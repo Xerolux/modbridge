@@ -51,7 +51,17 @@ func (m *Manager) AddProxy(cfg config.ProxyConfig, save bool) error {
 		old.Stop()
 	}
 
-	p := proxy.NewProxyInstance(cfg.ID, cfg.Name, cfg.ListenAddr, cfg.TargetAddr, m.log, m.deviceTracker)
+	// Convert config to pool config
+	poolCfg := proxy.PoolConfig{
+		Size:                cfg.PoolSize,
+		MinSize:             cfg.PoolMinSize,
+		ConnTimeout:         time.Duration(cfg.ConnTimeout) * time.Second,
+		MaxIdleTime:         time.Duration(cfg.ConnMaxIdle) * time.Second,
+		KeepAlive:           cfg.ConnKeepAlive,
+		HealthCheckInterval: time.Duration(cfg.HealthCheckInterval) * time.Second,
+	}
+
+	p := proxy.NewProxyInstance(cfg.ID, cfg.Name, cfg.ListenAddr, cfg.TargetAddr, m.log, m.deviceTracker, poolCfg)
 	m.proxies[cfg.ID] = p
 
 	if save {

@@ -13,6 +13,14 @@ type ProxyConfig struct {
 	ListenAddr string `json:"listen_addr"`
 	TargetAddr string `json:"target_addr"`
 	Enabled    bool   `json:"enabled"`
+
+	// Connection Pool Settings
+	PoolSize        int `json:"pool_size,omitempty"`         // Max pool size (default: 10)
+	PoolMinSize     int `json:"pool_min_size,omitempty"`     // Initial pool size (default: 2)
+	ConnTimeout     int `json:"conn_timeout,omitempty"`      // Connection timeout in seconds (default: 5)
+	ConnMaxIdle     int `json:"conn_max_idle,omitempty"`     // Max idle time in seconds (default: 300)
+	ConnKeepAlive   bool `json:"conn_keep_alive,omitempty"`  // Enable keep-alive (default: true)
+	HealthCheckInterval int `json:"health_check_interval,omitempty"` // Health check interval in seconds (default: 60)
 }
 
 // Config holds the global configuration.

@@ -6,10 +6,20 @@ import (
 	"modbusproxy/pkg/devices"
 	"modbusproxy/pkg/logger"
 	"modbusproxy/pkg/modbus"
+	"modbusproxy/pkg/pool"
 	"net"
-	"sync"
 	"time"
 )
+
+// PoolConfig holds connection pool configuration.
+type PoolConfig struct {
+	Size               int
+	MinSize            int
+	ConnTimeout        time.Duration
+	MaxIdleTime        time.Duration
+	KeepAlive          bool
+	HealthCheckInterval time.Duration
+}
 
 // ProxyInstance represents a running proxy.
 type ProxyInstance struct {
@@ -19,8 +29,8 @@ type ProxyInstance struct {
 	TargetAddr string
 
 	listener      net.Listener
-	targetConn    net.Conn
-	targetMu      sync.Mutex
+	pool          *pool.Pool
+	poolConfig    PoolConfig
 
 	log           *logger.Logger
 	deviceTracker *devices.Tracker
@@ -39,12 +49,30 @@ type Stats struct {
 }
 
 // NewProxyInstance creates a new proxy.
-func NewProxyInstance(id, name, listen, target string, l *logger.Logger, tracker *devices.Tracker) *ProxyInstance {
+func NewProxyInstance(id, name, listen, target string, l *logger.Logger, tracker *devices.Tracker, poolCfg PoolConfig) *ProxyInstance {
+	// Set defaults if not configured
+	if poolCfg.Size == 0 {
+		poolCfg.Size = 10
+	}
+	if poolCfg.MinSize == 0 {
+		poolCfg.MinSize = 2
+	}
+	if poolCfg.ConnTimeout == 0 {
+		poolCfg.ConnTimeout = 5 * time.Second
+	}
+	if poolCfg.MaxIdleTime == 0 {
+		poolCfg.MaxIdleTime = 5 * time.Minute
+	}
+	if poolCfg.HealthCheckInterval == 0 {
+		poolCfg.HealthCheckInterval = 60 * time.Second
+	}
+
 	return &ProxyInstance{
 		ID:            id,
 		Name:          name,
 		ListenAddr:    listen,
 		TargetAddr:    target,
+		poolConfig:    poolCfg,
 		log:           l,
 		deviceTracker: tracker,
 		Stats:         Stats{Status: "Stopped"},
@@ -64,11 +92,38 @@ func (p *ProxyInstance) Start() error {
 		return err
 	}
 	p.listener = l
-	
+
 	p.ctx, p.cancel = context.WithCancel(context.Background())
+
+	// Initialize connection pool
+	poolCfg := pool.Config{
+		InitialSize:    p.poolConfig.MinSize,
+		MaxSize:        p.poolConfig.Size,
+		MaxIdleTime:    p.poolConfig.MaxIdleTime,
+		AcquireTimeout: 30 * time.Second,
+		Dialer: func(ctx context.Context) (net.Conn, error) {
+			d := net.Dialer{
+				Timeout:   p.poolConfig.ConnTimeout,
+				KeepAlive: -1, // Disable system keepalive, we handle it ourselves
+			}
+			if p.poolConfig.KeepAlive {
+				d.KeepAlive = 30 * time.Second
+			}
+			return d.DialContext(ctx, "tcp", p.TargetAddr)
+		},
+	}
+
+	p.pool, err = pool.NewPool(poolCfg)
+	if err != nil {
+		p.listener.Close()
+		p.Stats.Status = "Error"
+		p.log.Error(p.ID, "Failed to create connection pool: "+err.Error())
+		return err
+	}
+
 	p.Stats.Status = "Running"
 	p.Stats.LastStart = time.Now()
-	
+
 	p.log.Info(p.ID, "Started proxy listening on "+p.ListenAddr+" -> "+p.TargetAddr)
 
 	go p.acceptLoop()
@@ -80,13 +135,15 @@ func (p *ProxyInstance) Stop() {
 	if p.Stats.Status != "Running" {
 		return
 	}
-	
+
 	p.log.Info(p.ID, "Stopping proxy")
 	p.cancel()
 	if p.listener != nil {
-		p.listener.Close()
+		_ = p.listener.Close()
 	}
-	p.closeTargetConn()
+	if p.pool != nil {
+		_ = p.pool.Close()
+	}
 	p.Stats.Status = "Stopped"
 }
 
@@ -149,51 +206,28 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn) {
 }
 
 func (p *ProxyInstance) forwardRequest(req []byte) ([]byte, error) {
-	p.targetMu.Lock()
-	defer p.targetMu.Unlock()
+	// Get connection from pool with timeout
+	ctx, cancel := context.WithTimeout(p.ctx, p.poolConfig.ConnTimeout)
+	defer cancel()
 
-	if err := p.ensureTargetConn(); err != nil {
-		return nil, err
-	}
-
-	_ = p.targetConn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if _, err := p.targetConn.Write(req); err != nil {
-		p.closeTargetConn()
-		if err := p.ensureTargetConn(); err != nil {
-			return nil, err
-		}
-		_ = p.targetConn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		if _, err := p.targetConn.Write(req); err != nil {
-			p.closeTargetConn()
-			return nil, err
-		}
-	}
-
-	_ = p.targetConn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	resp, err := modbus.ReadFrame(p.targetConn)
+	conn, err := p.pool.Get(ctx)
 	if err != nil {
-		p.closeTargetConn()
 		return nil, err
 	}
+	defer conn.Close() // Returns connection to pool
+
+	// Write request
+	_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if _, err := conn.Write(req); err != nil {
+		return nil, err
+	}
+
+	// Read response
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	resp, err := modbus.ReadFrame(conn)
+	if err != nil {
+		return nil, err
+	}
+
 	return resp, nil
-}
-
-func (p *ProxyInstance) ensureTargetConn() error {
-	if p.targetConn != nil {
-		return nil
-	}
-	d := net.Dialer{Timeout: 5 * time.Second}
-	conn, err := d.DialContext(p.ctx, "tcp", p.TargetAddr)
-	if err != nil {
-		return err
-	}
-	p.targetConn = conn
-	return nil
-}
-
-func (p *ProxyInstance) closeTargetConn() {
-	if p.targetConn != nil {
-		p.targetConn.Close()
-		p.targetConn = nil
-	}
 }
