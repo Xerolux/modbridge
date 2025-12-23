@@ -10,6 +10,11 @@ import (
 	"net"
 	"syscall"
 	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // PoolConfig holds connection pool configuration.
@@ -210,6 +215,9 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn) {
 		p.deviceTracker.TrackConnection(clientConn, p.ID)
 	}
 
+	// Get tracer for this function
+	tracer := otel.Tracer("modbus-proxy")
+
 	for {
 		// Check context
 		select {
@@ -218,53 +226,120 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn) {
 		default:
 		}
 
+		// Start a span for the entire client request cycle
+		ctx, span := tracer.Start(p.ctx, "modbus.handle_client",
+			trace.WithAttributes(
+				attribute.String("proxy.id", p.ID),
+				attribute.String("proxy.name", p.Name),
+				attribute.String("client.addr", clientConn.RemoteAddr().String()),
+				attribute.String("target.addr", p.TargetAddr),
+			),
+		)
+
 		_ = clientConn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		reqFrame, err := modbus.ReadFrame(clientConn)
 		if err != nil {
 			if err != io.EOF {
 				p.log.Info(p.ID, "Client read error: "+err.Error())
 			}
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			span.End()
 			return
 		}
 
-		respFrame, err := p.forwardRequest(reqFrame)
+		span.SetAttributes(attribute.Int("request.size", len(reqFrame)))
+
+		respFrame, err := p.forwardRequest(ctx, reqFrame)
 		if err != nil {
 			p.log.Error(p.ID, "Forward error: "+err.Error())
 			p.Stats.Errors++
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			span.End()
 			return
 		}
 		p.Stats.Requests++
 
+		span.SetAttributes(attribute.Int("response.size", len(respFrame)))
+
 		if _, err := clientConn.Write(respFrame); err != nil {
 			p.log.Error(p.ID, "Write response error: "+err.Error())
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			span.End()
 			return
 		}
+
+		span.SetStatus(codes.Ok, "")
+		span.End()
 	}
 }
 
-func (p *ProxyInstance) forwardRequest(req []byte) ([]byte, error) {
+func (p *ProxyInstance) forwardRequest(ctx context.Context, req []byte) ([]byte, error) {
+	tracer := otel.Tracer("modbus-proxy")
+
+	// Start span for the entire forward operation
+	ctx, span := tracer.Start(ctx, "modbus.forward_request",
+		trace.WithAttributes(
+			attribute.String("proxy.id", p.ID),
+			attribute.Int("request.size", len(req)),
+		),
+	)
+	defer span.End()
+
 	// Get connection from pool with timeout
-	ctx, cancel := context.WithTimeout(p.ctx, p.poolConfig.ConnTimeout)
+	connCtx, cancel := context.WithTimeout(ctx, p.poolConfig.ConnTimeout)
 	defer cancel()
 
-	conn, err := p.pool.Get(ctx)
+	// Span for connection acquisition
+	_, connSpan := tracer.Start(ctx, "pool.get_connection")
+	conn, err := p.pool.Get(connCtx)
 	if err != nil {
+		connSpan.RecordError(err)
+		connSpan.SetStatus(codes.Error, err.Error())
+		connSpan.End()
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to acquire connection")
 		return nil, err
 	}
+	connSpan.SetStatus(codes.Ok, "")
+	connSpan.End()
 	defer conn.Close() // Returns connection to pool
 
 	// Write request
+	_, writeSpan := tracer.Start(ctx, "modbus.write_request",
+		trace.WithAttributes(attribute.Int("bytes", len(req))),
+	)
 	_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	if _, err := conn.Write(req); err != nil {
+		writeSpan.RecordError(err)
+		writeSpan.SetStatus(codes.Error, err.Error())
+		writeSpan.End()
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to write request")
 		return nil, err
 	}
+	writeSpan.SetStatus(codes.Ok, "")
+	writeSpan.End()
 
 	// Read response
+	_, readSpan := tracer.Start(ctx, "modbus.read_response")
 	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	resp, err := modbus.ReadFrame(conn)
 	if err != nil {
+		readSpan.RecordError(err)
+		readSpan.SetStatus(codes.Error, err.Error())
+		readSpan.End()
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to read response")
 		return nil, err
 	}
+	readSpan.SetAttributes(attribute.Int("response.size", len(resp)))
+	readSpan.SetStatus(codes.Ok, "")
+	readSpan.End()
 
+	span.SetAttributes(attribute.Int("response.size", len(resp)))
+	span.SetStatus(codes.Ok, "")
 	return resp, nil
 }

@@ -27,6 +27,7 @@
 - 📊 **Prometheus Metrics** - 13+ metrics for comprehensive monitoring
 - 📝 **Structured Logging** - Zero-allocation JSON logging with zerolog
 - 🔍 **Request Tracing** - Correlation IDs for distributed tracing
+- 🌐 **OpenTelemetry Tracing** - Distributed tracing with Jaeger/Zipkin support
 - 🏥 **Health & Readiness Probes** - Kubernetes-compatible endpoints
 - 📉 **Profiling** - Built-in pprof support for performance analysis
 
@@ -86,6 +87,7 @@ docker run -p 8080:8080 -p 5020:5020 modbridge
 
 - **[Performance Guide](docs/PERFORMANCE.md)** - Optimization tips and benchmarks
 - **[Logging Guide](docs/LOGGING.md)** - Structured logging with zerolog
+- **[Tracing Guide](docs/TRACING.md)** - Distributed tracing with OpenTelemetry
 - **[Roadmap](ROADMAP.md)** - Development roadmap to v1.0.0
 - **[Contributing](CONTRIBUTING.md)** - How to contribute
 
@@ -122,6 +124,12 @@ docker run -p 8080:8080 -p 5020:5020 modbridge
 | `WEB_PORT` | `:8080` | Web interface port |
 | `LOG_LEVEL` | `info` | Log level (debug, info, warn, error) |
 | `LOG_PRETTY` | `false` | Pretty console output (development) |
+| `OTEL_ENABLED` | `false` | Enable OpenTelemetry tracing |
+| `OTEL_EXPORTER` | `none` | Exporter type (jaeger, zipkin, none) |
+| `OTEL_JAEGER_ENDPOINT` | `http://localhost:14268/api/traces` | Jaeger collector URL |
+| `OTEL_ZIPKIN_ENDPOINT` | `http://localhost:9411/api/v2/spans` | Zipkin collector URL |
+| `OTEL_SAMPLING_RATE` | `1.0` | Trace sampling rate (0.0-1.0) |
+| `OTEL_ENVIRONMENT` | `production` | Environment name for traces |
 
 ## 📊 Monitoring
 

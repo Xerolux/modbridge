@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"modbusproxy/pkg/api"
 	"modbusproxy/pkg/auth"
 	"modbusproxy/pkg/config"
 	"modbusproxy/pkg/logger"
 	"modbusproxy/pkg/manager"
+	"modbusproxy/pkg/middleware"
+	"modbusproxy/pkg/tracing"
 	"modbusproxy/pkg/web"
 	"net/http"
 	"net/http/pprof"
@@ -37,6 +40,46 @@ func main() {
 		log.Fatalf("Failed to init logger: %v", err)
 	}
 	defer l.Close()
+
+	// 2.5. OpenTelemetry Tracing
+	// Configure via environment variables:
+	//   OTEL_ENABLED=true/false (default: false)
+	//   OTEL_EXPORTER=jaeger/zipkin/none (default: none)
+	//   OTEL_JAEGER_ENDPOINT=http://localhost:14268/api/traces
+	//   OTEL_ZIPKIN_ENDPOINT=http://localhost:9411/api/v2/spans
+	//   OTEL_SAMPLING_RATE=0.0-1.0 (default: 1.0)
+	var tracerProvider *tracing.TracerProvider
+	if os.Getenv("OTEL_ENABLED") == "true" {
+		exporterType := tracing.ExporterType(os.Getenv("OTEL_EXPORTER"))
+		if exporterType == "" {
+			exporterType = tracing.ExporterNone
+		}
+
+		tracingCfg := tracing.Config{
+			ServiceName:    "modbus-proxy",
+			ServiceVersion: "1.0.0",
+			Environment:    getEnvOrDefault("OTEL_ENVIRONMENT", "production"),
+			ExporterType:   exporterType,
+			JaegerEndpoint: os.Getenv("OTEL_JAEGER_ENDPOINT"),
+			ZipkinEndpoint: os.Getenv("OTEL_ZIPKIN_ENDPOINT"),
+			SamplingRate:   getEnvFloat("OTEL_SAMPLING_RATE", 1.0),
+		}
+
+		tracerProvider, err = tracing.NewTracerProvider(tracingCfg)
+		if err != nil {
+			log.Printf("Warning: Failed to initialize tracing: %v", err)
+		} else {
+			l.Info("SYSTEM", "OpenTelemetry tracing initialized with "+string(exporterType)+" exporter")
+			log.Printf("OpenTelemetry tracing initialized with %s exporter", exporterType)
+			defer func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := tracerProvider.Shutdown(ctx); err != nil {
+					log.Printf("Error shutting down tracer provider: %v", err)
+				}
+			}()
+		}
+	}
 
 	// 3. Manager
 	mgr := manager.NewManager(cfgMgr, l)
@@ -89,9 +132,20 @@ func main() {
 		addr = envPort
 	}
 
+	// Wrap handler with middleware (order matters: outermost first)
+	var handler http.Handler = mux
+
+	// Add OpenTelemetry tracing middleware if enabled
+	if tracerProvider != nil {
+		handler = middleware.Tracing("modbus-proxy")(handler)
+	}
+
+	// Add request ID middleware (always enabled)
+	handler = middleware.RequestID(handler)
+
 	server := &http.Server{
 		Addr:    addr,
-		Handler: mux,
+		Handler: handler,
 	}
 
 	l.Info("SYSTEM", "Starting Modbus Manager on "+addr)
@@ -125,4 +179,23 @@ func main() {
 
 	l.Info("SYSTEM", "Server stopped")
 	log.Println("Server stopped")
+}
+
+// getEnvOrDefault returns the value of an environment variable or a default value if not set.
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+// getEnvFloat returns a float64 value from an environment variable or a default value.
+func getEnvFloat(key string, defaultValue float64) float64 {
+	if value := os.Getenv(key); value != "" {
+		var f float64
+		if _, err := fmt.Sscanf(value, "%f", &f); err == nil {
+			return f
+		}
+	}
+	return defaultValue
 }
