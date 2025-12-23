@@ -33,8 +33,9 @@ func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator,
 
 // Routes registers routes.
 func (s *Server) Routes(mux *http.ServeMux) {
-	// Public
+	// Public health endpoints
 	mux.HandleFunc("/api/health", s.handleHealth)
+	mux.HandleFunc("/api/ready", s.handleReady)
 	mux.HandleFunc("/api/status", s.corsMiddleware(s.handleStatus))
 	mux.HandleFunc("/api/login", s.corsMiddleware(s.handleLogin))
 	mux.HandleFunc("/api/setup", s.corsMiddleware(s.handleSetup))
@@ -67,12 +68,154 @@ func (s *Server) corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// handleHealth is a health check endpoint.
+// HealthCheck represents a health check result.
+type HealthCheck struct {
+	Status      string                    `json:"status"`      // "healthy", "degraded", "unhealthy"
+	Timestamp   string                    `json:"timestamp"`
+	Uptime      float64                   `json:"uptime_seconds"`
+	Version     string                    `json:"version"`
+	Checks      map[string]ComponentCheck `json:"checks"`
+}
+
+// ComponentCheck represents the health of a component.
+type ComponentCheck struct {
+	Status  string `json:"status"`  // "pass", "fail", "warn"
+	Message string `json:"message,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+// handleHealth is an enhanced health check endpoint (liveness probe).
+// Returns 200 if the application is alive, 503 otherwise.
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"status": "ok",
-	})
+
+	health := HealthCheck{
+		Status:    "healthy",
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Version:   "1.0.0", // TODO: Get from version file
+		Checks:    make(map[string]ComponentCheck),
+	}
+
+	// Check logger
+	if s.log != nil {
+		health.Checks["logger"] = ComponentCheck{
+			Status:  "pass",
+			Message: "Logger operational",
+		}
+	} else {
+		health.Status = "unhealthy"
+		health.Checks["logger"] = ComponentCheck{
+			Status: "fail",
+			Error:  "Logger not initialized",
+		}
+	}
+
+	// Check config manager
+	if s.cfgMgr != nil {
+		health.Checks["config"] = ComponentCheck{
+			Status:  "pass",
+			Message: "Configuration manager operational",
+		}
+	} else {
+		health.Status = "unhealthy"
+		health.Checks["config"] = ComponentCheck{
+			Status: "fail",
+			Error:  "Config manager not initialized",
+		}
+	}
+
+	// Check proxy manager
+	if s.mgr != nil {
+		proxies := s.mgr.GetProxies()
+		health.Checks["proxy_manager"] = ComponentCheck{
+			Status:  "pass",
+			Message: fmt.Sprintf("%d proxies managed", len(proxies)),
+		}
+	} else {
+		health.Status = "unhealthy"
+		health.Checks["proxy_manager"] = ComponentCheck{
+			Status: "fail",
+			Error:  "Proxy manager not initialized",
+		}
+	}
+
+	// Set HTTP status code
+	statusCode := http.StatusOK
+	if health.Status == "unhealthy" {
+		statusCode = http.StatusServiceUnavailable
+	}
+
+	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(health)
+}
+
+// handleReady is a readiness check endpoint (readiness probe).
+// Returns 200 if the application is ready to serve traffic, 503 otherwise.
+func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	readiness := HealthCheck{
+		Status:    "ready",
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Version:   "1.0.0",
+		Checks:    make(map[string]ComponentCheck),
+	}
+
+	// Check if setup is complete
+	cfg := s.cfgMgr.Get()
+	if cfg.AdminPassHash == "" {
+		readiness.Status = "degraded"
+		readiness.Checks["setup"] = ComponentCheck{
+			Status:  "warn",
+			Message: "Setup not completed",
+		}
+	} else {
+		readiness.Checks["setup"] = ComponentCheck{
+			Status:  "pass",
+			Message: "Setup complete",
+		}
+	}
+
+	// Check proxy status
+	proxies := s.mgr.GetProxies()
+	runningCount := 0
+	errorCount := 0
+	for _, p := range proxies {
+		if status, ok := p["status"].(string); ok {
+			if status == "Running" {
+				runningCount++
+			} else if status == "Error" {
+				errorCount++
+			}
+		}
+	}
+
+	if errorCount > 0 {
+		readiness.Status = "degraded"
+		readiness.Checks["proxies"] = ComponentCheck{
+			Status:  "warn",
+			Message: fmt.Sprintf("%d running, %d in error state", runningCount, errorCount),
+		}
+	} else if len(proxies) > 0 {
+		readiness.Checks["proxies"] = ComponentCheck{
+			Status:  "pass",
+			Message: fmt.Sprintf("%d proxies running", runningCount),
+		}
+	} else {
+		readiness.Checks["proxies"] = ComponentCheck{
+			Status:  "pass",
+			Message: "No proxies configured",
+		}
+	}
+
+	// Set HTTP status code
+	statusCode := http.StatusOK
+	if readiness.Status == "unhealthy" {
+		statusCode = http.StatusServiceUnavailable
+	}
+
+	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(readiness)
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {

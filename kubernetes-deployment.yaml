@@ -1,0 +1,128 @@
+# Kubernetes deployment for Modbus Proxy
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modbus-proxy
+  labels:
+    app: modbus-proxy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: modbus-proxy
+  template:
+    metadata:
+      labels:
+        app: modbus-proxy
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: modbus-proxy
+        image: modbus-proxy:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        - name: modbus
+          containerPort: 5020
+          protocol: TCP
+
+        # Environment variables
+        env:
+        - name: WEB_PORT
+          value: ":8080"
+
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /api/ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        # Resource limits
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+        # Volume mounts
+        volumeMounts:
+        - name: config
+          mountPath: /app/config.json
+          subPath: config.json
+        - name: logs
+          mountPath: /app/logs
+
+      volumes:
+      - name: config
+        configMap:
+          name: modbus-proxy-config
+      - name: logs
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: modbus-proxy
+  labels:
+    app: modbus-proxy
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
+    protocol: TCP
+  - name: modbus
+    port: 5020
+    targetPort: modbus
+    protocol: TCP
+  selector:
+    app: modbus-proxy
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: modbus-proxy-config
+data:
+  config.json: |
+    {
+      "web_port": ":8080",
+      "admin_pass_hash": "",
+      "proxies": [
+        {
+          "id": "1",
+          "name": "Modbus Device 1",
+          "listen_addr": ":5020",
+          "target_addr": "192.168.1.100:502",
+          "enabled": true,
+          "pool_size": 10,
+          "pool_min_size": 2,
+          "conn_timeout": 5,
+          "conn_max_idle": 300,
+          "conn_keep_alive": true,
+          "health_check_interval": 60
+        }
+      ]
+    }
