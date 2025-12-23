@@ -1,125 +1,159 @@
 package proxy
 
 import (
-	"log"
-	"modbusproxy/pkg/config"
+	"context"
+	"io"
+	"modbusproxy/pkg/logger"
 	"modbusproxy/pkg/modbus"
 	"net"
 	"sync"
 	"time"
 )
 
-// Proxy implements the Modbus TCP proxy.
-type Proxy struct {
-	cfg        config.Config
+// ProxyInstance represents a running proxy.
+type ProxyInstance struct {
+	ID         string
+	Name       string
+	ListenAddr string
+	TargetAddr string
+	
 	listener   net.Listener
 	targetConn net.Conn
 	targetMu   sync.Mutex
-	stopChan   chan struct{}
-	running    bool
+	
+	log        *logger.Logger
+	ctx        context.Context
+	cancel     context.CancelFunc
+	
+	Stats      Stats
 }
 
-// NewProxy creates a new proxy instance.
-func NewProxy(cfg config.Config) *Proxy {
-	return &Proxy{
-		cfg:      cfg,
-		stopChan: make(chan struct{}),
+type Stats struct {
+	Uptime       time.Duration
+	LastStart    time.Time
+	Requests     int64
+	Errors       int64
+	Status       string // "Running", "Stopped", "Error"
+}
+
+// NewProxyInstance creates a new proxy.
+func NewProxyInstance(id, name, listen, target string, l *logger.Logger) *ProxyInstance {
+	return &ProxyInstance{
+		ID:         id,
+		Name:       name,
+		ListenAddr: listen,
+		TargetAddr: target,
+		log:        l,
+		Stats:      Stats{Status: "Stopped"},
 	}
 }
 
-// Start starts the proxy listener. It blocks until Stop is called or an error occurs.
-func (p *Proxy) Start() error {
-	l, err := net.Listen("tcp", p.cfg.ListenAddr)
+// Start starts the proxy.
+func (p *ProxyInstance) Start() error {
+	if p.Stats.Status == "Running" {
+		return nil
+	}
+
+	l, err := net.Listen("tcp", p.ListenAddr)
 	if err != nil {
+		p.Stats.Status = "Error"
+		p.log.Error(p.ID, "Failed to listen: "+err.Error())
 		return err
 	}
 	p.listener = l
-	p.running = true
-	log.Printf("Proxy listening on %s, target: %s", p.cfg.ListenAddr, p.cfg.TargetAddr)
+	
+	p.ctx, p.cancel = context.WithCancel(context.Background())
+	p.Stats.Status = "Running"
+	p.Stats.LastStart = time.Now()
+	
+	p.log.Info(p.ID, "Started proxy listening on "+p.ListenAddr+" -> "+p.TargetAddr)
 
-	go func() {
-		<-p.stopChan
-		p.Close()
-	}()
+	go p.acceptLoop()
+	return nil
+}
 
+// Stop stops the proxy.
+func (p *ProxyInstance) Stop() {
+	if p.Stats.Status != "Running" {
+		return
+	}
+	
+	p.log.Info(p.ID, "Stopping proxy")
+	p.cancel()
+	if p.listener != nil {
+		p.listener.Close()
+	}
+	p.closeTargetConn()
+	p.Stats.Status = "Stopped"
+}
+
+func (p *ProxyInstance) acceptLoop() {
 	for {
-		conn, err := l.Accept()
+		conn, err := p.listener.Accept()
 		if err != nil {
-			if !p.running {
-				return nil // Expected shutdown
+			select {
+			case <-p.ctx.Done():
+				return // Normal shutdown
+			default:
+				p.log.Error(p.ID, "Accept error: "+err.Error())
+				// Backoff slightly to avoid spinning
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
-			log.Printf("Accept error: %v", err)
-			continue
 		}
 		go p.handleClient(conn)
 	}
 }
 
-// Stop stops the proxy.
-func (p *Proxy) Stop() {
-	if p.running {
-		p.running = false
-		close(p.stopChan)
-	}
-}
-
-// Close closes the listener and target connection.
-func (p *Proxy) Close() {
-	if p.listener != nil {
-		p.listener.Close()
-	}
-	p.targetMu.Lock()
-	if p.targetConn != nil {
-		p.targetConn.Close()
-		p.targetConn = nil
-	}
-	p.targetMu.Unlock()
-}
-
-func (p *Proxy) handleClient(clientConn net.Conn) {
+func (p *ProxyInstance) handleClient(clientConn net.Conn) {
 	defer clientConn.Close()
-
+	
 	for {
-		// Read request from client
+		// Check context
+		select {
+		case <-p.ctx.Done():
+			return
+		default:
+		}
+
+		clientConn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		reqFrame, err := modbus.ReadFrame(clientConn)
 		if err != nil {
-			// Start of EOF is expected if client closes connection
+			if err != io.EOF {
+				p.log.Info(p.ID, "Client read error: "+err.Error())
+			}
 			return
 		}
 
-		// Process request
 		respFrame, err := p.forwardRequest(reqFrame)
 		if err != nil {
-			log.Printf("Forward error: %v", err)
+			p.log.Error(p.ID, "Forward error: "+err.Error())
+			p.Stats.Errors++
 			return
 		}
+		p.Stats.Requests++
 
-		// Send response to client
 		if _, err := clientConn.Write(respFrame); err != nil {
-			log.Printf("Write response error: %v", err)
+			p.log.Error(p.ID, "Write response error: "+err.Error())
 			return
 		}
 	}
 }
 
-func (p *Proxy) forwardRequest(req []byte) ([]byte, error) {
+func (p *ProxyInstance) forwardRequest(req []byte) ([]byte, error) {
 	p.targetMu.Lock()
 	defer p.targetMu.Unlock()
 
-	// Ensure target connection
 	if err := p.ensureTargetConn(); err != nil {
 		return nil, err
 	}
 
-	// Write request
 	p.targetConn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	if _, err := p.targetConn.Write(req); err != nil {
 		p.closeTargetConn()
-		// Try to reconnect once
 		if err := p.ensureTargetConn(); err != nil {
 			return nil, err
 		}
-		// Retry write
 		p.targetConn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		if _, err := p.targetConn.Write(req); err != nil {
 			p.closeTargetConn()
@@ -127,23 +161,21 @@ func (p *Proxy) forwardRequest(req []byte) ([]byte, error) {
 		}
 	}
 
-	// Read response
 	p.targetConn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	resp, err := modbus.ReadFrame(p.targetConn)
 	if err != nil {
 		p.closeTargetConn()
 		return nil, err
 	}
-
 	return resp, nil
 }
 
-func (p *Proxy) ensureTargetConn() error {
+func (p *ProxyInstance) ensureTargetConn() error {
 	if p.targetConn != nil {
 		return nil
 	}
-
-	conn, err := net.DialTimeout("tcp", p.cfg.TargetAddr, 5*time.Second)
+	d := net.Dialer{Timeout: 5 * time.Second}
+	conn, err := d.DialContext(p.ctx, "tcp", p.TargetAddr)
 	if err != nil {
 		return err
 	}
@@ -151,7 +183,7 @@ func (p *Proxy) ensureTargetConn() error {
 	return nil
 }
 
-func (p *Proxy) closeTargetConn() {
+func (p *ProxyInstance) closeTargetConn() {
 	if p.targetConn != nil {
 		p.targetConn.Close()
 		p.targetConn = nil

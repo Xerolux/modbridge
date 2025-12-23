@@ -2,49 +2,56 @@ package main
 
 import (
 	"log"
+	"modbusproxy/pkg/api"
+	"modbusproxy/pkg/auth"
 	"modbusproxy/pkg/config"
-	"modbusproxy/pkg/proxy"
+	"modbusproxy/pkg/logger"
+	"modbusproxy/pkg/manager"
 	"modbusproxy/pkg/web"
-	"sync"
+	"net/http"
 )
 
 func main() {
-	// Initialize config
-	cfgManager := config.NewManager("config.json")
-	if err := cfgManager.Load(); err != nil {
-		log.Printf("Could not load config, using defaults: %v", err)
+	// 1. Config
+	cfgMgr := config.NewManager("config.json")
+	if err := cfgMgr.Load(); err != nil {
+		log.Printf("Starting with empty config: %v", err)
 	}
 
-	// Manage proxy instance
-	var proxyMu sync.Mutex
-	var currentProxy *proxy.Proxy
-
-	startProxy := func(cfg config.Config) {
-		proxyMu.Lock()
-		defer proxyMu.Unlock()
-
-		if currentProxy != nil {
-			log.Println("Stopping existing proxy...")
-			currentProxy.Stop()
-		}
-
-		log.Println("Starting new proxy...")
-		currentProxy = proxy.NewProxy(cfg)
-		go func(p *proxy.Proxy) {
-			if err := p.Start(); err != nil {
-				log.Printf("Proxy server error: %v", err)
-			}
-		}(currentProxy)
+	// 2. Logger
+	l, err := logger.NewLogger("proxy.log", 1000)
+	if err != nil {
+		log.Fatalf("Failed to init logger: %v", err)
 	}
 
-	// Initial start
-	startProxy(cfgManager.Get())
+	// 3. Manager
+	mgr := manager.NewManager(cfgMgr, l)
+	mgr.Initialize()
 
-	// Start web server
-	webServer := web.NewServer(cfgManager, func(newConfig config.Config) {
-		startProxy(newConfig)
-	})
+	// 4. Auth
+	authenticator := auth.NewAuthenticator()
+
+	// 5. API Server
+	apiServer := api.NewServer(cfgMgr, mgr, authenticator, l)
+
+	// 6. Router
+	mux := http.NewServeMux()
 	
-	// This blocks
-	webServer.Start()
+	// API Routes
+	apiServer.Routes(mux)
+
+	// Web Routes
+	mux.Handle("/", web.Handler())
+
+	// Start
+	addr := cfgMgr.Get().WebPort
+	if addr == "" {
+		addr = ":8080"
+	}
+	
+	l.Info("SYSTEM", "Starting Modbus Manager on "+addr)
+	log.Printf("Listening on %s", addr)
+	if err := http.ListenAndServe(addr, mux); err != nil {
+		log.Fatalf("Server error: %v", err)
+	}
 }

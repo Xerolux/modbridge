@@ -1,0 +1,20 @@
+{
+  "web_port": ":8080",
+  "admin_pass_hash": "$2a$14$GIEWZELPUk/ixrj.sEb12OTEJCgb6hpxWqA0mAzZVlbxYL5qZclnu",
+  "proxies": [
+    {
+      "id": "21e71152-3866-43ac-891d-c5ec85fa1e98",
+      "name": "Test-Proxy-UI",
+      "listen_addr": ":5555",
+      "target_addr": "127.0.0.1:502",
+      "enabled": true
+    },
+    {
+      "id": "cdd183c1-211f-4903-8009-6835ca43feeb",
+      "name": "Test-Proxy-UI",
+      "listen_addr": ":5555",
+      "target_addr": "127.0.0.1:502",
+      "enabled": true
+    }
+  ]
+}

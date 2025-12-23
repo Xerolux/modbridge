@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modbus Proxy Manager</title>
+    <script src="assets/tailwindcss.js"></script>
+    <script src="assets/vue.global.prod.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f5f5f7;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+    </style>
+</head>
+<body class="text-gray-800 antialiased h-screen overflow-hidden flex flex-col">
+
+    <div id="app" class="flex h-full">
+        <!-- Sidebar -->
+        <aside class="w-64 glass border-r border-gray-200 flex flex-col justify-between p-4" v-if="authenticated || !setupRequired">
+            <div>
+                <h1 class="text-xl font-bold mb-8 px-2 tracking-tight text-gray-900">Modbus Manager</h1>
+                <nav class="space-y-1">
+                    <a href="#" @click="currentView = 'dashboard'" :class="{'bg-gray-200/50': currentView === 'dashboard'}" class="block px-3 py-2 rounded-lg hover:bg-white/50 transition">Dashboard</a>
+                    <a href="#" @click="currentView = 'proxies'" :class="{'bg-gray-200/50': currentView === 'proxies'}" class="block px-3 py-2 rounded-lg hover:bg-white/50 transition">Proxies</a>
+                    <a href="#" @click="currentView = 'logs'" :class="{'bg-gray-200/50': currentView === 'logs'}" class="block px-3 py-2 rounded-lg hover:bg-white/50 transition">Logs</a>
+                </nav>
+            </div>
+            <div class="px-2" v-if="authenticated">
+                <button @click="logout" class="text-sm text-red-500 hover:text-red-700 font-medium">Logout</button>
+            </div>
+            <div class="px-2" v-else>
+                <button @click="currentView = 'login'" class="text-sm text-blue-500 hover:text-blue-700 font-medium">Login (Admin)</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-auto p-8 relative">
+            
+            <!-- Setup View -->
+            <div v-if="setupRequired" class="max-w-md mx-auto mt-20 p-8 glass rounded-2xl shadow-xl">
+                <h2 class="text-2xl font-bold mb-4 text-center">Welcome</h2>
+                <p class="mb-6 text-gray-600 text-center">Please set an admin password to get started.</p>
+                <form @submit.prevent="doSetup">
+                    <input v-model="setupPassword" type="password" placeholder="New Password" class="w-full p-3 rounded-lg border border-gray-300 mb-4 focus:ring-2 focus:ring-blue-500 outline-none" required>
+                    <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg font-semibold hover:bg-blue-700 transition">Set Password</button>
+                </form>
+            </div>
+
+            <!-- Login View -->
+            <div v-else-if="currentView === 'login' && !authenticated" class="max-w-md mx-auto mt-20 p-8 glass rounded-2xl shadow-xl">
+                <h2 class="text-2xl font-bold mb-4 text-center">Admin Login</h2>
+                <form @submit.prevent="doLogin">
+                    <input v-model="loginPassword" type="password" placeholder="Password" class="w-full p-3 rounded-lg border border-gray-300 mb-4 focus:ring-2 focus:ring-blue-500 outline-none" required>
+                    <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg font-semibold hover:bg-blue-700 transition">Login</button>
+                </form>
+            </div>
+
+            <!-- Dashboard -->
+            <div v-else-if="currentView === 'dashboard'">
+                <h2 class="text-3xl font-bold mb-6">Dashboard</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="glass p-6 rounded-2xl">
+                        <div class="text-gray-500 text-sm font-medium">Total Proxies</div>
+                        <div class="text-4xl font-bold mt-2">{{ proxies.length }}</div>
+                    </div>
+                    <div class="glass p-6 rounded-2xl">
+                        <div class="text-gray-500 text-sm font-medium">Running</div>
+                        <div class="text-4xl font-bold mt-2 text-green-600">{{ proxies.filter(p => p.status === 'Running').length }}</div>
+                    </div>
+                    <div class="glass p-6 rounded-2xl">
+                        <div class="text-gray-500 text-sm font-medium">Total Errors</div>
+                        <div class="text-4xl font-bold mt-2 text-red-500">{{ totalErrors }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Proxies List -->
+            <div v-else-if="currentView === 'proxies'">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-bold">Proxies</h2>
+                    <button v-if="authenticated" @click="showAddModal = true" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">+ Add Proxy</button>
+                </div>
+
+                <div class="grid grid-cols-1 gap-4">
+                    <div v-for="proxy in proxies" :key="proxy.id" class="glass p-6 rounded-2xl flex justify-between items-center">
+                        <div>
+                            <div class="flex items-center gap-3">
+                                <h3 class="text-xl font-bold">{{ proxy.name }}</h3>
+                                <span :class="{'bg-green-100 text-green-700': proxy.status === 'Running', 'bg-gray-100 text-gray-700': proxy.status === 'Stopped', 'bg-red-100 text-red-700': proxy.status === 'Error'}" class="px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide">{{ proxy.status }}</span>
+                            </div>
+                            <div class="text-gray-500 mt-1 flex gap-4 text-sm">
+                                <span>Listen: {{ proxy.listen_addr }}</span>
+                                <span>Target: {{ proxy.target_addr }}</span>
+                            </div>
+                            <div class="text-gray-400 mt-2 text-xs">
+                                Uptime: {{ formatUptime(proxy.uptime_s) }} | Req: {{ proxy.requests }} | Err: {{ proxy.errors }}
+                            </div>
+                        </div>
+                        <div v-if="authenticated" class="flex gap-2">
+                            <button v-if="proxy.status !== 'Running'" @click="controlProxy(proxy.id, 'start')" class="p-2 bg-green-50 text-green-600 rounded hover:bg-green-100">Start</button>
+                            <button v-if="proxy.status === 'Running'" @click="controlProxy(proxy.id, 'stop')" class="p-2 bg-gray-50 text-gray-600 rounded hover:bg-gray-100">Stop</button>
+                            <button @click="controlProxy(proxy.id, 'restart')" class="p-2 bg-blue-50 text-blue-600 rounded hover:bg-blue-100">Restart</button>
+                            <button @click="deleteProxy(proxy.id)" class="p-2 bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logs -->
+            <div v-else-if="currentView === 'logs'" class="h-full flex flex-col">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-bold">Live Logs</h2>
+                    <div class="flex gap-2">
+                        <input v-model="logFilter" placeholder="Filter logs..." class="p-2 rounded border text-sm">
+                        <select v-model="logLevelFilter" class="p-2 rounded border text-sm">
+                            <option value="">All Levels</option>
+                            <option value="INFO">INFO</option>
+                            <option value="WARN">WARN</option>
+                            <option value="ERROR">ERROR</option>
+                        </select>
+                        <a href="/api/logs/download" target="_blank" class="bg-gray-200 text-gray-700 px-3 py-2 rounded hover:bg-gray-300 text-sm font-medium">Download</a>
+                    </div>
+                </div>
+                <div class="flex-1 glass rounded-2xl p-4 overflow-hidden flex flex-col font-mono text-sm bg-gray-900 text-gray-200">
+                    <div class="flex-1 overflow-auto space-y-1" id="log-container">
+                        <div v-for="(log, i) in filteredLogs" :key="i" class="border-l-2 pl-2" :class="logColor(log.level)">
+                            <span class="opacity-50 text-xs">{{ formatTime(log.timestamp) }}</span>
+                            <span class="font-bold mx-2">[{{ log.level }}]</span>
+                            <span v-if="log.proxy_id" class="text-blue-400 mr-2">({{ proxyName(log.proxy_id) }})</span>
+                            <span>{{ log.message }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings/Config -->
+             <div v-if="currentView === 'proxies'" class="mt-8">
+                <div class="border-t border-gray-300 pt-4">
+                    <h3 class="text-xl font-bold mb-4">Configuration</h3>
+                    <div class="flex gap-4">
+                        <a href="/api/config/export" target="_blank" class="bg-blue-100 text-blue-700 px-4 py-2 rounded hover:bg-blue-200">Export Config</a>
+                        
+                        <label class="bg-green-100 text-green-700 px-4 py-2 rounded hover:bg-green-200 cursor-pointer">
+                            Import Config
+                            <input type="file" @change="importConfig" class="hidden">
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Proxy Modal -->
+            <div v-if="showAddModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+                <div class="glass bg-white p-8 rounded-2xl w-full max-w-lg shadow-2xl">
+                    <h3 class="text-xl font-bold mb-4">Add Proxy</h3>
+                    <form @submit.prevent="addProxy">
+                        <div class="mb-4">
+                            <label class="block text-sm font-bold mb-1">Name</label>
+                            <input v-model="newProxy.name" type="text" class="w-full p-2 border rounded" required>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-bold mb-1">Listen Address (e.g. :5020)</label>
+                            <input v-model="newProxy.listen_addr" type="text" class="w-full p-2 border rounded" required>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-bold mb-1">Target Address (e.g. 1.2.3.4:502)</label>
+                            <input v-model="newProxy.target_addr" type="text" class="w-full p-2 border rounded" required>
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <button type="button" @click="showAddModal = false" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+                            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const currentView = ref('dashboard');
+                const setupRequired = ref(false);
+                const authenticated = ref(false);
+                const proxies = ref([]);
+                const logs = ref([]);
+                const logFilter = ref('');
+                const logLevelFilter = ref('');
+                const setupPassword = ref('');
+                const loginPassword = ref('');
+                const showAddModal = ref(false);
+                const newProxy = ref({ name: '', listen_addr: ':5020', target_addr: '127.0.0.1:502', enabled: true });
+
+                const totalErrors = computed(() => proxies.value.reduce((acc, p) => acc + p.errors, 0));
+                
+                const filteredLogs = computed(() => {
+                    return logs.value.filter(l => {
+                        if (logLevelFilter.value && l.level !== logLevelFilter.value) return false;
+                        if (logFilter.value) {
+                            const term = logFilter.value.toLowerCase();
+                            return l.message.toLowerCase().includes(term) || (l.proxy_id && l.proxy_id.toLowerCase().includes(term));
+                        }
+                        return true;
+                    });
+                });
+
+                const fetchStatus = async () => {
+                    try {
+                        const res = await fetch('/api/status');
+                        const data = await res.json();
+                        setupRequired.value = data.setup_required;
+                        proxies.value = data.proxies || [];
+                    } catch (e) {
+                        console.error(e);
+                    }
+                };
+
+                const doSetup = async () => {
+                    const res = await fetch('/api/setup', {
+                        method: 'POST',
+                        body: JSON.stringify({ password: setupPassword.value })
+                    });
+                    if (res.ok) {
+                        setupRequired.value = false;
+                        currentView.value = 'login';
+                    } else {
+                        alert('Setup failed');
+                    }
+                };
+
+                const doLogin = async () => {
+                    console.log("Attempting login with password length:", loginPassword.value.length);
+                    try {
+                        const res = await fetch('/api/login', {
+                            method: 'POST',
+                            body: JSON.stringify({ password: loginPassword.value })
+                        });
+                        if (res.ok) {
+                            console.log("Login success");
+                            authenticated.value = true;
+                            currentView.value = 'dashboard';
+                            startLogStream();
+                        } else {
+                            console.log("Login failed status:", res.status);
+                            alert('Login failed');
+                        }
+                    } catch (e) {
+                        console.log("Login error:", e);
+                        alert("Login error: " + e);
+                    }
+                };
+
+                const logout = () => {
+                    document.cookie = 'session_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+                    authenticated.value = false;
+                    currentView.value = 'login';
+                };
+
+                const addProxy = async () => {
+                    const res = await fetch('/api/proxies', {
+                        method: 'POST',
+                        body: JSON.stringify(newProxy.value)
+                    });
+                    if (res.ok) {
+                        showAddModal.value = false;
+                        newProxy.value = { name: '', listen_addr: ':5020', target_addr: '127.0.0.1:502', enabled: true };
+                        fetchStatus();
+                    } else {
+                        alert('Failed to add proxy');
+                    }
+                };
+
+                const controlProxy = async (id, action) => {
+                    await fetch('/api/proxies/control', {
+                        method: 'POST',
+                        body: JSON.stringify({ id, action })
+                    });
+                    fetchStatus();
+                };
+
+                const deleteProxy = async (id) => {
+                    if(!confirm('Are you sure?')) return;
+                    await fetch(`/api/proxies?id=${id}`, { method: 'DELETE' });
+                    fetchStatus();
+                };
+
+                const startLogStream = () => {
+                    const evtSource = new EventSource('/api/logs/stream');
+                    evtSource.onmessage = (event) => {
+                        const log = JSON.parse(event.data);
+                        logs.value.push(log);
+                        if (logs.value.length > 200) logs.value.shift();
+                        // Scroll to bottom
+                        setTimeout(() => {
+                            const container = document.getElementById('log-container');
+                            if(container) container.scrollTop = container.scrollHeight;
+                        }, 10);
+                    };
+                };
+
+                const formatUptime = (s) => {
+                    if (s < 60) return `${Math.floor(s)}s`;
+                    if (s < 3600) return `${Math.floor(s/60)}m`;
+                    return `${Math.floor(s/3600)}h`;
+                };
+
+                const formatTime = (ts) => new Date(ts).toLocaleTimeString();
+                
+                const logColor = (level) => {
+                    if (level === 'ERROR') return 'border-red-500 text-red-300';
+                    if (level === 'WARN') return 'border-yellow-500 text-yellow-300';
+                    return 'border-green-500 text-gray-300';
+                };
+
+                const proxyName = (id) => {
+                    const p = proxies.value.find(x => x.id === id);
+                    return p ? p.name : id;
+                };
+
+                const importConfig = async (event) => {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    
+                    if(!confirm('This will overwrite current configuration. Continue?')) {
+                        event.target.value = '';
+                        return;
+                    }
+
+                    try {
+                        const res = await fetch('/api/config/import', {
+                            method: 'POST',
+                            body: file
+                        });
+                        
+                        if (res.ok) {
+                            alert('Configuration imported successfully.');
+                            fetchStatus();
+                        } else {
+                            const txt = await res.text();
+                            alert('Import failed: ' + txt);
+                        }
+                    } catch (e) {
+                        alert('Import error: ' + e);
+                    }
+                    event.target.value = '';
+                };
+
+                onMounted(() => {
+                    fetchStatus();
+                    setInterval(fetchStatus, 2000);
+                    // Check if we have a cookie, if so assume logged in or check via API (todo)
+                    if (document.cookie.includes('session_token')) {
+                        authenticated.value = true;
+                        startLogStream();
+                    }
+                });
+
+                return {
+                    currentView, setupRequired, authenticated, proxies, logs, filteredLogs, logFilter, logLevelFilter,
+                    setupPassword, loginPassword, showAddModal, newProxy, totalErrors,
+                    doSetup, doLogin, logout, addProxy, controlProxy, deleteProxy,
+                    formatUptime, formatTime, logColor, proxyName, importConfig
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
