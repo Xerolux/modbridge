@@ -16,6 +16,8 @@ import (
 	"runtime"
 	"syscall"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -71,6 +73,11 @@ func main() {
 	mux.Handle("/debug/pprof/block", pprof.Handler("block"))
 	mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
 	mux.Handle("/debug/pprof/allocs", pprof.Handler("allocs"))
+
+	// Prometheus metrics endpoint
+	// Usage: curl http://localhost:8080/metrics
+	//        Or configure Prometheus to scrape this endpoint
+	mux.Handle("/metrics", promhttp.Handler())
 
 	// Start server
 	addr := cfgMgr.Get().WebPort

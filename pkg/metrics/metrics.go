@@ -17,6 +17,10 @@ type Metrics struct {
 
 	// Per-proxy metrics
 	proxyMetrics map[string]*ProxyMetrics
+	proxyNames   map[string]string // Maps proxy ID to name
+
+	// Prometheus metrics
+	prometheus *PrometheusMetrics
 
 	// System metrics
 	startTime time.Time
@@ -40,12 +44,19 @@ type ProxyMetrics struct {
 func NewMetrics() *Metrics {
 	return &Metrics{
 		proxyMetrics: make(map[string]*ProxyMetrics),
+		proxyNames:   make(map[string]string),
+		prometheus:   NewPrometheusMetrics("modbus_proxy"),
 		startTime:    time.Now(),
 	}
 }
 
+// GetPrometheusMetrics returns the Prometheus metrics instance.
+func (m *Metrics) GetPrometheusMetrics() *PrometheusMetrics {
+	return m.prometheus
+}
+
 // RegisterProxy registers a new proxy for metrics tracking.
-func (m *Metrics) RegisterProxy(proxyID string) {
+func (m *Metrics) RegisterProxy(proxyID, proxyName string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -55,6 +66,7 @@ func (m *Metrics) RegisterProxy(proxyID string) {
 			latencies:       make([]time.Duration, 0, 1000),
 		}
 	}
+	m.proxyNames[proxyID] = proxyName
 }
 
 // UnregisterProxy removes a proxy from metrics tracking.
@@ -70,6 +82,7 @@ func (m *Metrics) RecordRequest(proxyID string, latency time.Duration, bytesIn, 
 
 	m.mu.RLock()
 	pm, exists := m.proxyMetrics[proxyID]
+	proxyName := m.proxyNames[proxyID]
 	m.mu.RUnlock()
 
 	if exists {
@@ -77,6 +90,9 @@ func (m *Metrics) RecordRequest(proxyID string, latency time.Duration, bytesIn, 
 		pm.bytesIn.Add(bytesIn)
 		pm.bytesOut.Add(bytesOut)
 		pm.recordLatency(latency)
+
+		// Record in Prometheus
+		m.prometheus.RecordRequest(proxyID, proxyName, latency.Seconds(), bytesIn, bytesOut)
 	}
 }
 
@@ -86,10 +102,12 @@ func (m *Metrics) RecordError(proxyID string) {
 
 	m.mu.RLock()
 	pm, exists := m.proxyMetrics[proxyID]
+	proxyName := m.proxyNames[proxyID]
 	m.mu.RUnlock()
 
 	if exists {
 		pm.errors.Add(1)
+		m.prometheus.RecordError(proxyID, proxyName, "general")
 	}
 }
 
@@ -97,10 +115,12 @@ func (m *Metrics) RecordError(proxyID string) {
 func (m *Metrics) RecordConnection(proxyID string, active bool) {
 	if active {
 		m.totalConnections.Add(1)
+		m.prometheus.RecordConnection()
 	}
 
 	m.mu.RLock()
 	pm, exists := m.proxyMetrics[proxyID]
+	proxyName := m.proxyNames[proxyID]
 	m.mu.RUnlock()
 
 	if exists {
@@ -109,6 +129,7 @@ func (m *Metrics) RecordConnection(proxyID string, active bool) {
 		} else {
 			pm.activeConns.Add(-1)
 		}
+		m.prometheus.SetActiveConnections(proxyID, proxyName, int(pm.activeConns.Load()))
 	}
 }
 

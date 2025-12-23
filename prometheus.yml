@@ -1,0 +1,28 @@
+# Prometheus configuration for Modbus Proxy
+# Place this in your Prometheus config directory or merge with existing prometheus.yml
+
+global:
+  scrape_interval: 15s # Scrape targets every 15 seconds
+  evaluation_interval: 15s # Evaluate rules every 15 seconds
+
+scrape_configs:
+  - job_name: 'modbus_proxy'
+    static_configs:
+      - targets: ['localhost:8080']
+        labels:
+          environment: 'production'
+          service: 'modbus-proxy'
+
+    # Scrape metrics from /metrics endpoint
+    metrics_path: '/metrics'
+
+    # Optional: Add basic auth if you secure the endpoint
+    # basic_auth:
+    #   username: 'prometheus'
+    #   password: 'secret'
+
+    # Optional: Relabel instance to be more readable
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'modbus-proxy-main'

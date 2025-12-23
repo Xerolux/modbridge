@@ -1,0 +1,157 @@
+{
+  "dashboard": {
+    "title": "Modbus Proxy Metrics",
+    "tags": ["modbus", "proxy"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "5s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(modbus_proxy_requests_total[5m])",
+            "legendFormat": "{{proxy_name}} ({{proxy_id}})",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps", "label": "Requests/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Error Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(modbus_proxy_errors_total[5m])",
+            "legendFormat": "{{proxy_name}} - {{type}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "errors/sec", "label": "Errors/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Request Latency (p95)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(modbus_proxy_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{proxy_name}} p95",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Latency"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Active Connections",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "modbus_proxy_active_connections",
+            "legendFormat": "{{proxy_name}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Connections"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Throughput",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "rate(modbus_proxy_bytes_received_total[5m])",
+            "legendFormat": "{{proxy_name}} RX",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(modbus_proxy_bytes_sent_total[5m])",
+            "legendFormat": "{{proxy_name}} TX",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "Bps", "label": "Bytes/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Connection Pool Status",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "modbus_proxy_pool_size",
+            "legendFormat": "{{proxy_name}} Total",
+            "refId": "A"
+          },
+          {
+            "expr": "modbus_proxy_pool_idle_connections",
+            "legendFormat": "{{proxy_name}} Idle",
+            "refId": "B"
+          },
+          {
+            "expr": "modbus_proxy_pool_active_connections",
+            "legendFormat": "{{proxy_name}} Active",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Connections"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Uptime",
+        "type": "singlestat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "modbus_proxy_uptime_seconds",
+            "refId": "A"
+          }
+        ],
+        "format": "dtdurations",
+        "valueName": "current"
+      },
+      {
+        "id": 8,
+        "title": "Total Devices",
+        "type": "singlestat",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 24},
+        "targets": [
+          {
+            "expr": "modbus_proxy_devices_total",
+            "refId": "A"
+          }
+        ],
+        "format": "none",
+        "valueName": "current"
+      }
+    ]
+  }
+}
