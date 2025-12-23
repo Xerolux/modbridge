@@ -10,13 +10,19 @@ import (
 	"modbusproxy/pkg/manager"
 	"modbusproxy/pkg/web"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 )
 
 func main() {
+	// 0. Runtime Settings for better profiling
+	runtime.SetBlockProfileRate(1)    // Enable blocking profile
+	runtime.SetMutexProfileFraction(1) // Enable mutex profile
+
 	// 1. Config
 	cfgMgr := config.NewManager("config.json")
 	if err := cfgMgr.Load(); err != nil {
@@ -49,6 +55,22 @@ func main() {
 
 	// Web Routes
 	mux.Handle("/", web.Handler())
+
+	// Profiling endpoints (available at /debug/pprof/)
+	// Usage:
+	//   go tool pprof http://localhost:8080/debug/pprof/heap
+	//   go tool pprof http://localhost:8080/debug/pprof/profile?seconds=30
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	mux.Handle("/debug/pprof/heap", pprof.Handler("heap"))
+	mux.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
+	mux.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
+	mux.Handle("/debug/pprof/block", pprof.Handler("block"))
+	mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
+	mux.Handle("/debug/pprof/allocs", pprof.Handler("allocs"))
 
 	// Start server
 	addr := cfgMgr.Get().WebPort
