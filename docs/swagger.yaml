@@ -1,0 +1,640 @@
+openapi: 3.0.3
+info:
+  title: Modbridge API
+  description: |
+    Enterprise-grade Modbus TCP Proxy with advanced features including:
+    - Multi-protocol support (TCP, RTU, ASCII)
+    - Load balancing and failover
+    - Circuit breaker protection
+    - Rate limiting
+    - User management with RBAC
+    - Real-time WebSocket updates
+    - Comprehensive observability
+  version: 1.0.0
+  contact:
+    name: Modbridge Support
+    url: https://github.com/Xerolux/modbridge
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+  - url: https://modbridge.example.com
+    description: Production server
+
+tags:
+  - name: Proxies
+    description: Modbus proxy management
+  - name: Devices
+    description: Device tracking and management
+  - name: Users
+    description: User management (admin only)
+  - name: Audit
+    description: Audit log access
+  - name: Backup
+    description: Configuration backup and restore
+  - name: Metrics
+    description: Metrics and statistics
+  - name: Health
+    description: Health and readiness checks
+  - name: Auth
+    description: Authentication
+
+paths:
+  # Authentication
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      description: Authenticate user and create session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: admin
+                password:
+                  type: string
+                  example: admin
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  session_id:
+                    type: string
+        '401':
+          description: Invalid credentials
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout
+      description: Destroy current session
+      responses:
+        '200':
+          description: Logout successful
+
+  # Proxies
+  /api/proxies:
+    get:
+      tags: [Proxies]
+      summary: List all proxies
+      description: Get list of all configured Modbus proxies
+      responses:
+        '200':
+          description: List of proxies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Proxy'
+
+    post:
+      tags: [Proxies]
+      summary: Create proxy
+      description: Create a new Modbus proxy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProxyConfig'
+      responses:
+        '201':
+          description: Proxy created
+        '400':
+          description: Invalid configuration
+
+  /api/proxies/{id}:
+    get:
+      tags: [Proxies]
+      summary: Get proxy
+      description: Get details of a specific proxy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Proxy details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proxy'
+        '404':
+          description: Proxy not found
+
+    put:
+      tags: [Proxies]
+      summary: Update proxy
+      description: Update proxy configuration
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProxyConfig'
+      responses:
+        '200':
+          description: Proxy updated
+        '404':
+          description: Proxy not found
+
+    delete:
+      tags: [Proxies]
+      summary: Delete proxy
+      description: Delete a proxy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Proxy deleted
+        '404':
+          description: Proxy not found
+
+  /api/proxies/{id}/start:
+    post:
+      tags: [Proxies]
+      summary: Start proxy
+      description: Start a stopped proxy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Proxy started
+        '400':
+          description: Proxy already running
+
+  /api/proxies/{id}/stop:
+    post:
+      tags: [Proxies]
+      summary: Stop proxy
+      description: Stop a running proxy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Proxy stopped
+
+  # Devices
+  /api/devices:
+    get:
+      tags: [Devices]
+      summary: List devices
+      description: Get list of all connected devices
+      responses:
+        '200':
+          description: List of devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Device'
+
+  /api/devices/{id}/rename:
+    post:
+      tags: [Devices]
+      summary: Rename device
+      description: Set custom name for a device
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: PLC-Building-A
+      responses:
+        '200':
+          description: Device renamed
+
+  # Users
+  /api/users:
+    get:
+      tags: [Users]
+      summary: List users
+      description: Get list of all users (admin only)
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '403':
+          description: Insufficient permissions
+
+    post:
+      tags: [Users]
+      summary: Create user
+      description: Create a new user (admin only)
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '201':
+          description: User created
+        '400':
+          description: Invalid data
+        '403':
+          description: Insufficient permissions
+
+  # Audit
+  /api/audit:
+    get:
+      tags: [Audit]
+      summary: Get audit logs
+      description: Retrieve audit log entries
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: user_id
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditEntry'
+
+  # Backup
+  /api/backup:
+    get:
+      tags: [Backup]
+      summary: List backups
+      description: Get list of available backups
+      responses:
+        '200':
+          description: List of backups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BackupInfo'
+
+    post:
+      tags: [Backup]
+      summary: Create backup
+      description: Create a new configuration backup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description:
+                  type: string
+                  example: Manual backup before upgrade
+      responses:
+        '201':
+          description: Backup created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  filename:
+                    type: string
+
+  /api/backup/{filename}/restore:
+    post:
+      tags: [Backup]
+      summary: Restore backup
+      description: Restore configuration from backup
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Backup restored
+        '404':
+          description: Backup not found
+
+  # Metrics
+  /api/metrics:
+    get:
+      tags: [Metrics]
+      summary: Get metrics
+      description: Retrieve current metrics and statistics
+      responses:
+        '200':
+          description: Metrics data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Metrics'
+
+  # Health
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Check if the service is healthy (liveness probe)
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheck'
+        '503':
+          description: Service is unhealthy
+
+  /api/ready:
+    get:
+      tags: [Health]
+      summary: Readiness check
+      description: Check if the service is ready to accept traffic
+      responses:
+        '200':
+          description: Service is ready
+        '503':
+          description: Service is not ready
+
+  # WebSocket
+  /ws:
+    get:
+      tags: [WebSocket]
+      summary: WebSocket connection
+      description: Establish WebSocket connection for real-time updates
+      responses:
+        '101':
+          description: WebSocket connection established
+
+components:
+  schemas:
+    Proxy:
+      type: object
+      properties:
+        id:
+          type: string
+          example: proxy-1
+        name:
+          type: string
+          example: PLC-Building-A
+        listen_addr:
+          type: string
+          example: "0.0.0.0:5020"
+        target_addr:
+          type: string
+          example: "192.168.1.100:502"
+        enabled:
+          type: boolean
+        status:
+          type: string
+          enum: [running, stopped, error]
+        stats:
+          $ref: '#/components/schemas/ProxyStats'
+
+    ProxyConfig:
+      type: object
+      required: [id, name, listen_addr, target_addr]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        listen_addr:
+          type: string
+        target_addr:
+          type: string
+        enabled:
+          type: boolean
+          default: true
+        pool_size:
+          type: integer
+          default: 10
+        pool_min_size:
+          type: integer
+          default: 2
+        conn_timeout:
+          type: integer
+          description: Connection timeout in seconds
+          default: 5
+        conn_max_idle:
+          type: integer
+          description: Max idle time in seconds
+          default: 300
+
+    ProxyStats:
+      type: object
+      properties:
+        uptime:
+          type: integer
+          description: Uptime in seconds
+        requests:
+          type: integer
+        errors:
+          type: integer
+        last_start:
+          type: string
+          format: date-time
+
+    Device:
+      type: object
+      properties:
+        id:
+          type: string
+        ip:
+          type: string
+        mac:
+          type: string
+        name:
+          type: string
+        proxy_id:
+          type: string
+        first_seen:
+          type: string
+          format: date-time
+        last_seen:
+          type: string
+          format: date-time
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, operator, viewer]
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        last_login:
+          type: string
+          format: date-time
+
+    UserCreate:
+      type: object
+      required: [username, email, password, role]
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        role:
+          type: string
+          enum: [admin, operator, viewer]
+
+    AuditEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        user_id:
+          type: string
+        username:
+          type: string
+        action:
+          type: string
+        resource:
+          type: string
+        success:
+          type: boolean
+        error:
+          type: string
+        ip_address:
+          type: string
+
+    BackupInfo:
+      type: object
+      properties:
+        filename:
+          type: string
+        size:
+          type: integer
+          description: File size in bytes
+        created:
+          type: string
+          format: date-time
+
+    Metrics:
+      type: object
+      properties:
+        total_requests:
+          type: integer
+        total_errors:
+          type: integer
+        active_connections:
+          type: integer
+        uptime_seconds:
+          type: integer
+
+    HealthCheck:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        uptime_seconds:
+          type: number
+        version:
+          type: string
+        checks:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ComponentCheck'
+
+    ComponentCheck:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pass, fail]
+        message:
+          type: string
+        error:
+          type: string
+
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: session_id
