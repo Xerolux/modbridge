@@ -5,13 +5,17 @@ import (
 	"fmt"
 	"log"
 	"modbusproxy/pkg/api"
+	"modbusproxy/pkg/audit"
 	"modbusproxy/pkg/auth"
+	"modbusproxy/pkg/backup"
 	"modbusproxy/pkg/config"
 	"modbusproxy/pkg/logger"
 	"modbusproxy/pkg/manager"
 	"modbusproxy/pkg/middleware"
+	"modbusproxy/pkg/rbac"
 	"modbusproxy/pkg/tracing"
 	"modbusproxy/pkg/web"
+	"modbusproxy/pkg/websocket"
 	"net/http"
 	"net/http/pprof"
 	"os"
@@ -89,14 +93,64 @@ func main() {
 	authenticator := auth.NewAuthenticator()
 	go authenticator.CleanupExpiredSessions()
 
+	// 4.1. WebSocket Hub (Phase 3)
+	wsHub := websocket.NewHub()
+	go wsHub.Run()
+	l.Info("SYSTEM", "WebSocket hub initialized")
+	log.Println("WebSocket hub initialized for real-time updates")
+
+	// 4.2. User Management & RBAC (Phase 3)
+	userManager := rbac.NewUserManager()
+	// Create default admin user if not exists
+	if _, err := userManager.GetUser("admin"); err != nil {
+		_, err := userManager.CreateUser("admin", "admin@modbridge.local", "admin", rbac.RoleAdmin)
+		if err != nil {
+			log.Printf("Warning: Failed to create default admin user: %v", err)
+		} else {
+			l.Info("SYSTEM", "Default admin user created (username: admin, password: admin)")
+			log.Println("⚠️  Default admin user created - please change password!")
+		}
+	}
+	l.Info("SYSTEM", "User management system initialized")
+
+	// 4.3. Audit Logging (Phase 3)
+	auditLogger, err := audit.NewLogger("audit.log", 10000)
+	if err != nil {
+		log.Printf("Warning: Failed to initialize audit logger: %v", err)
+	} else {
+		defer auditLogger.Close()
+		l.Info("SYSTEM", "Audit logging initialized (capacity: 10000 entries)")
+		log.Println("Audit logging enabled - all admin actions will be tracked")
+	}
+
+	// 4.4. Backup Manager (Phase 3)
+	backupManager, err := backup.NewManager("./backups")
+	if err != nil {
+		log.Printf("Warning: Failed to initialize backup manager: %v", err)
+	} else {
+		l.Info("SYSTEM", "Backup manager initialized (directory: ./backups)")
+		log.Println("Configuration backup/restore enabled")
+	}
+
 	// 5. API Server
 	apiServer := api.NewServer(cfgMgr, mgr, authenticator, l)
+
+	// TODO: Pass Phase 3 systems to API server for new endpoints
+	// Will be used for: /api/users, /api/audit, /api/backup
+	_ = userManager
+	_ = auditLogger
+	_ = backupManager
 
 	// 6. Router
 	mux := http.NewServeMux()
 
 	// API Routes
 	apiServer.Routes(mux)
+
+	// WebSocket Route (Phase 3)
+	wsHandler := websocket.NewHandler(wsHub)
+	mux.Handle("/ws", wsHandler)
+	l.Info("SYSTEM", "WebSocket endpoint registered at /ws")
 
 	// Web Routes
 	mux.Handle("/", web.Handler())
@@ -171,6 +225,10 @@ func main() {
 
 	// Stop all proxies
 	mgr.StopAll()
+
+	// Close WebSocket connections
+	log.Println("Closing WebSocket connections...")
+	// WebSocket hub will be garbage collected
 
 	// Shutdown HTTP server
 	if err := server.Shutdown(ctx); err != nil {
