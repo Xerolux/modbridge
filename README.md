@@ -2,7 +2,26 @@
 
 **Version:** 0.1.0
 
+[![CI](https://github.com/Xerolux/modbridge/workflows/CI/badge.svg)](https://github.com/Xerolux/modbridge/actions/workflows/ci.yml)
+[![Release](https://github.com/Xerolux/modbridge/workflows/Release/badge.svg)](https://github.com/Xerolux/modbridge/actions/workflows/release.yml)
+[![Docker](https://github.com/Xerolux/modbridge/workflows/Docker/badge.svg)](https://github.com/Xerolux/modbridge/actions/workflows/docker-publish.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Ein moderner, robuster Modbus TCP Proxy Manager mit einer eleganten Web-Oberfläche. ModBridge ermöglicht die Verwaltung mehrerer Modbus TCP Proxy-Instanzen über eine zentrale Webschnittstelle.
+
+## 📦 Quick Install
+
+```bash
+# Debian/Ubuntu (.deb)
+wget https://github.com/Xerolux/modbridge/releases/latest/download/modbus-proxy-manager_0.1.0_amd64.deb
+sudo dpkg -i modbus-proxy-manager_0.1.0_amd64.deb
+
+# Docker (vorgefertigt)
+docker run -d -p 8080:8080 -p 5020-5030:5020-5030 ghcr.io/xerolux/modbridge:latest
+
+# Docker Compose
+docker-compose up -d
+```
 
 ## Inhaltsverzeichnis
 
@@ -121,6 +140,35 @@ Die schnellste Methode für Debian und Ubuntu Systeme.
 ### Methode 2: Docker
 
 Docker ist eine plattformunabhängige Installationsmethode.
+
+#### Mit vorgebautem Image (GitHub Container Registry)
+
+Das schnellste Docker-Setup - kein Build erforderlich!
+
+1. **Image pullen und starten**:
+   ```bash
+   docker run -d \
+     --name modbus-proxy \
+     -p 8080:8080 \
+     -p 5020-5030:5020-5030 \
+     -v $(pwd)/config.json:/app/config.json \
+     -v $(pwd)/logs:/app/data \
+     --restart unless-stopped \
+     ghcr.io/xerolux/modbridge:latest
+   ```
+
+2. **Web-Interface öffnen**:
+   ```
+   http://localhost:8080
+   ```
+
+**Verfügbare Tags**:
+- `latest` - Neueste stabile Version
+- `v0.1.0` - Spezifische Version
+- `main` - Neueste Entwicklungsversion
+- `edge` - Bleeding Edge (main branch)
+
+---
 
 #### Mit Docker Compose
 
