@@ -2,7 +2,12 @@ version: '3.8'
 
 services:
   modbus-proxy:
-    build: .
+    # Option 1: Use pre-built image from GitHub Container Registry (recommended)
+    image: ghcr.io/xerolux/modbridge:latest
+
+    # Option 2: Build locally (comment out 'image' above and uncomment below)
+    # build: .
+
     container_name: modbus-proxy-manager
     ports:
       - "8080:8080"
