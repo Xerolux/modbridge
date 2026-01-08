@@ -43,11 +43,14 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/proxies", s.corsMiddleware(s.auth.Middleware(s.handleProxies)))
 	mux.HandleFunc("/api/proxies/control", s.corsMiddleware(s.auth.Middleware(s.handleProxyControl)))
 	mux.HandleFunc("/api/devices", s.corsMiddleware(s.auth.Middleware(s.handleDevices)))
+	mux.HandleFunc("/api/devices/history", s.corsMiddleware(s.auth.Middleware(s.handleDeviceHistory)))
 	mux.HandleFunc("/api/logs", s.corsMiddleware(s.auth.Middleware(s.handleLogs)))
 	mux.HandleFunc("/api/logs/download", s.corsMiddleware(s.auth.Middleware(s.handleLogDownload)))
 	mux.HandleFunc("/api/logs/stream", s.corsMiddleware(s.auth.Middleware(s.handleLogStream)))
 	mux.HandleFunc("/api/config/export", s.corsMiddleware(s.auth.Middleware(s.handleConfigExport)))
 	mux.HandleFunc("/api/config/import", s.corsMiddleware(s.auth.Middleware(s.handleConfigImport)))
+	mux.HandleFunc("/api/config/webport", s.corsMiddleware(s.auth.Middleware(s.handleWebPort)))
+	mux.HandleFunc("/api/system/restart", s.corsMiddleware(s.auth.Middleware(s.handleSystemRestart)))
 }
 
 // corsMiddleware adds CORS headers to responses.
@@ -170,14 +173,52 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 			req.ID = uuid.New().String()
 		}
 
+		// Set defaults for new fields if not provided
+		if req.ConnectionTimeout == 0 {
+			req.ConnectionTimeout = 10
+		}
+		if req.ReadTimeout == 0 {
+			req.ReadTimeout = 30
+		}
+		if req.MaxRetries == 0 {
+			req.MaxRetries = 3
+		}
+
 		if err := s.mgr.AddProxy(req, true); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		// If enabled, start it
-		if req.Enabled {
+		// If enabled and not paused, start it
+		if req.Enabled && !req.Paused {
 			_ = s.mgr.StartProxy(req.ID)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method == http.MethodPut {
+		var req config.ProxyConfig
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Set defaults for new fields if not provided
+		if req.ConnectionTimeout == 0 {
+			req.ConnectionTimeout = 10
+		}
+		if req.ReadTimeout == 0 {
+			req.ReadTimeout = 30
+		}
+		if req.MaxRetries == 0 {
+			req.MaxRetries = 3
+		}
+
+		if err := s.mgr.UpdateProxy(req); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -203,7 +244,7 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		ID     string `json:"id"`
-		Action string `json:"action"` // start, stop, restart
+		Action string `json:"action"` // start, stop, restart, pause, resume
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -220,6 +261,10 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 		_ = s.mgr.StopProxy(req.ID)
 		time.Sleep(100 * time.Millisecond)
 		err = s.mgr.StartProxy(req.ID)
+	case "pause":
+		err = s.mgr.PauseProxy(req.ID)
+	case "resume":
+		err = s.mgr.ResumeProxy(req.ID)
 	default:
 		err = fmt.Errorf("unknown action")
 	}
@@ -260,4 +305,66 @@ func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 	}
+}
+
+func (s *Server) handleSystemRestart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	s.log.Info("System restart requested via API", "")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"restarting"}`))
+
+	// Stop all proxies gracefully
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		s.mgr.StopAll()
+		time.Sleep(500 * time.Millisecond)
+		s.log.Info("System restarting now", "")
+		// Exit with code 0 so the process manager (systemd, docker, etc.) can restart it
+		// Note: This assumes the service is running under a process manager
+		panic("Restart requested") // This will trigger main's recover and graceful shutdown
+	}()
+}
+
+func (s *Server) handleWebPort(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		cfg := s.cfgMgr.Get()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"web_port": cfg.WebPort})
+		return
+	}
+
+	if r.Method == http.MethodPut {
+		var req struct {
+			WebPort string `json:"web_port"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Validate port format
+		if req.WebPort == "" {
+			http.Error(w, "web_port cannot be empty", http.StatusBadRequest)
+			return
+		}
+
+		// Update config
+		if err := s.cfgMgr.Update(func(c *config.Config) error {
+			c.WebPort = req.WebPort
+			return nil
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Port updated, restart required"})
+		return
+	}
+
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }
