@@ -48,6 +48,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/logs/stream", s.corsMiddleware(s.auth.Middleware(s.handleLogStream)))
 	mux.HandleFunc("/api/config/export", s.corsMiddleware(s.auth.Middleware(s.handleConfigExport)))
 	mux.HandleFunc("/api/config/import", s.corsMiddleware(s.auth.Middleware(s.handleConfigImport)))
+	mux.HandleFunc("/api/config/webport", s.corsMiddleware(s.auth.Middleware(s.handleWebPort)))
 	mux.HandleFunc("/api/system/restart", s.corsMiddleware(s.auth.Middleware(s.handleSystemRestart)))
 }
 
@@ -325,4 +326,44 @@ func (s *Server) handleSystemRestart(w http.ResponseWriter, r *http.Request) {
 		// Note: This assumes the service is running under a process manager
 		panic("Restart requested") // This will trigger main's recover and graceful shutdown
 	}()
+}
+
+func (s *Server) handleWebPort(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		cfg := s.cfgMgr.Get()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"web_port": cfg.WebPort})
+		return
+	}
+
+	if r.Method == http.MethodPut {
+		var req struct {
+			WebPort string `json:"web_port"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Validate port format
+		if req.WebPort == "" {
+			http.Error(w, "web_port cannot be empty", http.StatusBadRequest)
+			return
+		}
+
+		// Update config
+		if err := s.cfgMgr.Update(func(c *config.Config) error {
+			c.WebPort = req.WebPort
+			return nil
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Port updated, restart required"})
+		return
+	}
+
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }
