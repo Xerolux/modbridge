@@ -18,24 +18,24 @@ type ProxyInstance struct {
 	ListenAddr string
 	TargetAddr string
 
-	listener      net.Listener
-	targetConn    net.Conn
-	targetMu      sync.Mutex
+	listener   net.Listener
+	targetConn net.Conn
+	targetMu   sync.Mutex
 
 	log           *logger.Logger
 	deviceTracker *devices.Tracker
 	ctx           context.Context
 	cancel        context.CancelFunc
 
-	Stats         Stats
+	Stats Stats
 }
 
 type Stats struct {
-	Uptime       time.Duration
-	LastStart    time.Time
-	Requests     int64
-	Errors       int64
-	Status       string // "Running", "Stopped", "Error"
+	Uptime    time.Duration
+	LastStart time.Time
+	Requests  int64
+	Errors    int64
+	Status    string // "Running", "Stopped", "Error"
 }
 
 // NewProxyInstance creates a new proxy.
@@ -64,11 +64,11 @@ func (p *ProxyInstance) Start() error {
 		return err
 	}
 	p.listener = l
-	
+
 	p.ctx, p.cancel = context.WithCancel(context.Background())
 	p.Stats.Status = "Running"
 	p.Stats.LastStart = time.Now()
-	
+
 	p.log.Info(p.ID, "Started proxy listening on "+p.ListenAddr+" -> "+p.TargetAddr)
 
 	go p.acceptLoop()
@@ -80,7 +80,7 @@ func (p *ProxyInstance) Stop() {
 	if p.Stats.Status != "Running" {
 		return
 	}
-	
+
 	p.log.Info(p.ID, "Stopping proxy")
 	p.cancel()
 	if p.listener != nil {

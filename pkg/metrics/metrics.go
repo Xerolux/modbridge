@@ -11,8 +11,8 @@ type Metrics struct {
 	mu sync.RWMutex
 
 	// Counters (atomic)
-	totalRequests   atomic.Int64
-	totalErrors     atomic.Int64
+	totalRequests    atomic.Int64
+	totalErrors      atomic.Int64
 	totalConnections atomic.Int64
 
 	// Per-proxy metrics
@@ -24,10 +24,10 @@ type Metrics struct {
 
 // ProxyMetrics tracks metrics for a single proxy.
 type ProxyMetrics struct {
-	requests   atomic.Int64
-	errors     atomic.Int64
-	bytesIn    atomic.Int64
-	bytesOut   atomic.Int64
+	requests    atomic.Int64
+	errors      atomic.Int64
+	bytesIn     atomic.Int64
+	bytesOut    atomic.Int64
 	activeConns atomic.Int32
 
 	// Latency tracking

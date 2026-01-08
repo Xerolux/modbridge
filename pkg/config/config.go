@@ -17,9 +17,9 @@ type ProxyConfig struct {
 
 // Config holds the global configuration.
 type Config struct {
-	WebPort      string        `json:"web_port"`
+	WebPort       string        `json:"web_port"`
 	AdminPassHash string        `json:"admin_pass_hash"` // Empty means first-run
-	Proxies      []ProxyConfig `json:"proxies"`
+	Proxies       []ProxyConfig `json:"proxies"`
 }
 
 // Manager handles config persistence.
@@ -92,7 +92,7 @@ func (m *Manager) Update(fn func(*Config) error) error {
 	defer m.mu.Unlock()
 
 	// Create a copy to modify
-	newCfg := m.cfg 
+	newCfg := m.cfg
 	// (Deep copy slice for safety)
 	if newCfg.Proxies != nil {
 		proxies := make([]ProxyConfig, len(newCfg.Proxies))
@@ -105,7 +105,7 @@ func (m *Manager) Update(fn func(*Config) error) error {
 	}
 
 	m.cfg = newCfg
-	
+
 	// Save to disk immediately
 	f, err := os.Create(m.path)
 	if err != nil {

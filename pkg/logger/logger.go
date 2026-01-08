@@ -83,7 +83,7 @@ func (l *Logger) Log(level LogLevel, proxyID, msg string) {
 			// Drop if channel full to avoid blocking logger
 		}
 	}
-	
+
 	// Print to stdout for debug
 	fmt.Printf("[%s] [%s] %s: %s\n", entry.Timestamp, entry.Level, entry.ProxyID, entry.Message)
 }
@@ -109,11 +109,11 @@ func (l *Logger) Unsubscribe(ch chan LogEntry) {
 func (l *Logger) GetRecent(limit int) []LogEntry {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	
+
 	if limit > len(l.ringBuffer) {
 		limit = len(l.ringBuffer)
 	}
-	
+
 	// Return a copy
 	out := make([]LogEntry, limit)
 	start := len(l.ringBuffer) - limit
