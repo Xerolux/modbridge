@@ -109,7 +109,7 @@ func (m *Manager) StartProxy(id string) error {
 	if err := p.Start(); err != nil {
 		return err
 	}
-	
+
 	// Update enabled state
 	return m.cfgMgr.Update(func(c *config.Config) error {
 		for i, pc := range c.Proxies {

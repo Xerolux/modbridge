@@ -174,16 +174,16 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		
+
 		// If enabled, start it
 		if req.Enabled {
 			_ = s.mgr.StartProxy(req.ID)
 		}
-		
+
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	
+
 	if r.Method == http.MethodDelete {
 		id := r.URL.Query().Get("id")
 		if err := s.mgr.RemoveProxy(id); err != nil {
@@ -200,7 +200,7 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	var req struct {
 		ID     string `json:"id"`
 		Action string `json:"action"` // start, stop, restart
@@ -209,7 +209,7 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	
+
 	var err error
 	switch req.Action {
 	case "start":
@@ -223,7 +223,7 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 	default:
 		err = fmt.Errorf("unknown action")
 	}
-	
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

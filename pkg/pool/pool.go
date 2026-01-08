@@ -38,15 +38,15 @@ type Pool struct {
 	maxIdleTime    time.Duration
 	acquireTimeout time.Duration
 
-	closed bool
-	size   int
+	closed  bool
+	size    int
 	maxSize int
 }
 
 type poolConn struct {
-	conn       net.Conn
-	lastUsed   time.Time
-	inUse      bool
+	conn     net.Conn
+	lastUsed time.Time
+	inUse    bool
 }
 
 // NewPool creates a new connection pool.
@@ -223,10 +223,10 @@ func (p *Pool) Stats() PoolStats {
 	defer p.mu.Unlock()
 
 	return PoolStats{
-		TotalConns:     p.size,
-		IdleConns:      len(p.conns),
-		ActiveConns:    p.size - len(p.conns),
-		MaxSize:        p.maxSize,
+		TotalConns:  p.size,
+		IdleConns:   len(p.conns),
+		ActiveConns: p.size - len(p.conns),
+		MaxSize:     p.maxSize,
 	}
 }
 

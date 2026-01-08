@@ -8,13 +8,13 @@ import (
 
 // Device represents a connected client device.
 type Device struct {
-	IP          string    `json:"ip"`
-	MAC         string    `json:"mac"`
-	Name        string    `json:"name"`         // User-friendly name
-	LastConnect time.Time `json:"last_connect"`
-	FirstSeen   time.Time `json:"first_seen"`
+	IP           string    `json:"ip"`
+	MAC          string    `json:"mac"`
+	Name         string    `json:"name"` // User-friendly name
+	LastConnect  time.Time `json:"last_connect"`
+	FirstSeen    time.Time `json:"first_seen"`
 	RequestCount int64     `json:"request_count"`
-	ProxyID     string    `json:"proxy_id"`
+	ProxyID      string    `json:"proxy_id"`
 }
 
 // Tracker tracks connected devices.
