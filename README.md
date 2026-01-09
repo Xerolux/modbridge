@@ -1134,5 +1134,5 @@ MIT License - siehe [LICENSE](LICENSE) für Details.
 ---
 
 **Version**: 0.1.0
-**Letzte Aktualisierung**: 24. Dezember 2025
+**Letzte Aktualisierung**: 9. Januar 2026
 **Status**: Beta

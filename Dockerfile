@@ -1,8 +1,8 @@
 # Build stage
 FROM golang:1.24-alpine AS builder
 
-# Install build dependencies
-RUN apk add --no-cache git ca-certificates tzdata
+# Install build dependencies including GCC for CGO/sqlite3
+RUN apk add --no-cache git ca-certificates tzdata gcc musl-dev
 
 WORKDIR /build
 
@@ -14,7 +14,8 @@ RUN go mod download && go mod verify
 COPY . .
 
 # Build the application with optimizations
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+# CGO is required for sqlite3
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-s -w" \
     -trimpath \
     -o modbridge ./main.go

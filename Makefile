@@ -95,10 +95,10 @@ dev: ## Run in development mode with live reload (requires air)
 
 deb-amd64: ## Build .deb package for AMD64
 	@echo "Building .deb package for AMD64..."
-	@mkdir -p $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_amd64/{DEBIAN,opt/modbusmanager,etc/systemd/system,var/lib/modbusmanager,var/log/modbusmanager}
-	@GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_amd64/opt/modbusmanager/$(BINARY_NAME) ./main.go
-	@chmod +x $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_amd64/opt/modbusmanager/$(BINARY_NAME)
-	@cp modbusmanager.service $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_amd64/etc/systemd/system/
+	@mkdir -p $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_amd64/{DEBIAN,opt/modbridge,etc/systemd/system,var/lib/modbridge,var/log/modbridge}
+	@GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_amd64/opt/modbridge/$(BINARY_NAME) ./main.go
+	@chmod +x $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_amd64/opt/modbridge/$(BINARY_NAME)
+	@cp modbridge.service $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_amd64/etc/systemd/system/
 	@echo "Package: $(DEB_PACKAGE_NAME)" > $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_amd64/DEBIAN/control
 	@echo "Version: $(VERSION)" >> $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_amd64/DEBIAN/control
 	@echo "Section: net" >> $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_amd64/DEBIAN/control
@@ -118,10 +118,10 @@ deb-amd64: ## Build .deb package for AMD64
 
 deb-arm64: ## Build .deb package for ARM64
 	@echo "Building .deb package for ARM64..."
-	@mkdir -p $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_arm64/{DEBIAN,opt/modbusmanager,etc/systemd/system,var/lib/modbusmanager,var/log/modbusmanager}
-	@GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_arm64/opt/modbusmanager/$(BINARY_NAME) ./main.go
-	@chmod +x $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_arm64/opt/modbusmanager/$(BINARY_NAME)
-	@cp modbusmanager.service $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_arm64/etc/systemd/system/
+	@mkdir -p $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_arm64/{DEBIAN,opt/modbridge,etc/systemd/system,var/lib/modbridge,var/log/modbridge}
+	@GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_arm64/opt/modbridge/$(BINARY_NAME) ./main.go
+	@chmod +x $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_arm64/opt/modbridge/$(BINARY_NAME)
+	@cp modbridge.service $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_arm64/etc/systemd/system/
 	@echo "Package: $(DEB_PACKAGE_NAME)" > $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_arm64/DEBIAN/control
 	@echo "Version: $(VERSION)" >> $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_arm64/DEBIAN/control
 	@echo "Section: net" >> $(DEB_BUILD_DIR)/$(DEB_PACKAGE_NAME)_$(VERSION)_arm64/DEBIAN/control
