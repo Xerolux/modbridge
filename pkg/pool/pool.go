@@ -253,10 +253,11 @@ func (p *Pool) cleanup() {
 
 		// Remove expired connections
 		timeout := time.After(100 * time.Millisecond)
+	cleanup_loop:
 		for {
 			select {
 			case <-timeout:
-				return
+				break cleanup_loop
 			case pc := <-p.conns:
 				if time.Since(pc.lastUsed) > p.maxIdleTime {
 					pc.conn.Close()
@@ -266,10 +267,10 @@ func (p *Pool) cleanup() {
 				} else {
 					// Put it back
 					p.conns <- pc
-					return
+					break cleanup_loop
 				}
 			default:
-				return
+				break cleanup_loop
 			}
 		}
 	}

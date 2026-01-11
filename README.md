@@ -53,15 +53,21 @@ docker-compose up -d
   - Optional: Read-Only-Ansicht für nicht authentifizierte Benutzer
 - **Persistenz**: JSON-basierte Konfiguration mit Export/Import
 - **Single Binary**: Gesamte Frontend ist im Go-Binary eingebettet
-- **Graceful Shutdown**: Sauberes Herunterfahren aller Proxy-Instanzen
+- **Graceful Shutdown**: Sauberes Herunterfahren aller Proxy-Instanzen mit WaitGroup-Synchronisation
 - **Health Checks**: Integrierte Gesundheitsprüfungen für Container-Umgebungen
+- **MaxReadSize**: Automatisches Aufteilen großer Modbus-Read-Requests
+- **Device Tracking**: SQLite-Datenbank zur Verfolgung verbundener Geräte
+- **Connection History**: Vollständige Historie aller Modbus-Verbindungen
 
 ### Performance-Merkmale
 - Latenz (avg): ~3-5ms
 - Latenz (p99): ~12ms
 - Durchsatz: ~10,000 req/s
-- Speicher (idle): ~8MB
+- Speicher (idle): ~2.5MB (optimiert)
+- Speicher (load): ~8-15MB
 - Gleichzeitige Verbindungen: ~1,000
+- Thread-Safe: Race Condition freie Implementation
+- Graceful Shutdown: Wartet auf alle aktiven Goroutines
 
 ---
 
@@ -78,6 +84,8 @@ docker-compose up -d
 #### Für Quellcode-Kompilierung
 - Go 1.24.0 oder höher
 - Git
+- GCC (für CGO/SQLite) - unter Windows: MinGW oder TDM-GCC
+- CGO_ENABLED=1 erforderlich für SQLite-Support
 
 #### Für Docker-Installation
 - Docker 20.10+
@@ -814,6 +822,33 @@ sudo systemctl restart modbridge
 ---
 
 ## Performance
+
+### Aktuelle Optimierungen (v0.1.1)
+
+Die folgenden Performance- und Stabilitätsverbesserungen wurden implementiert:
+
+#### Thread-Safety
+- **Race Condition Fix**: `Stats.Requests` und `Stats.Errors` verwenden jetzt `atomic.Int64` für thread-sichere Operationen
+- **Lock-freie Metriken**: Keine Locks mehr für Counter-Inkrementierungen
+
+#### Resource Management
+- **Goroutine Leak Prevention**: Implementierung von `sync.WaitGroup` für alle Proxy-Goroutines
+- **Graceful Shutdown**: `Stop()` wartet nun auf Beendigung aller aktiven Verbindungen
+- Korrekte `defer`-Reihenfolge in `handleClient()` und `acceptLoop()`
+
+#### Memory-Optimierungen
+- **Slice Pre-Allocation**: Vorausberechnung der Capacity für aggregierte Daten in `handleSplitRead()`
+  ```go
+  expectedBytes := int(quantity) * 2
+  aggregatedData := make([]byte, 0, expectedBytes)
+  ```
+- **Manager Slice-Optimierung**: Pre-Allocation in `RemoveProxy()` und `GetProxies()`
+- Reduzierte Memory-Allocations durch capacity hints
+
+#### Code-Qualität
+- Verbesserte Context-Nutzung in Goroutines
+- Konsistente Error-Behandlung
+- Optimierte Lock-Contention durch frühere Lock-Freigabe
 
 ### Benchmarks (v0.1.0)
 
