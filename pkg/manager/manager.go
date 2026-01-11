@@ -86,7 +86,7 @@ func (m *Manager) RemoveProxy(id string) error {
 	}
 
 	return m.cfgMgr.Update(func(c *config.Config) error {
-		newProxies := []config.ProxyConfig{}
+		newProxies := make([]config.ProxyConfig, 0, len(c.Proxies)-1)
 		for _, pc := range c.Proxies {
 			if pc.ID != id {
 				newProxies = append(newProxies, pc)
@@ -240,7 +240,7 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 		cfgMap[pc.ID] = pc
 	}
 
-	res := []map[string]interface{}{}
+	res := make([]map[string]interface{}, 0, len(m.proxies))
 	for _, p := range m.proxies {
 		status := p.Stats
 		uptime := time.Duration(0)
@@ -260,8 +260,8 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 			"paused":             pCfg.Paused,
 			"enabled":            pCfg.Enabled,
 			"uptime_s":           uptime.Seconds(),
-			"requests":           status.Requests,
-			"errors":             status.Errors,
+			"requests":           status.Requests.Load(),
+			"errors":             status.Errors.Load(),
 			"description":        pCfg.Description,
 			"connection_timeout": pCfg.ConnectionTimeout,
 			"read_timeout":       pCfg.ReadTimeout,
