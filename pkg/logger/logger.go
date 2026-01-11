@@ -37,7 +37,7 @@ type Logger struct {
 
 // NewLogger creates a new logger.
 func NewLogger(filePath string, bufferSize int) (*Logger, error) {
-	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return nil, err
 	}

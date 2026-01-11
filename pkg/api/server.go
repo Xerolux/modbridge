@@ -152,6 +152,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    token,
 		Expires:  time.Now().Add(24 * time.Hour),
 		HttpOnly: true,
+		Secure:   true, // Only send over HTTPS
+		SameSite: http.SameSiteStrictMode,
 		Path:     "/",
 	})
 	w.WriteHeader(http.StatusOK)

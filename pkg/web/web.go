@@ -28,7 +28,7 @@ func Handler() http.Handler {
 		// Try to open the file
 		f, err := distRoot.Open(path)
 		if err == nil {
-			f.Close()
+			_ = f.Close() // Ignore close error
 			// File exists, serve it
 			// Manually set content type to be safe, as http.FileServer might guess wrong on embedded sometimes
 			ctype := mime.TypeByExtension(filepath.Ext(path))
@@ -48,8 +48,12 @@ func Handler() http.Handler {
 				w.Header().Set("Content-Type", ctype)
 			}
 
-			content, _ := fs.ReadFile(distRoot, path)
-			w.Write(content)
+			content, err := fs.ReadFile(distRoot, path)
+			if err != nil {
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			_, _ = w.Write(content) // Ignore write error (already committed response)
 			return
 		}
 
@@ -60,6 +64,6 @@ func Handler() http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html")
-		w.Write(content)
+		_, _ = w.Write(content) // Ignore write error (already committed response)
 	})
 }
