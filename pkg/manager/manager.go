@@ -18,6 +18,7 @@ type Manager struct {
 	cfgMgr        *config.Manager
 	log           *logger.Logger
 	deviceTracker *devices.Tracker
+	broadcaster   *EventBroadcaster
 }
 
 // NewManager creates a manager with database support.
@@ -27,6 +28,7 @@ func NewManager(cfgMgr *config.Manager, log *logger.Logger, db *database.DB) *Ma
 		cfgMgr:        cfgMgr,
 		log:           log,
 		deviceTracker: devices.NewTracker(db),
+		broadcaster:   NewEventBroadcaster(),
 	}
 	return m
 }
@@ -54,6 +56,13 @@ func (m *Manager) AddProxy(cfg config.ProxyConfig, save bool) error {
 
 	p := proxy.NewProxyInstance(cfg.ID, cfg.Name, cfg.ListenAddr, cfg.TargetAddr, cfg.MaxReadSize, m.log, m.deviceTracker)
 	m.proxies[cfg.ID] = p
+
+	// Broadcast event
+	m.broadcaster.Broadcast(map[string]interface{}{
+		"type":      "proxy_added",
+		"timestamp": time.Now(),
+		"proxy":     m.getProxyStatus(cfg.ID),
+	})
 
 	if save {
 		return m.cfgMgr.Update(func(c *config.Config) error {
@@ -85,6 +94,13 @@ func (m *Manager) RemoveProxy(id string) error {
 		delete(m.proxies, id)
 	}
 
+	// Broadcast event
+	m.broadcaster.Broadcast(map[string]interface{}{
+		"type":      "proxy_removed",
+		"timestamp": time.Now(),
+		"proxy_id":  id,
+	})
+
 	return m.cfgMgr.Update(func(c *config.Config) error {
 		newProxies := make([]config.ProxyConfig, 0, len(c.Proxies)-1)
 		for _, pc := range c.Proxies {
@@ -111,6 +127,13 @@ func (m *Manager) StartProxy(id string) error {
 		return err
 	}
 
+	// Broadcast event
+	m.broadcaster.Broadcast(map[string]interface{}{
+		"type":      "proxy_started",
+		"timestamp": time.Now(),
+		"proxy":     m.getProxyStatus(id),
+	})
+
 	// Update enabled state
 	return m.cfgMgr.Update(func(c *config.Config) error {
 		for i, pc := range c.Proxies {
@@ -133,6 +156,13 @@ func (m *Manager) StopProxy(id string) error {
 	}
 
 	p.Stop()
+
+	// Broadcast event
+	m.broadcaster.Broadcast(map[string]interface{}{
+		"type":      "proxy_stopped",
+		"timestamp": time.Now(),
+		"proxy":     m.getProxyStatus(id),
+	})
 
 	// Update enabled state
 	return m.cfgMgr.Update(func(c *config.Config) error {
@@ -216,6 +246,13 @@ func (m *Manager) UpdateProxy(cfg config.ProxyConfig) error {
 		p.Start()
 	}
 
+	// Broadcast event
+	m.broadcaster.Broadcast(map[string]interface{}{
+		"type":      "proxy_updated",
+		"timestamp": time.Now(),
+		"proxy":     m.getProxyStatus(cfg.ID),
+	})
+
 	// Update config
 	return m.cfgMgr.Update(func(c *config.Config) error {
 		for i, pc := range c.Proxies {
@@ -242,13 +279,12 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 
 	res := make([]map[string]interface{}, 0, len(m.proxies))
 	for _, p := range m.proxies {
-		status := p.Stats
+		status := &p.Stats
 		uptime := time.Duration(0)
 		if status.Status == "Running" {
 			uptime = time.Since(status.LastStart)
 		}
 
-		// Get config for this proxy
 		pCfg := cfgMap[p.ID]
 
 		res = append(res, map[string]interface{}{
@@ -301,4 +337,55 @@ func (m *Manager) GetConnectionHistory(ip string, limit int) ([]*database.Connec
 // GetAllConnectionHistory returns all connection history with optional proxy filter.
 func (m *Manager) GetAllConnectionHistory(proxyID string, limit int) ([]*database.ConnectionHistoryEntry, error) {
 	return m.deviceTracker.GetAllConnectionHistory(proxyID, limit)
+}
+
+// GetProxyEventsSubscription returns a subscription for proxy events
+func (m *Manager) GetProxyEventsSubscription() chan interface{} {
+	return m.broadcaster.Subscribe()
+}
+
+// UnsubscribeProxyEvents unsubscribes from proxy events
+func (m *Manager) UnsubscribeProxyEvents(ch chan interface{}) {
+	m.broadcaster.Unsubscribe(ch)
+}
+
+// getProxyStatus returns proxy status information
+func (m *Manager) getProxyStatus(id string) map[string]interface{} {
+	p, ok := m.proxies[id]
+	if !ok {
+		return nil
+	}
+
+	cfg := m.cfgMgr.Get()
+	cfgMap := make(map[string]config.ProxyConfig)
+	if cfg.Proxies != nil {
+		for _, pc := range cfg.Proxies {
+			cfgMap[pc.ID] = pc
+		}
+	}
+
+	status := &p.Stats
+	uptime := time.Duration(0)
+	if status.Status == "Running" {
+		uptime = time.Since(status.LastStart)
+	}
+
+	pCfg := cfgMap[p.ID]
+
+	return map[string]interface{}{
+		"id":                 p.ID,
+		"name":               p.Name,
+		"listen_addr":        p.ListenAddr,
+		"target_addr":        p.TargetAddr,
+		"status":             status.Status,
+		"paused":             pCfg.Paused,
+		"enabled":            pCfg.Enabled,
+		"uptime_s":           uptime.Seconds(),
+		"requests":           status.Requests.Load(),
+		"errors":             status.Errors.Load(),
+		"description":        pCfg.Description,
+		"connection_timeout": pCfg.ConnectionTimeout,
+		"read_timeout":       pCfg.ReadTimeout,
+		"max_retries":        pCfg.MaxRetries,
+	}
 }
