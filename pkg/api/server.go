@@ -7,6 +7,7 @@ import (
 	"modbusproxy/pkg/config"
 	"modbusproxy/pkg/logger"
 	"modbusproxy/pkg/manager"
+	"modbusproxy/pkg/middleware"
 	"net/http"
 	"time"
 
@@ -15,59 +16,75 @@ import (
 
 // Server is the API server.
 type Server struct {
-	cfgMgr *config.Manager
-	mgr    *manager.Manager
-	auth   *auth.Authenticator
-	log    *logger.Logger
+	cfgMgr      *config.Manager
+	mgr         *manager.Manager
+	auth        *auth.Authenticator
+	log         *logger.Logger
+	cors        *middleware.CORSMiddleware
+	security    *middleware.SecurityMiddleware
+	rateLimiter *middleware.RateLimiter
+	csrf        *middleware.CSRFMiddleware
+	validator   *middleware.Validator
 }
 
 // NewServer creates a new API server.
 func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator, l *logger.Logger) *Server {
+	// Initialize middlewares
+	corsMW := middleware.NewCORSMiddleware([]string{})
+	secMW := middleware.NewSecurityMiddleware()
+	rateLimiter := middleware.NewRateLimiter(60, 100) // 60 requests/minute, burst 100
+	csrfMW := middleware.NewCSRFMiddleware("modbridge-csrf-secret")
+	validator := middleware.NewValidator()
+
 	return &Server{
-		cfgMgr: cfg,
-		mgr:    mgr,
-		auth:   a,
-		log:    l,
+		cfgMgr:      cfg,
+		mgr:         mgr,
+		auth:        a,
+		log:         l,
+		cors:        corsMW,
+		security:    secMW,
+		rateLimiter: rateLimiter,
+		csrf:        csrfMW,
+		validator:   validator,
 	}
 }
 
 // Routes registers routes.
 func (s *Server) Routes(mux *http.ServeMux) {
-	// Public
-	mux.HandleFunc("/api/health", s.handleHealth)
-	mux.HandleFunc("/api/status", s.corsMiddleware(s.handleStatus))
-	mux.HandleFunc("/api/login", s.corsMiddleware(s.handleLogin))
-	mux.HandleFunc("/api/setup", s.corsMiddleware(s.handleSetup))
-
-	// Protected
-	mux.HandleFunc("/api/proxies", s.corsMiddleware(s.auth.Middleware(s.handleProxies)))
-	mux.HandleFunc("/api/proxies/control", s.corsMiddleware(s.auth.Middleware(s.handleProxyControl)))
-	mux.HandleFunc("/api/devices", s.corsMiddleware(s.auth.Middleware(s.handleDevices)))
-	mux.HandleFunc("/api/devices/history", s.corsMiddleware(s.auth.Middleware(s.handleDeviceHistory)))
-	mux.HandleFunc("/api/logs", s.corsMiddleware(s.auth.Middleware(s.handleLogs)))
-	mux.HandleFunc("/api/logs/download", s.corsMiddleware(s.auth.Middleware(s.handleLogDownload)))
-	mux.HandleFunc("/api/logs/stream", s.corsMiddleware(s.auth.Middleware(s.handleLogStream)))
-	mux.HandleFunc("/api/config/export", s.corsMiddleware(s.auth.Middleware(s.handleConfigExport)))
-	mux.HandleFunc("/api/config/import", s.corsMiddleware(s.auth.Middleware(s.handleConfigImport)))
-	mux.HandleFunc("/api/config/webport", s.corsMiddleware(s.auth.Middleware(s.handleWebPort)))
-	mux.HandleFunc("/api/system/restart", s.corsMiddleware(s.auth.Middleware(s.handleSystemRestart)))
-}
-
-// corsMiddleware adds CORS headers to responses.
-func (s *Server) corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		w.Header().Set("Access-Control-Max-Age", "3600")
-
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
-			return
+	// Helper function to compose middlewares
+	compose := func(middlewares ...func(http.HandlerFunc) http.HandlerFunc) func(http.HandlerFunc) http.HandlerFunc {
+		return func(handler http.HandlerFunc) http.HandlerFunc {
+			for i := len(middlewares) - 1; i >= 0; i-- {
+				handler = middlewares[i](handler)
+			}
+			return handler
 		}
-
-		next(w, r)
 	}
+
+	// Common middlewares
+	publicMW := compose(s.cors.Middleware, s.security.Middleware, s.rateLimiter.Middleware)
+	authMW := compose(s.cors.Middleware, s.security.Middleware, s.auth.Middleware)
+	csrfMW := compose(s.cors.Middleware, s.security.Middleware, s.auth.Middleware, s.csrf.Middleware)
+
+	// Public routes
+	mux.HandleFunc("/api/health", publicMW(s.handleHealth))
+	mux.HandleFunc("/api/status", publicMW(s.handleStatus))
+	mux.HandleFunc("/api/login", s.cors.Middleware(s.security.Middleware(s.handleLogin)))
+	mux.HandleFunc("/api/setup", s.cors.Middleware(s.security.Middleware(s.handleSetup)))
+
+	// Protected routes
+	mux.HandleFunc("/api/proxies", authMW(s.handleProxies))
+	mux.HandleFunc("/api/proxies/stream", authMW(s.handleProxiesStream))
+	mux.HandleFunc("/api/proxies/control", csrfMW(s.handleProxyControl))
+	mux.HandleFunc("/api/devices", authMW(s.handleDevices))
+	mux.HandleFunc("/api/devices/history", authMW(s.handleDeviceHistory))
+	mux.HandleFunc("/api/logs", authMW(s.handleLogs))
+	mux.HandleFunc("/api/logs/download", authMW(s.handleLogDownload))
+	mux.HandleFunc("/api/logs/stream", authMW(s.handleLogStream))
+	mux.HandleFunc("/api/config/export", authMW(s.handleConfigExport))
+	mux.HandleFunc("/api/config/import", csrfMW(s.handleConfigImport))
+	mux.HandleFunc("/api/config/webport", csrfMW(s.handleWebPort))
+	mux.HandleFunc("/api/system/restart", csrfMW(s.handleSystemRestart))
 }
 
 // handleHealth is a health check endpoint.
@@ -159,6 +176,41 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// handleProxiesStream streams proxy updates via SSE
+func (s *Server) handleProxiesStream(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	ch := s.mgr.GetProxyEventsSubscription()
+	defer s.mgr.UnsubscribeProxyEvents(ch)
+
+	timeout := time.NewTimer(30 * time.Minute)
+	defer timeout.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-timeout.C:
+			s.log.Info("SSE stream timeout, closing connection", "")
+			return
+		case event := <-ch:
+			data, _ := json.Marshal(event)
+			fmt.Fprintf(w, "data: %s\n\n", data)
+			flusher.Flush()
+			timeout.Reset(30 * time.Minute)
+		}
+	}
+}
+
 func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		_ = json.NewEncoder(w).Encode(s.mgr.GetProxies())
@@ -171,19 +223,9 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		if req.ID == "" {
 			req.ID = uuid.New().String()
-		}
-
-		// Set defaults for new fields if not provided
-		if req.ConnectionTimeout == 0 {
-			req.ConnectionTimeout = 10
-		}
-		if req.ReadTimeout == 0 {
-			req.ReadTimeout = 30
-		}
-		if req.MaxRetries == 0 {
-			req.MaxRetries = 3
 		}
 
 		if err := s.mgr.AddProxy(req, true); err != nil {
@@ -191,7 +233,6 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// If enabled and not paused, start it
 		if req.Enabled && !req.Paused {
 			_ = s.mgr.StartProxy(req.ID)
 		}
@@ -205,17 +246,6 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
-		}
-
-		// Set defaults for new fields if not provided
-		if req.ConnectionTimeout == 0 {
-			req.ConnectionTimeout = 10
-		}
-		if req.ReadTimeout == 0 {
-			req.ReadTimeout = 30
-		}
-		if req.MaxRetries == 0 {
-			req.MaxRetries = 3
 		}
 
 		if err := s.mgr.UpdateProxy(req); err != nil {

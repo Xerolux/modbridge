@@ -15,7 +15,28 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(go fmt:*)"
+      "Bash(go fmt:*)",
+      "Bash(start /B modbridge.exe)",
+      "Bash(taskkill:*)",
+      "Bash(./modbridge.exe)",
+      "Bash(timeout 5 bash -c 'while ! curl -s http://localhost:8080/api/health > /dev/null 2>&1; do sleep 0.5; done && echo \"\"Server is up\"\"')",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(go env:*)",
+      "Bash(set CGO_ENABLED=1:*)",
+      "Bash(timeout 5 bash:*)",
+      "Bash(del modbridge.exe)",
+      "Bash(rm:*)",
+      "Bash(export CGO_ENABLED=1:*)",
+      "Bash(docker run:*)",
+      "Bash(docker logs:*)",
+      "Bash(docker stop:*)",
+      "Bash(docker rm:*)",
+      "Bash(if [ -f \"C:\\\\Users\\\\Basti\\\\Documents\\\\GitHub\\\\modbridge\\\\build\\\\modbus-proxy-manager_0.1.0_amd64\\\\etc\\\\systemd\\\\system\\\\modbusmanager.service\" ])",
+      "Bash(then echo \"File exists\")",
+      "Bash(mkdir:*)",
+      "Bash(docker:*)",
+      "Bash(python:*)"
     ]
   }
 }
