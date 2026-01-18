@@ -87,10 +87,10 @@ Die neue `main.yml` kombiniert alle CI/CD-Prozesse in einem einzigen Workflow:
    - Image Security Scanning
 
 6. **Release** - Automatische Releases
-   - Wird bei Tags ausgelöst (`v*`)
-   - Erstellt GitHub Release
-   - Uploaded Binaries und .deb Pakete
-   - Generiert Changelog
+    - Wird bei Tags ausgelöst (`v*`)
+    - Erstellt GitHub Release
+    - Uploaded Binaries
+    - Generiert Changelog
 
 ### Workflow Trigger
 

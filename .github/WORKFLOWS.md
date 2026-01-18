@@ -35,17 +35,13 @@ Dieses Repository nutzt GitHub Actions für automatische Builds, Tests und Relea
    - Linux (AMD64, ARM64)
    - Windows (AMD64)
    - macOS (AMD64, ARM64)
-3. **.deb Pakete**: Baut Debian/Ubuntu Pakete:
-   - AMD64 (x86_64)
-   - ARM64 (Raspberry Pi)
-4. **Docker Image**: Baut und pusht Multi-Arch Image zu `ghcr.io`:
+3. **Docker Image**: Baut und pusht Multi-Arch Image zu `ghcr.io`:
    - `ghcr.io/xerolux/modbridge:latest`
    - `ghcr.io/xerolux/modbridge:v0.1.0`
    - `ghcr.io/xerolux/modbridge:0.1`
    - `ghcr.io/xerolux/modbridge:0`
-5. **GitHub Release**: Erstellt Release mit:
+4. **GitHub Release**: Erstellt Release mit:
    - Allen Binaries
-   - .deb Paketen
    - Automatischen Release Notes
    - Installations-Anleitung
 
@@ -246,9 +242,6 @@ Die Workflows benötigen folgende Permissions (bereits konfiguriert):
 ### Release-Workflow lokal simulieren
 
 ```bash
-# .deb Pakete bauen
-make deb-all
-
 # Docker Image bauen
 docker build -t modbus-proxy-manager:test .
 
@@ -296,17 +289,6 @@ go build -v -o modbusmanager ./main.go
 **Lösung**:
 - Permissions in Repository-Settings überprüfen
 - `packages: write` Permission aktivieren
-
----
-
-### .deb Paket-Build schlägt fehl
-
-**Problem**: `make: *** [deb-all] Error 1`
-
-**Lösung**:
-1. `version.txt` existiert
-2. Alle DEBIAN-Scripts sind vorhanden
-3. dpkg-deb ist installiert (Ubuntu/Debian Runner)
 
 ---
 

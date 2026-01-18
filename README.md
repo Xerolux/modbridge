@@ -62,10 +62,6 @@ Exportieren und importieren Sie Ihre Konfiguration für Backup und Wiederherstel
 ## 📦 Quick Install
 
 ```bash
-# Debian/Ubuntu (.deb)
-wget https://github.com/Xerolux/modbridge/releases/latest/download/modbridge_0.1.0_amd64.deb
-sudo dpkg -i modbridge_0.1.0_amd64.deb
-
 # Docker (vorgefertigt)
 docker run -d -p 8080:8080 -p 5020-5030:5020-5030 ghcr.io/xerolux/modbridge:latest
 
@@ -114,10 +110,8 @@ Nach der Installation: Öffnen Sie **http://localhost:8080** in Ihrem Browser.
 ## 📋 Inhaltsverzeichnis
 
 - [Installation](#installation)
-  - [Methode 1: Debian/Ubuntu Paket (.deb)](#methode-1-debianubuntu-paket-deb---einfachste-installation)
-  - [Methode 2: Docker](#methode-2-docker)
-  - [Methode 3: Aus Quellcode kompilieren](#methode-3-aus-quellcode-kompilieren)
-  - [Methode 4: Systemd Service Installation](#methode-4-systemd-service-installation)
+  - [Methode 1: Docker](#methode-1-docker)
+  - [Methode 2: Aus Quellcode kompilieren](#methode-2-aus-quellcode-kompilieren)
 - [Konfiguration](#konfiguration)
 - [Verwendung](#verwendung)
 - [Troubleshooting](#troubleshooting)
@@ -127,30 +121,7 @@ Nach der Installation: Öffnen Sie **http://localhost:8080** in Ihrem Browser.
 
 ## 🔧 Installation
 
-### Methode 1: Debian/Ubuntu Paket (.deb) - Einfachste Installation
-
-Die schnellste Methode für Debian und Ubuntu Systeme.
-
-#### Installation
-
-```bash
-# Für AMD64 (x86_64)
-wget https://github.com/Xerolux/modbridge/releases/download/v0.1.0/modbridge_0.1.0_amd64.deb
-sudo dpkg -i modbridge_0.1.0_amd64.deb
-
-# Für ARM64 (Raspberry Pi 64-bit)
-wget https://github.com/Xerolux/modbridge/releases/download/v0.1.0/modbridge_0.1.0_arm64.deb
-sudo dpkg -i modbridge_0.1.0_arm64.deb
-
-# Service starten
-sudo systemctl start modbridge
-```
-
-**Web-Interface**: http://localhost:8080
-
----
-
-### Methode 2: Docker
+### Methode 1: Docker
 
 Docker ist eine plattformunabhängige Installationsmethode.
 
@@ -180,7 +151,7 @@ docker-compose up -d
 
 ---
 
-### Methode 3: Aus Quellcode kompilieren
+### Methode 2: Aus Quellcode kompilieren
 
 Für Entwicklung oder wenn Docker nicht verfügbar ist.
 
@@ -197,36 +168,6 @@ go build -o modbridge main.go
 ```
 
 **Web-Interface**: http://localhost:8080
-
----
-
-### Methode 4: Systemd Service Installation
-
-Für produktive Linux-Server mit systemd.
-
-#### Automatische Installation
-
-```bash
-git clone https://github.com/Xerolux/modbridge.git
-cd modbridge
-sudo ./install.sh
-```
-
-#### Service-Verwaltung
-
-```bash
-# Status prüfen
-sudo systemctl status modbridge
-
-# Service starten
-sudo systemctl start modbridge
-
-# Service stoppen
-sudo systemctl stop modbridge
-
-# Logs ansehen (live)
-sudo journalctl -u modbridge -f
-```
 
 ---
 
@@ -271,9 +212,6 @@ sudo journalctl -u modbridge -f
 
    # Docker
    docker-compose up -d
-
-   # Systemd
-   sudo systemctl start modbridge
    ```
 
 2. **Web-Interface öffnen**:
