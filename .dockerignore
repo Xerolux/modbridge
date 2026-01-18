@@ -31,7 +31,6 @@ modbusmanager
 modbusmanager.exe
 modbusmanager-*
 *.exe
-*.deb
 releases/
 dist/
 build/
