@@ -20,6 +20,11 @@ func NewDB(path string) (*DB, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
+	// Test connection
+	if err := conn.Ping(); err != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
 	// Enable WAL mode for better concurrent access
 	if _, err := conn.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		return nil, fmt.Errorf("failed to enable WAL mode: %w", err)
