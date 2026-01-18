@@ -1,6 +1,7 @@
 {
   "web_port": ":8080",
-  "admin_pass_hash": "$2a$14$GIEWZELPUk/ixrj.sEb12OTEJCgb6hpxWqA0mAzZVlbxYL5qZclnu",
+  "admin_pass_hash": "$2a$14$mznIFMYlQAffKqiQ.R53kOagT0lmBEG9aDGBuWeVCaoR4D2uOYXKG",
+  "force_password_change": true,
   "proxies": [
     {
       "id": "21e71152-3866-43ac-891d-c5ec85fa1e98",

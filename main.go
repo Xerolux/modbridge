@@ -36,6 +36,22 @@ func main() {
 		log.Printf("Starting with empty config: %v", err)
 	}
 
+	// Set default admin password if not configured
+	cfg := cfgMgr.Get()
+	if cfg.AdminPassHash == "" {
+		defaultHash := "$2a$14$mznIFMYlQAffKqiQ.R53kOagT0lmBEG9aDGBuWeVCaoR4D2uOYXKG"
+		err = cfgMgr.Update(func(c *config.Config) error {
+			c.AdminPassHash = defaultHash
+			c.ForcePasswordChange = true
+			return nil
+		})
+		if err != nil {
+			log.Printf("Warning: Failed to set default admin password: %v", err)
+		} else {
+			log.Println("Default admin password set: 'admin' (password change required on first login)")
+		}
+	}
+
 	// 3. Logger
 	l, err := logger.NewLogger("proxy.log", 1000)
 	if err != nil {

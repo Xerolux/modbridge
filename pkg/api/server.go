@@ -100,6 +100,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/config/export", authMW(s.handleConfigExport))
 	mux.HandleFunc("/api/config/import", csrfMW(s.handleConfigImport))
 	mux.HandleFunc("/api/config/webport", csrfMW(s.handleWebPort))
+	mux.HandleFunc("/api/config/password", csrfMW(s.handleChangePassword))
 	mux.HandleFunc("/api/system/restart", csrfMW(s.handleSystemRestart))
 }
 
@@ -218,7 +219,73 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteStrictMode,
 		Path:     "/",
 	})
+
+	// Generate and set CSRF token
+	csrfToken := s.csrf.GenerateToken(token)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "csrf_token",
+		Value:    csrfToken,
+		Path:     "/",
+		HttpOnly: false,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	// Return login status including force_password_change flag
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":               true,
+		"force_password_change": cfg.ForcePasswordChange,
+	})
 	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	cfg := s.cfgMgr.Get()
+	if !auth.CheckPasswordHash(req.CurrentPassword, cfg.AdminPassHash) {
+		http.Error(w, "Invalid current password", http.StatusUnauthorized)
+		return
+	}
+
+	if len(req.NewPassword) < 6 {
+		http.Error(w, "Password must be at least 6 characters", http.StatusBadRequest)
+		return
+	}
+
+	hash, err := auth.HashPassword(req.NewPassword)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = s.cfgMgr.Update(func(c *config.Config) error {
+		c.AdminPassHash = hash
+		c.ForcePasswordChange = false
+		return nil
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+	})
 }
 
 // handleProxiesStream streams proxy updates via SSE

@@ -21,7 +21,9 @@ func NewCSRFMiddleware(secret string) *CSRFMiddleware {
 
 // GenerateToken generates a new CSRF token
 func (m *CSRFMiddleware) GenerateToken(sessionID string) string {
-	return generateRandomToken(32)
+	token := generateRandomToken(32)
+	m.csrfTokens[sessionID] = token
+	return token
 }
 
 // ValidateToken validates a CSRF token
