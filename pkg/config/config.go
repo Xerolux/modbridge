@@ -23,9 +23,10 @@ type ProxyConfig struct {
 
 // Config holds the global configuration.
 type Config struct {
-	WebPort       string        `json:"web_port"`
-	AdminPassHash string        `json:"admin_pass_hash"` // Empty means first-run
-	Proxies       []ProxyConfig `json:"proxies"`
+	WebPort             string        `json:"web_port"`
+	AdminPassHash       string        `json:"admin_pass_hash"`       // Empty means first-run
+	ForcePasswordChange bool          `json:"force_password_change"` // Forces password change on next login
+	Proxies             []ProxyConfig `json:"proxies"`
 }
 
 // Manager handles config persistence.
