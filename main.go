@@ -23,10 +23,12 @@ func main() {
 	// 1. Database
 	db, err := database.NewDB("modbridge.db")
 	if err != nil {
-		log.Fatalf("Failed to init database: %v", err)
+		log.Printf("Warning: Failed to init database: %v. Database features will be disabled.", err)
+		db = nil
+	} else {
+		defer db.Close()
+		log.Println("Database initialized successfully")
 	}
-	defer db.Close()
-	log.Println("Database initialized successfully")
 
 	// 2. Config
 	cfgMgr := config.NewManager("config.json")
