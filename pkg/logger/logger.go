@@ -37,9 +37,13 @@ type Logger struct {
 
 // NewLogger creates a new logger.
 func NewLogger(filePath string, bufferSize int) (*Logger, error) {
-	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		return nil, err
+	var f *os.File
+	var err error
+	if filePath != "" {
+		f, err = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &Logger{
@@ -48,6 +52,16 @@ func NewLogger(filePath string, bufferSize int) (*Logger, error) {
 		ringSize:    bufferSize,
 		subscribers: make(map[chan LogEntry]struct{}),
 	}, nil
+}
+
+// NewNullLogger creates a logger that discards file output.
+func NewNullLogger(bufferSize int) *Logger {
+	return &Logger{
+		file:        nil,
+		ringBuffer:  make([]LogEntry, 0, bufferSize),
+		ringSize:    bufferSize,
+		subscribers: make(map[chan LogEntry]struct{}),
+	}
 }
 
 // Log writes a log entry.
@@ -63,9 +77,11 @@ func (l *Logger) Log(level LogLevel, proxyID, msg string) {
 	defer l.mu.Unlock()
 
 	// 1. Write to file
-	if jsonBytes, err := json.Marshal(entry); err == nil {
-		_, _ = l.file.Write(jsonBytes)
-		_, _ = l.file.WriteString("\n")
+	if l.file != nil {
+		if jsonBytes, err := json.Marshal(entry); err == nil {
+			_, _ = l.file.Write(jsonBytes)
+			_, _ = l.file.WriteString("\n")
+		}
 	}
 
 	// 2. Add to ring buffer

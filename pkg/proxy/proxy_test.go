@@ -35,7 +35,7 @@ func TestSplitLogic_Integration(t *testing.T) {
 	proxyAddr := proxyListener.Addr().String()
 	proxyListener.Close() // We just wanted a free port, ProxyInstance will listen itself
 
-	l, _ := logger.NewLogger("/dev/null", 100)
+	l := logger.NewNullLogger(100)
 	p := NewProxyInstance("test", "test", proxyAddr, targetAddr, 10, l, nil) // MaxReadSize = 10 registers
 
 	err = p.Start()
