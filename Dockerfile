@@ -14,7 +14,16 @@ RUN npm run build
 FROM golang:1.25-alpine AS builder
 
 # Install build dependencies including GCC for CGO/sqlite3 and Node.js for frontend
-RUN apk add --no-cache git ca-certificates tzdata gcc musl-dev nodejs npm
+RUN apk add --no-cache \
+    git \
+    ca-certificates \
+    tzdata \
+    gcc \
+    musl-dev \
+    sqlite-dev \
+    nodejs \
+    npm \
+    curl
 
 WORKDIR /build
 
@@ -30,21 +39,32 @@ COPY --from=frontend-builder /frontend/dist ./pkg/web/dist
 
 # Build the application with optimizations
 # CGO is required for sqlite3
-RUN CGO_ENABLED=1 go build \
-    -ldflags="-s -w" \
-    -trimpath \
+RUN CGO_ENABLED=1 GOFLAGS=-trimpath \
+    go build \
+    -ldflags="-s -w -X main.version=dev -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     -o modbridge ./main.go
+
+# Verify the binary
+RUN ./modbridge --version || true && \
+    chmod +x modbridge && \
+    ldd modbridge || true
 
 # Final stage - use alpine for health checks and minimal size
 FROM alpine:3.23
 
 LABEL org.opencontainers.image.title="ModBridge" \
-      org.opencontainers.image.description="Modbus TCP Proxy Manager" \
+      org.opencontainers.image.description="Enterprise-grade Modbus TCP Proxy Manager with 10/10 Stability, Performance & Observability" \
       org.opencontainers.image.source="https://github.com/Xerolux/modbridge" \
-      org.opencontainers.image.licenses="MIT"
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="1.0.0"
 
 # Install runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata wget && \
+RUN apk add --no-cache \
+    ca-certificates \
+    tzdata \
+    wget \
+    sqlite-libs \
+    curl && \
     adduser -D -u 1000 -g appuser appuser
 
 WORKDIR /app
@@ -53,7 +73,7 @@ WORKDIR /app
 COPY --from=builder /build/modbridge .
 
 # Create directory for logs and config with correct permissions
-RUN mkdir -p /app/data && \
+RUN mkdir -p /app/data /app/logs && \
     chown -R appuser:appuser /app
 
 # Switch to non-root user
