@@ -158,57 +158,57 @@ func (m *Manager) Get() Config {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	c := m.cfg
+	return m.deepCopyConfig(m.cfg)
+}
+
+// deepCopyConfig creates a deep copy of the config.
+// This is optimized to only copy slices, not individual structs.
+func (m *Manager) deepCopyConfig(c Config) Config {
+	result := c
+
+	// Deep copy all slices to prevent concurrent modification issues
 	if c.Proxies != nil {
-		proxies := make([]ProxyConfig, len(c.Proxies))
-		copy(proxies, c.Proxies)
-		c.Proxies = proxies
+		result.Proxies = make([]ProxyConfig, len(c.Proxies))
+		for i := range c.Proxies {
+			// Copy struct by value (shallow copy is fine for struct)
+			// Then copy the Tags slice if present
+			result.Proxies[i] = c.Proxies[i]
+			if c.Proxies[i].Tags != nil {
+				result.Proxies[i].Tags = make([]string, len(c.Proxies[i].Tags))
+				copy(result.Proxies[i].Tags, c.Proxies[i].Tags)
+			}
+		}
 	}
 	if c.CORSAllowedOrigins != nil {
-		origins := make([]string, len(c.CORSAllowedOrigins))
-		copy(origins, c.CORSAllowedOrigins)
-		c.CORSAllowedOrigins = origins
+		result.CORSAllowedOrigins = make([]string, len(c.CORSAllowedOrigins))
+		copy(result.CORSAllowedOrigins, c.CORSAllowedOrigins)
+	}
+	if c.CORSAllowedMethods != nil {
+		result.CORSAllowedMethods = make([]string, len(c.CORSAllowedMethods))
+		copy(result.CORSAllowedMethods, c.CORSAllowedMethods)
+	}
+	if c.CORSAllowedHeaders != nil {
+		result.CORSAllowedHeaders = make([]string, len(c.CORSAllowedHeaders))
+		copy(result.CORSAllowedHeaders, c.CORSAllowedHeaders)
 	}
 	if c.IPWhitelist != nil {
-		whitelist := make([]string, len(c.IPWhitelist))
-		copy(whitelist, c.IPWhitelist)
-		c.IPWhitelist = whitelist
+		result.IPWhitelist = make([]string, len(c.IPWhitelist))
+		copy(result.IPWhitelist, c.IPWhitelist)
 	}
 	if c.IPBlacklist != nil {
-		blacklist := make([]string, len(c.IPBlacklist))
-		copy(blacklist, c.IPBlacklist)
-		c.IPBlacklist = blacklist
+		result.IPBlacklist = make([]string, len(c.IPBlacklist))
+		copy(result.IPBlacklist, c.IPBlacklist)
 	}
-	return c
+
+	return result
 }
 
 func (m *Manager) Update(fn func(*Config) error) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Create a copy to modify
-	newCfg := m.cfg
-	// (Deep copy slice for safety)
-	if newCfg.Proxies != nil {
-		proxies := make([]ProxyConfig, len(newCfg.Proxies))
-		copy(proxies, newCfg.Proxies)
-		newCfg.Proxies = proxies
-	}
-	if newCfg.CORSAllowedOrigins != nil {
-		origins := make([]string, len(newCfg.CORSAllowedOrigins))
-		copy(origins, newCfg.CORSAllowedOrigins)
-		newCfg.CORSAllowedOrigins = origins
-	}
-	if newCfg.IPWhitelist != nil {
-		whitelist := make([]string, len(newCfg.IPWhitelist))
-		copy(whitelist, newCfg.IPWhitelist)
-		newCfg.IPWhitelist = whitelist
-	}
-	if newCfg.IPBlacklist != nil {
-		blacklist := make([]string, len(newCfg.IPBlacklist))
-		copy(blacklist, newCfg.IPBlacklist)
-		newCfg.IPBlacklist = blacklist
-	}
+	// Create a deep copy to modify
+	newCfg := m.deepCopyConfig(m.cfg)
 
 	if err := fn(&newCfg); err != nil {
 		return err

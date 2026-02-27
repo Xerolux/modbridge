@@ -1,6 +1,8 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"modbusproxy/pkg/auth"
@@ -33,11 +35,19 @@ type Server struct {
 
 // NewServer creates a new API server.
 func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator, l *logger.Logger) *Server {
+	// Generate random CSRF secret at startup
+	csrfSecretBytes := make([]byte, 32)
+	if _, err := rand.Read(csrfSecretBytes); err != nil {
+		l.Error("SYSTEM", "Failed to generate CSRF secret, using fallback")
+		csrfSecretBytes = []byte("fallback-secret-change-in-production")
+	}
+	csrfSecret := hex.EncodeToString(csrfSecretBytes)
+
 	// Initialize middlewares
 	corsMW := middleware.NewCORSMiddleware([]string{})
 	secMW := middleware.NewSecurityMiddleware()
 	rateLimiter := middleware.NewRateLimiter(60, 100) // 60 requests/minute, burst 100
-	csrfMW := middleware.NewCSRFMiddleware("modbridge-csrf-secret")
+	csrfMW := middleware.NewCSRFMiddleware(csrfSecret)
 	validator := middleware.NewValidator()
 
 	return &Server{
@@ -109,9 +119,11 @@ func (s *Server) Routes(mux *http.ServeMux) {
 // handleHealth is a health check endpoint.
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status": "ok",
-	})
+	}); err != nil {
+		s.log.Error("API", fmt.Sprintf("Failed to encode health response: %v", err))
+	}
 }
 
 // handleReady is a readiness check endpoint.
@@ -134,7 +146,9 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(statusCode)
-	_ = json.NewEncoder(w).Encode(ready)
+	if err := json.NewEncoder(w).Encode(ready); err != nil {
+		s.log.Error("API", fmt.Sprintf("Failed to encode ready response: %v", err))
+	}
 }
 
 // handleMetrics returns Prometheus metrics.
@@ -149,7 +163,9 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"setup_required": cfg.AdminPassHash == "",
 		"proxies":        s.mgr.GetProxies(),
 	}
-	_ = json.NewEncoder(w).Encode(status)
+	if err := json.NewEncoder(w).Encode(status); err != nil {
+		s.log.Error("API", fmt.Sprintf("Failed to encode status response: %v", err))
+	}
 }
 
 func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
@@ -434,7 +450,9 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	logs := s.log.GetRecent(100)
-	_ = json.NewEncoder(w).Encode(logs)
+	if err := json.NewEncoder(w).Encode(logs); err != nil {
+		s.log.Error("API", fmt.Sprintf("Failed to encode logs response: %v", err))
+	}
 }
 
 func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
@@ -473,15 +491,14 @@ func (s *Server) handleSystemRestart(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status":"restarting"}`))
 
-	// Stop all proxies gracefully
+	// Stop all proxies gracefully and exit for restart
 	go func() {
 		time.Sleep(500 * time.Millisecond)
 		s.mgr.StopAll()
 		time.Sleep(500 * time.Millisecond)
 		s.log.Info("System restarting now", "")
 		// Exit with code 0 so the process manager (systemd, docker, etc.) can restart it
-		// Note: This assumes the service is running under a process manager
-		panic("Restart requested") // This will trigger main's recover and graceful shutdown
+		os.Exit(0)
 	}()
 }
 

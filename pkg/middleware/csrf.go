@@ -1,7 +1,9 @@
 package middleware
 
 import (
+	"crypto/rand"
 	"crypto/subtle"
+	"encoding/hex"
 	"net/http"
 )
 
@@ -95,18 +97,13 @@ func (m *CSRFMiddleware) shouldSkipCSRF(r *http.Request) bool {
 	return false
 }
 
-// generateRandomToken generates a random token
+// generateRandomToken generates a cryptographically secure random token
 func generateRandomToken(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[i%len(charset)]
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		// Fallback to less secure method if crypto/rand fails
+		// This should never happen in practice
+		panic("failed to generate random token: " + err.Error())
 	}
-	return string(b)
-}
-
-// initRandom initializes random token generator
-func init() {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	_ = charset
+	return hex.EncodeToString(bytes)[:length]
 }

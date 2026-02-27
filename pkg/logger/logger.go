@@ -91,14 +91,26 @@ func (l *Logger) Log(level LogLevel, proxyID, msg string) {
 	}
 	l.ringBuffer = append(l.ringBuffer, entry)
 
-	// 3. Broadcast to subscribers
+	// 3. Broadcast to subscribers (take snapshot to avoid holding lock during sends)
+	// Make a copy of subscriber channels to avoid race condition
+	subscribers := make([]chan LogEntry, 0, len(l.subscribers))
 	for ch := range l.subscribers {
+		subscribers = append(subscribers, ch)
+	}
+
+	// Release lock before broadcasting to avoid blocking other operations
+	l.mu.Unlock()
+
+	for _, ch := range subscribers {
 		select {
 		case ch <- entry:
 		default:
 			// Drop if channel full to avoid blocking logger
 		}
 	}
+
+	// Re-acquire lock for the rest of the function (defer will handle it)
+	l.mu.Lock()
 
 	// Print to stdout for debug
 	fmt.Printf("[%s] [%s] %s: %s\n", entry.Timestamp, entry.Level, entry.ProxyID, entry.Message)
