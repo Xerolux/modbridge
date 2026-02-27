@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"net/http"
 	"strings"
 	"time"
@@ -61,12 +63,12 @@ func generateRequestID() string {
 	return time.Now().Format("20060102150405") + "-" + randomString(8)
 }
 
-// randomString generates a random string
+// randomString generates a cryptographically secure random string
 func randomString(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[i%len(charset)]
+	bytes := make([]byte, length/2+1) // hex encoding doubles the length
+	if _, err := rand.Read(bytes); err != nil {
+		// Fallback to timestamp-based ID (less secure but better than nothing)
+		return time.Now().Format("20060102150405.000000")[:length]
 	}
-	return string(b)
+	return hex.EncodeToString(bytes)[:length]
 }
