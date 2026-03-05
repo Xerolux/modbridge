@@ -141,6 +141,54 @@ check_dependencies() {
     check_go
 }
 
+select_modbridge_release() {
+    log "Fetching available Modbridge releases..."
+
+    # Get all releases from GitHub
+    ALL_RELEASES=$(curl -sSL "$RELEASES_API?per_page=20" 2>/dev/null)
+
+    if [ -z "$ALL_RELEASES" ]; then
+        log "⚠ Failed to fetch releases from GitHub."
+        return 1
+    fi
+
+    # Parse releases and ask user which channel they prefer
+    echo ""
+    echo "Available Modbridge versions:"
+    echo "1) Release (Stable) - Latest stable version"
+    echo "2) Beta - Pre-release versions"
+    echo "3) Alpha - Development versions"
+    read -p "Choose [1-3] (default: 1): " release_choice
+    release_choice=${release_choice:-1}
+
+    case "$release_choice" in
+        1) RELEASE_CHANNEL="release" ;;
+        2) RELEASE_CHANNEL="beta" ;;
+        3) RELEASE_CHANNEL="alpha" ;;
+        *) log "Invalid choice, using Release"; RELEASE_CHANNEL="release" ;;
+    esac
+
+    # Find the latest release for the selected channel
+    if [ "$RELEASE_CHANNEL" = "release" ]; then
+        # Get latest non-prerelease version
+        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep -o '"tag_name":"[^"]*","target_commitish"[^}]*"prerelease":false' | head -n 1 | grep -o '"tag_name":"[^"]*"' | head -n 1 | cut -d'"' -f4)
+    elif [ "$RELEASE_CHANNEL" = "beta" ]; then
+        # Get latest beta version
+        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep -o '"tag_name":"[^"]*beta[^"]*"' | head -n 1 | cut -d'"' -f4)
+    else
+        # Get latest alpha version
+        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep -o '"tag_name":"[^"]*alpha[^"]*"' | head -n 1 | cut -d'"' -f4)
+    fi
+
+    if [ -z "$SELECTED_RELEASE" ]; then
+        log "⚠ No $RELEASE_CHANNEL version found. Using latest available."
+        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep -o '"tag_name":"[^"]*"' | head -n 1 | cut -d'"' -f4)
+    fi
+
+    log "Selected version: $SELECTED_RELEASE ($RELEASE_CHANNEL)"
+    echo "$SELECTED_RELEASE"
+}
+
 download_modbridge_binary() {
     log "Attempting to download Modbridge precompiled binary..."
 
@@ -154,19 +202,26 @@ download_modbridge_binary() {
 
     log "System architecture detected: linux-${GOARCH}"
 
-    # Get latest release from GitHub
-    log "Fetching latest release from GitHub..."
-    RELEASE_JSON=$(curl -sSL "$RELEASES_API/latest" 2>/dev/null)
+    # Let user select release channel
+    RELEASE_TAG=$(select_modbridge_release)
+    if [ -z "$RELEASE_TAG" ]; then
+        log "⚠ Could not determine release. Will build from source."
+        return 1
+    fi
+
+    # Get the release JSON for the selected tag
+    log "Fetching release details for $RELEASE_TAG..."
+    RELEASE_JSON=$(curl -sSL "$RELEASES_API/tags/$RELEASE_TAG" 2>/dev/null)
 
     if [ -z "$RELEASE_JSON" ]; then
-        log "⚠ Failed to fetch GitHub releases. Will build from source."
+        log "⚠ Failed to fetch release details. Will build from source."
         return 1
     fi
 
     # Check if release has any assets
-    ASSET_COUNT=$(echo "$RELEASE_JSON" | grep -o '"assets":' | wc -l)
+    ASSET_COUNT=$(echo "$RELEASE_JSON" | grep -o '"browser_download_url"' | wc -l)
     if [ "$ASSET_COUNT" -eq 0 ]; then
-        log "⚠ No release assets found on GitHub. Will build from source."
+        log "⚠ No release assets found for $RELEASE_TAG. Will build from source."
         return 1
     fi
 
@@ -175,13 +230,13 @@ download_modbridge_binary() {
     DOWNLOAD_URL=$(echo "$RELEASE_JSON" | grep -o "\"browser_download_url\": \"[^\"]*${BINARY_NAME}[^\"]*\"" | head -n 1 | cut -d'"' -f4)
 
     if [ -z "$DOWNLOAD_URL" ]; then
-        log "⚠ No precompiled binary found for ${BINARY_NAME} in release. Will build from source."
+        log "⚠ No precompiled binary found for ${BINARY_NAME} in $RELEASE_TAG. Will build from source."
         return 1
     fi
 
     TEMP_BIN="/tmp/modbridge_temp_$$"
 
-    log "✓ Downloading binary from GitHub..."
+    log "✓ Downloading $RELEASE_TAG binary from GitHub..."
     if ! curl -sSL -L "$DOWNLOAD_URL" -o "$TEMP_BIN"; then
         log "⚠ Failed to download binary. Will build from source."
         rm -f "$TEMP_BIN"
@@ -202,7 +257,7 @@ download_modbridge_binary() {
     cp "$TEMP_BIN" "$INSTALL_DIR/modbridge"
     rm -f "$TEMP_BIN"
 
-    log "✓ Modbridge binary downloaded and verified successfully."
+    log "✓ Modbridge $RELEASE_TAG binary downloaded and verified successfully."
     return 0
 }
 
