@@ -6,20 +6,34 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
+	"net/http/pprof"
+	"os"
 	"modbusproxy/pkg/auth"
 	"modbusproxy/pkg/config"
 	"modbusproxy/pkg/logger"
 	"modbusproxy/pkg/manager"
 	"modbusproxy/pkg/metrics"
 	"modbusproxy/pkg/middleware"
-	"net/http"
-	"net/http/pprof"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+// checkPortAvailable checks if a port is available for binding
+func checkPortAvailable(port string) error {
+	// Try to create a listener on the port
+	ln, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		return fmt.Errorf("port already in use or invalid")
+	}
+	// Close the listener immediately
+	ln.Close()
+	return nil
+}
 
 // Server is the API server.
 type Server struct {
@@ -96,11 +110,12 @@ func (s *Server) Routes(mux *http.ServeMux) {
 
 	// Pprof endpoints (debug mode only)
 	if os.Getenv("DEBUG") == "true" {
-		mux.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
-		mux.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
-		mux.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
-		mux.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
-		mux.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
+		debugMW := compose(s.cors.Middleware, s.security.Middleware, s.auth.Middleware)
+		mux.Handle("/debug/pprof/", debugMW(pprof.Index))
+		mux.Handle("/debug/pprof/cmdline", debugMW(pprof.Cmdline))
+		mux.Handle("/debug/pprof/profile", debugMW(pprof.Profile))
+		mux.Handle("/debug/pprof/symbol", debugMW(pprof.Symbol))
+		mux.Handle("/debug/pprof/trace", debugMW(pprof.Trace))
 	}
 
 	// Protected routes
@@ -203,10 +218,14 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = s.cfgMgr.Update(func(c *config.Config) error {
+	err = s.cfgMgr.Update(func(c *config.Config) error {
 		c.AdminPassHash = hash
 		return nil
 	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -338,7 +357,11 @@ func (s *Server) handleProxiesStream(w http.ResponseWriter, r *http.Request) {
 			s.log.Info("SSE stream timeout, closing connection", "")
 			return
 		case event := <-ch:
-			data, _ := json.Marshal(event)
+			data, err := json.Marshal(event)
+			if err != nil {
+				s.log.Error("API", fmt.Sprintf("Failed to marshal SSE event: %v", err))
+				continue
+			}
 			fmt.Fprintf(w, "data: %s\n\n", data)
 			flusher.Flush()
 			timeout.Reset(30 * time.Minute)
@@ -625,6 +648,12 @@ func (s *Server) handleWebPort(w http.ResponseWriter, r *http.Request) {
 
 		if err := s.validator.ValidatePort(req.WebPort); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Check if port is available by trying to bind to it
+		if err := checkPortAvailable(req.WebPort); err != nil {
+			http.Error(w, fmt.Sprintf("port %s is not available: %v", req.WebPort, err), http.StatusBadRequest)
 			return
 		}
 

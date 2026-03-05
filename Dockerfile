@@ -1,5 +1,5 @@
 # Build stage for frontend
-FROM node:22-alpine AS frontend-builder
+FROM node:25-alpine AS frontend-builder
 
 WORKDIR /frontend
 
@@ -11,7 +11,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Build stage for backend
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 # Install build dependencies including GCC for CGO/sqlite3 and Node.js for frontend
 RUN apk add --no-cache \
@@ -34,7 +34,11 @@ RUN go mod download && go mod verify
 # Copy source code (but exclude frontend/dist which will be built separately)
 COPY . .
 
-# Copy frontend build to pkg/web/dist before building
+# Copy frontend build and fix underscore files for go:embed compatibility
+COPY --from=frontend-builder /frontend/dist ./frontend/dist
+RUN cd /frontend && ./build.sh
+
+# Copy fixed frontend build to pkg/web/dist before building
 COPY --from=frontend-builder /frontend/dist ./pkg/web/dist
 
 # Build the application with optimizations

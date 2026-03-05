@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	_ "expvar"
 	"log"
 	"modbusproxy/pkg/api"
@@ -42,16 +44,22 @@ func main() {
 	// Set default admin password if not configured
 	cfg := cfgMgr.Get()
 	if cfg.AdminPassHash == "" {
-		defaultHash := "$2a$14$mznIFMYlQAffKqiQ.R53kOagT0lmBEG9aDGBuWeVCaoR4D2uOYXKG"
+		// Generate a secure random password instead of hardcoded one
+		randomPassword := generateSecurePassword(16)
+		defaultHash, err := auth.HashPassword(randomPassword)
+		if err != nil {
+			log.Fatalf("Failed to hash default admin password: %v", err)
+		}
+
 		err = cfgMgr.Update(func(c *config.Config) error {
 			c.AdminPassHash = defaultHash
 			c.ForcePasswordChange = true
 			return nil
 		})
 		if err != nil {
-			log.Printf("Warning: Failed to set default admin password: %v", err)
+			log.Fatalf("Failed to set default admin password: %v", err)
 		} else {
-			log.Println("Default admin password set: 'admin' (password change required on first login)")
+			log.Printf("Default admin password set: %s (password change required on first login)", randomPassword)
 		}
 	}
 
