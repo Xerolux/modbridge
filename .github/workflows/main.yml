@@ -14,7 +14,7 @@ permissions:
   security-events: write
 
 env:
-  GO_VERSION: '1.26'
+  GO_VERSION: '1.24.0'
   NODE_VERSION: '22'
   REGISTRY: ghcr.io
   IMAGE_NAME: xerolux/modbridge
@@ -55,7 +55,7 @@ jobs:
         env:
           CGO_ENABLED: "1"
         with:
-          version: latest
+          version: v1.64
           args: --timeout=5m
 
   test:
@@ -152,6 +152,7 @@ jobs:
 
       - name: Copy frontend to pkg/web/dist
         run: |
+          mkdir -p pkg/web/dist
           rm -rf pkg/web/dist/*
           cp -r frontend/dist/* pkg/web/dist/
 

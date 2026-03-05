@@ -11,7 +11,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Build stage for backend
-FROM golang:1.26-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # Install build dependencies including GCC for CGO/sqlite3 and Node.js for frontend
 RUN apk add --no-cache \
@@ -23,7 +23,8 @@ RUN apk add --no-cache \
     sqlite-dev \
     nodejs \
     npm \
-    curl
+    curl \
+    bash
 
 WORKDIR /build
 
@@ -44,7 +45,7 @@ RUN cd /build && bash ./build.sh
 # CGO is required for sqlite3
 RUN CGO_ENABLED=1 GOFLAGS=-trimpath \
     go build \
-    -ldflags="-s -w -X main.version=dev -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -ldflags="-s -w -X main.Version=dev -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     -o modbridge ./main.go
 
 # Verify the binary
