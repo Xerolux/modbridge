@@ -3,7 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"modbusproxy/pkg/database"
+	"modbridge/pkg/database"
 	"net/http"
 )
 

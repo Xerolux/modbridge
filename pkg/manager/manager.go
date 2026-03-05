@@ -2,11 +2,11 @@ package manager
 
 import (
 	"fmt"
-	"modbusproxy/pkg/config"
-	"modbusproxy/pkg/database"
-	"modbusproxy/pkg/devices"
-	"modbusproxy/pkg/logger"
-	"modbusproxy/pkg/proxy"
+	"modbridge/pkg/config"
+	"modbridge/pkg/database"
+	"modbridge/pkg/devices"
+	"modbridge/pkg/logger"
+	"modbridge/pkg/proxy"
 	"sync"
 	"time"
 )

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"modbusproxy/pkg/config"
+	"modbridge/pkg/config"
 )
 
 func TestValidateProxyConfig(t *testing.T) {

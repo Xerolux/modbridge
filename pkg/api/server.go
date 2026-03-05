@@ -10,17 +10,17 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
-	"modbusproxy/pkg/auth"
-	"modbusproxy/pkg/config"
-	"modbusproxy/pkg/logger"
-	"modbusproxy/pkg/manager"
-	"modbusproxy/pkg/metrics"
-	"modbusproxy/pkg/middleware"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+
+	"modbridge/pkg/auth"
+	"modbridge/pkg/config"
+	"modbridge/pkg/logger"
+	"modbridge/pkg/manager"
+	"modbridge/pkg/metrics"
+	"modbridge/pkg/middleware"
 )
 
 // checkPortAvailable checks if a port is available for binding
