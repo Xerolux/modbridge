@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
@@ -166,18 +167,23 @@ func (a *Authenticator) Middleware(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // CleanupExpiredSessions periodically removes expired sessions.
-func (a *Authenticator) CleanupExpiredSessions() {
+func (a *Authenticator) CleanupExpiredSessions(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		a.mu.Lock()
-		now := time.Now()
-		for token, session := range a.sessions {
-			if now.After(session.ExpiresAt) {
-				delete(a.sessions, token)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			a.mu.Lock()
+			now := time.Now()
+			for token, session := range a.sessions {
+				if now.After(session.ExpiresAt) {
+					delete(a.sessions, token)
+				}
 			}
+			a.mu.Unlock()
 		}
-		a.mu.Unlock()
 	}
 }

@@ -294,7 +294,7 @@
 
 <script setup>
  import { ref, onMounted } from 'vue';
- import axios from 'axios';
+ import axios from '../axios.js';
  import Button from 'primevue/button';
  import Password from 'primevue/password';
  import Tabs from 'primevue/tabs';

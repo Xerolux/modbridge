@@ -2,24 +2,71 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"strings"
 	"sync"
 )
 
+// FlexibleTags is a custom type that can unmarshal both string and array for tags
+type FlexibleTags []string
+
+// UnmarshalJSON implements custom JSON unmarshaling for FlexibleTags
+func (ft *FlexibleTags) UnmarshalJSON(data []byte) error {
+	// Handle null
+	if string(data) == "null" {
+		*ft = FlexibleTags{}
+		return nil
+	}
+
+	// Try to unmarshal as string first
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		// Split comma-separated string into array
+		if str == "" {
+			*ft = FlexibleTags{}
+		} else {
+			tags := strings.Split(str, ",")
+			result := make([]string, 0, len(tags))
+			for _, tag := range tags {
+				trimmed := strings.TrimSpace(tag)
+				if trimmed != "" {
+					result = append(result, trimmed)
+				}
+			}
+			*ft = FlexibleTags(result)
+		}
+		return nil
+	}
+
+	// Try to unmarshal as array
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err != nil {
+		return err
+	}
+	*ft = FlexibleTags(arr)
+	return nil
+}
+
+// MarshalJSON marshals FlexibleTags as JSON array
+func (ft FlexibleTags) MarshalJSON() ([]byte, error) {
+	return json.Marshal([]string(ft))
+}
+
 // ProxyConfig defines the configuration for a single proxy instance.
 type ProxyConfig struct {
-	ID                string   `json:"id"`
-	Name              string   `json:"name"`
-	ListenAddr        string   `json:"listen_addr"`
-	TargetAddr        string   `json:"target_addr"`
-	Enabled           bool     `json:"enabled"`
-	Paused            bool     `json:"paused"`             // New: Paused state (different from Enabled)
-	ConnectionTimeout int      `json:"connection_timeout"` // New: Connection timeout in seconds (default: 10)
-	ReadTimeout       int      `json:"read_timeout"`       // New: Read timeout in seconds (default: 30)
-	MaxRetries        int      `json:"max_retries"`        // New: Max retry attempts (default: 3)
-	Description       string   `json:"description"`        // New: User description
-	MaxReadSize       int      `json:"max_read_size"`
-	Tags              []string `json:"tags"`
+	ID                string       `json:"id"`
+	Name              string       `json:"name"`
+	ListenAddr        string       `json:"listen_addr"`
+	TargetAddr        string       `json:"target_addr"`
+	Enabled           bool         `json:"enabled"`
+	Paused            bool         `json:"paused"`             // New: Paused state (different from Enabled)
+	ConnectionTimeout int          `json:"connection_timeout"` // New: Connection timeout in seconds (default: 10)
+	ReadTimeout       int          `json:"read_timeout"`       // New: Read timeout in seconds (default: 30)
+	MaxRetries        int          `json:"max_retries"`        // New: Max retry attempts (default: 3)
+	Description       string       `json:"description"`        // New: User description
+	MaxReadSize       int          `json:"max_read_size"`
+	Tags              FlexibleTags `json:"tags"`
 }
 
 // Config holds the global configuration.
@@ -158,57 +205,57 @@ func (m *Manager) Get() Config {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	c := m.cfg
+	return m.deepCopyConfig(m.cfg)
+}
+
+// deepCopyConfig creates a deep copy of the config.
+// This is optimized to only copy slices, not individual structs.
+func (m *Manager) deepCopyConfig(c Config) Config {
+	result := c
+
+	// Deep copy all slices to prevent concurrent modification issues
 	if c.Proxies != nil {
-		proxies := make([]ProxyConfig, len(c.Proxies))
-		copy(proxies, c.Proxies)
-		c.Proxies = proxies
+		result.Proxies = make([]ProxyConfig, len(c.Proxies))
+		for i := range c.Proxies {
+			// Copy struct by value (shallow copy is fine for struct)
+			// Then copy the Tags slice if present
+			result.Proxies[i] = c.Proxies[i]
+			if c.Proxies[i].Tags != nil {
+				result.Proxies[i].Tags = make(FlexibleTags, len(c.Proxies[i].Tags))
+				copy(result.Proxies[i].Tags, c.Proxies[i].Tags)
+			}
+		}
 	}
 	if c.CORSAllowedOrigins != nil {
-		origins := make([]string, len(c.CORSAllowedOrigins))
-		copy(origins, c.CORSAllowedOrigins)
-		c.CORSAllowedOrigins = origins
+		result.CORSAllowedOrigins = make([]string, len(c.CORSAllowedOrigins))
+		copy(result.CORSAllowedOrigins, c.CORSAllowedOrigins)
+	}
+	if c.CORSAllowedMethods != nil {
+		result.CORSAllowedMethods = make([]string, len(c.CORSAllowedMethods))
+		copy(result.CORSAllowedMethods, c.CORSAllowedMethods)
+	}
+	if c.CORSAllowedHeaders != nil {
+		result.CORSAllowedHeaders = make([]string, len(c.CORSAllowedHeaders))
+		copy(result.CORSAllowedHeaders, c.CORSAllowedHeaders)
 	}
 	if c.IPWhitelist != nil {
-		whitelist := make([]string, len(c.IPWhitelist))
-		copy(whitelist, c.IPWhitelist)
-		c.IPWhitelist = whitelist
+		result.IPWhitelist = make([]string, len(c.IPWhitelist))
+		copy(result.IPWhitelist, c.IPWhitelist)
 	}
 	if c.IPBlacklist != nil {
-		blacklist := make([]string, len(c.IPBlacklist))
-		copy(blacklist, c.IPBlacklist)
-		c.IPBlacklist = blacklist
+		result.IPBlacklist = make([]string, len(c.IPBlacklist))
+		copy(result.IPBlacklist, c.IPBlacklist)
 	}
-	return c
+
+	return result
 }
 
 func (m *Manager) Update(fn func(*Config) error) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Create a copy to modify
-	newCfg := m.cfg
-	// (Deep copy slice for safety)
-	if newCfg.Proxies != nil {
-		proxies := make([]ProxyConfig, len(newCfg.Proxies))
-		copy(proxies, newCfg.Proxies)
-		newCfg.Proxies = proxies
-	}
-	if newCfg.CORSAllowedOrigins != nil {
-		origins := make([]string, len(newCfg.CORSAllowedOrigins))
-		copy(origins, newCfg.CORSAllowedOrigins)
-		newCfg.CORSAllowedOrigins = origins
-	}
-	if newCfg.IPWhitelist != nil {
-		whitelist := make([]string, len(newCfg.IPWhitelist))
-		copy(whitelist, newCfg.IPWhitelist)
-		newCfg.IPWhitelist = whitelist
-	}
-	if newCfg.IPBlacklist != nil {
-		blacklist := make([]string, len(newCfg.IPBlacklist))
-		copy(blacklist, newCfg.IPBlacklist)
-		newCfg.IPBlacklist = blacklist
-	}
+	// Create a deep copy to modify
+	newCfg := m.deepCopyConfig(m.cfg)
 
 	if err := fn(&newCfg); err != nil {
 		return err
@@ -225,5 +272,12 @@ func (m *Manager) Update(fn func(*Config) error) error {
 
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
-	return enc.Encode(m.cfg)
+
+	// Debug logging
+	if err := enc.Encode(m.cfg); err != nil {
+		fmt.Printf("ERROR encoding config: %v\n", err)
+		return err
+	}
+	fmt.Printf("Config saved successfully\n")
+	return nil
 }

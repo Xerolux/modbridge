@@ -68,7 +68,16 @@
             />
           </template>
         </Column>
-        <Column field="mac" header="MAC-Adresse" sortable></Column>
+        <Column field="mac" header="MAC-Adresse" sortable>
+          <template #body="{ data }">
+            <span
+              :title="data.mac === 'unknown' ? 'N/A (TCP Remote - MAC nur im lokalen Netzwerk direkt ermittelbar)' : data.mac"
+              class="cursor-help"
+            >
+              {{ data.mac === 'unknown' ? 'N/A' : data.mac }}
+            </span>
+          </template>
+        </Column>
         <Column field="firstSeen" header="Erstmals gesehen" sortable>
           <template #body="{ data }">
             {{ formatDate(data.firstSeen) }}
@@ -86,12 +95,14 @@
                 icon="pi pi-eye"
                 size="small"
                 text
+                title="Details anzeigen"
                 @click="showDeviceDetails(data)"
               />
               <Button
                 icon="pi pi-history"
                 size="small"
                 text
+                title="Verlauf anzeigen"
                 @click="showConnectionHistory(data.ip)"
               />
             </div>
@@ -180,6 +191,20 @@ import Dialog from 'primevue/dialog';
 import Toast from 'primevue/toast';
 import { useToast } from 'primevue/usetoast';
 import { useAppStore } from '../stores/appStore';
+
+const FilterMatchMode = {
+  STARTS_WITH: 'startsWith',
+  CONTAINS: 'contains',
+  NOT_CONTAINS: 'notContains',
+  ENDS_WITH: 'endsWith',
+  EQUALS: 'equals',
+  NOT_EQUALS: 'notEquals',
+  IN: 'in',
+  DATE_IS: 'dateIs',
+  DATE_IS_NOT: 'dateIsNot',
+  DATE_BEFORE: 'dateBefore',
+  DATE_AFTER: 'dateAfter'
+};
 
 const store = useAppStore();
 const toast = useToast();

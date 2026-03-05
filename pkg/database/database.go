@@ -20,6 +20,13 @@ func NewDB(path string) (*DB, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
+	// Ensure connection is closed on error
+	defer func() {
+		if err != nil {
+			conn.Close()
+		}
+	}()
+
 	// Test connection
 	if err := conn.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
@@ -42,6 +49,8 @@ func NewDB(path string) (*DB, error) {
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
+	// Clear defer error since we succeeded
+	err = nil
 	return db, nil
 }
 

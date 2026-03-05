@@ -1,9 +1,8 @@
 # Git
 .git
 .gitignore
-.github
 
-# CI/CD
+# CI/CD (keep .github for workflow files, but ignore other CI systems)
 .travis.yml
 .gitlab-ci.yml
 
@@ -14,6 +13,8 @@ DEPLOYMENT.md
 CONTRIBUTING.md
 ROADMAP.md
 CHANGELOG.md
+README.md
+LICENSE
 
 # IDE
 .vscode/
@@ -22,6 +23,7 @@ CHANGELOG.md
 *.swo
 *~
 .DS_Store
+*.iml
 
 # Build artifacts
 modbridge
@@ -39,12 +41,15 @@ build/
 *_test.go
 coverage.txt
 *.out
+*.test
 
 # Config and data (should be mounted)
 config.json
 *.log
 logs/
 data/
+*.db
+*.sqlite
 
 # Dependencies
 vendor/
@@ -52,6 +57,8 @@ vendor/
 # OS files
 Thumbs.db
 .DS_Store
+ehthumbs.db
+Desktop.ini
 
 # Temporary files
 tmp/
@@ -60,3 +67,16 @@ temp/
 
 # Claude
 .claude/
+
+# Node.js (frontend)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+.pytest_cache/

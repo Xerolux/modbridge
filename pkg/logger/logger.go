@@ -37,9 +37,13 @@ type Logger struct {
 
 // NewLogger creates a new logger.
 func NewLogger(filePath string, bufferSize int) (*Logger, error) {
-	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		return nil, err
+	var f *os.File
+	var err error
+	if filePath != "" {
+		f, err = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &Logger{
@@ -48,6 +52,16 @@ func NewLogger(filePath string, bufferSize int) (*Logger, error) {
 		ringSize:    bufferSize,
 		subscribers: make(map[chan LogEntry]struct{}),
 	}, nil
+}
+
+// NewNullLogger creates a logger that discards file output.
+func NewNullLogger(bufferSize int) *Logger {
+	return &Logger{
+		file:        nil,
+		ringBuffer:  make([]LogEntry, 0, bufferSize),
+		ringSize:    bufferSize,
+		subscribers: make(map[chan LogEntry]struct{}),
+	}
 }
 
 // Log writes a log entry.
@@ -59,24 +73,39 @@ func (l *Logger) Log(level LogLevel, proxyID, msg string) {
 		Message:   msg,
 	}
 
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	// Critical section 1: File write and ring buffer operations
+	func() {
+		l.mu.Lock()
+		defer l.mu.Unlock()
 
-	// 1. Write to file
-	if jsonBytes, err := json.Marshal(entry); err == nil {
-		_, _ = l.file.Write(jsonBytes)
-		_, _ = l.file.WriteString("\n")
-	}
+		// 1. Write to file
+		if l.file != nil {
+			if jsonBytes, err := json.Marshal(entry); err == nil {
+				_, _ = l.file.Write(jsonBytes)
+				_, _ = l.file.WriteString("\n")
+			}
+		}
 
-	// 2. Add to ring buffer
-	if len(l.ringBuffer) >= l.ringSize {
-		// Shift
-		l.ringBuffer = l.ringBuffer[1:]
-	}
-	l.ringBuffer = append(l.ringBuffer, entry)
+		// 2. Add to ring buffer
+		if len(l.ringBuffer) >= l.ringSize {
+			l.ringBuffer = l.ringBuffer[1:]
+		}
+		l.ringBuffer = append(l.ringBuffer, entry)
+	}()
 
-	// 3. Broadcast to subscribers
-	for ch := range l.subscribers {
+	// Critical section 2: Get subscriber snapshot
+	subscribers := func() []chan LogEntry {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+		subs := make([]chan LogEntry, 0, len(l.subscribers))
+		for ch := range l.subscribers {
+			subs = append(subs, ch)
+		}
+		return subs
+	}()
+
+	// Broadcast to subscribers (outside of lock)
+	for _, ch := range subscribers {
 		select {
 		case ch <- entry:
 		default:
@@ -127,6 +156,10 @@ func (l *Logger) Info(proxyID, msg string) {
 
 func (l *Logger) Error(proxyID, msg string) {
 	l.Log(ERROR, proxyID, msg)
+}
+
+func (l *Logger) Debug(proxyID, msg string) {
+	l.Log(DEBUG, proxyID, msg)
 }
 
 // Close closes the logger file.

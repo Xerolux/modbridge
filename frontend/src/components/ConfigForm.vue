@@ -181,11 +181,21 @@
 
    validationErrors.value = {};
 
+   // Convert tags from string to array before sending to backend
+   const proxyData = { ...proxy };
+   if (typeof proxyData.tags === 'string') {
+     // Split comma-separated string into array, trim whitespace, filter empty
+     proxyData.tags = proxyData.tags
+       .split(',')
+       .map(t => t.trim())
+       .filter(t => t.length > 0);
+   }
+
    let success = false;
    if (proxy._isNew) {
-     success = await store.addProxy(proxy);
+     success = await store.addProxy(proxyData);
    } else {
-     success = await store.updateProxy(proxy);
+     success = await store.updateProxy(proxyData);
    }
    if (success) {
      // Refresh handled by store, but we might want to clear dirty flags if we kept the object

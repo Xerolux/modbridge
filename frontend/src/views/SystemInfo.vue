@@ -142,12 +142,23 @@
             </Card>
 
             <Card class="bg-gray-800 text-white">
-                <template #title>Actions</template>
+                <template #title>Server Control</template>
                 <template #content>
                     <div class="flex flex-col gap-2">
                         <Button @click="refreshInfo" label="Refresh" icon="pi pi-refresh" class="w-full" />
+                        <Button @click="restartSystem" label="Restart System" icon="pi pi-power-off" severity="warning" class="w-full" />
+                    </div>
+                </template>
+            </Card>
+
+            <Card class="bg-gray-800 text-white">
+                <template #title>Proxy Control</template>
+                <template #content>
+                    <div class="flex flex-col gap-2">
+                        <Button @click="startAllProxies" label="Start All Proxies" icon="pi pi-play" severity="success" class="w-full" />
+                        <Button @click="stopAllProxies" label="Stop All Proxies" icon="pi pi-stop" severity="danger" class="w-full" />
+                        <Button @click="restartAllProxies" label="Restart All Proxies" icon="pi pi-refresh" severity="warning" class="w-full" />
                         <Button @click="downloadLogs" label="Download Logs" icon="pi pi-download" severity="secondary" class="w-full" />
-                        <Button @click="restartSystem" label="Restart System" icon="pi pi-power-off" severity="danger" class="w-full" />
                     </div>
                 </template>
             </Card>
@@ -160,7 +171,7 @@
 
 <script setup>
  import { ref, onMounted, onUnmounted } from 'vue';
- import axios from 'axios';
+ import axios from '../axios.js';
  import Card from 'primevue/card';
  import Button from 'primevue/button';
  import Toast from 'primevue/toast';
@@ -241,13 +252,50 @@
          accept: async () => {
              try {
                  await axios.post('/api/system/restart');
-                 toast.add({ severity: 'info', summary: 'Restarting', detail: 'System is restarting...', life: 3000 });
+                 toast.add({ severity: 'info', summary: 'Restarting', detail: 'System is restarting...', life: 5000 });
              } catch (e) {
                  toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to restart', life: 3000 });
              }
          }
      });
  };
+
+const startAllProxies = async () => {
+    try {
+        await axios.post('/api/proxies/control', { action: 'start_all' });
+        toast.add({ severity: 'success', summary: 'Success', detail: 'All proxies started', life: 3000 });
+        await fetchInfo();
+    } catch (e) {
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to start proxies', life: 3000 });
+    }
+};
+
+const stopAllProxies = async () => {
+    confirm.require({
+        message: 'Are you sure you want to stop all proxies?',
+        header: 'Confirm Stop',
+        icon: 'pi pi-exclamation-triangle',
+        accept: async () => {
+            try {
+                await axios.post('/api/proxies/control', { action: 'stop_all' });
+                toast.add({ severity: 'success', summary: 'Success', detail: 'All proxies stopped', life: 3000 });
+                await fetchInfo();
+            } catch (e) {
+                toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to stop proxies', life: 3000 });
+            }
+        }
+    });
+};
+
+const restartAllProxies = async () => {
+    try {
+        await axios.post('/api/proxies/control', { action: 'restart_all' });
+        toast.add({ severity: 'success', summary: 'Success', detail: 'All proxies restarted', life: 3000 });
+        await fetchInfo();
+    } catch (e) {
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to restart proxies', life: 3000 });
+    }
+};
 
  onMounted(() => {
      fetchInfo();

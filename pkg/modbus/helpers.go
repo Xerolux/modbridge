@@ -107,3 +107,16 @@ func ExceptionResponse(txID uint16, unitID uint8, fc uint8, exceptionCode uint8)
 	frame[8] = exceptionCode
 	return frame
 }
+
+// CreateExceptionResponse creates an exception response from a request frame
+func CreateExceptionResponse(reqFrame []byte, exceptionCode uint8) []byte {
+	if len(reqFrame) < 8 {
+		return nil
+	}
+
+	txID := binary.BigEndian.Uint16(reqFrame[0:2])
+	unitID := reqFrame[6]
+	fc := reqFrame[7]
+
+	return ExceptionResponse(txID, unitID, fc, exceptionCode)
+}

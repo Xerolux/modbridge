@@ -1,6 +1,7 @@
 package devices
 
 import (
+	"log"
 	"modbusproxy/pkg/database"
 	"net"
 	"sync"
@@ -18,26 +19,95 @@ type Device struct {
 	ProxyID      string    `json:"proxy_id"`
 }
 
+// dbWrite represents a database write operation.
+type dbWrite struct {
+	device  *database.Device
+	ip      string
+	proxyID string
+	history bool // true if this is a connection history write
+}
+
 // Tracker tracks connected devices with persistent storage.
 type Tracker struct {
-	mu      sync.RWMutex
-	devices map[string]*Device // key: IP address (cache)
-	db      *database.DB       // persistent storage
+	mu       sync.RWMutex
+	devices  map[string]*Device // key: IP address (cache)
+	db       *database.DB       // persistent storage
+	dbWrites chan dbWrite       // channel for async database writes
+	wg       sync.WaitGroup     // wait group for graceful shutdown
+	stopOnce sync.Once          // ensures stop is called only once
+	stopped  chan struct{}      // signals when writer is stopped
 }
 
 // NewTracker creates a new device tracker with database support.
 func NewTracker(db *database.DB) *Tracker {
 	t := &Tracker{
-		devices: make(map[string]*Device),
-		db:      db,
+		devices:  make(map[string]*Device),
+		db:       db,
+		dbWrites: make(chan dbWrite, 5000), // Increased buffer size for high-load scenarios
+		stopped:  make(chan struct{}),
 	}
 
 	// Load existing devices from database into cache
 	if db != nil {
 		t.loadDevicesFromDB()
+		// Start database writer goroutine
+		t.wg.Add(1)
+		go t.dbWriter()
 	}
 
 	return t
+}
+
+// dbWriter processes database writes asynchronously.
+func (t *Tracker) dbWriter() {
+	defer t.wg.Done()
+	for {
+		select {
+		case write, ok := <-t.dbWrites:
+			if !ok {
+				// Channel closed, exit
+				return
+			}
+			if write.history {
+				// Connection history write
+				if err := t.db.AddConnectionHistory(write.ip, write.proxyID); err != nil {
+					log.Printf("[DeviceTracker] Failed to write connection history: %v", err)
+				}
+			} else if write.device != nil {
+				// Device write
+				if err := t.db.SaveDevice(write.device); err != nil {
+					log.Printf("[DeviceTracker] Failed to save device: %v", err)
+				}
+			}
+		case <-t.stopped:
+			// Drain remaining writes before exiting
+			for {
+				select {
+				case write := <-t.dbWrites:
+					if write.history {
+						_ = t.db.AddConnectionHistory(write.ip, write.proxyID)
+					} else if write.device != nil {
+						_ = t.db.SaveDevice(write.device)
+					}
+				default:
+					return
+				}
+			}
+		}
+	}
+}
+
+// Stop gracefully stops the tracker and flushes pending writes.
+func (t *Tracker) Stop() {
+	t.stopOnce.Do(func() {
+		if t.db != nil {
+			close(t.stopped)
+			// Close the write channel to signal the writer to stop
+			close(t.dbWrites)
+			// Wait for writer to finish
+			t.wg.Wait()
+		}
+	})
 }
 
 // loadDevicesFromDB loads all devices from the database into the cache.
@@ -99,7 +169,7 @@ func (t *Tracker) TrackConnection(conn net.Conn, proxyID string) {
 	device.RequestCount++
 	device.ProxyID = proxyID
 
-	// Save to database if available
+	// Queue database writes if available (non-blocking)
 	if t.db != nil {
 		dbDevice := &database.Device{
 			IP:           device.IP,
@@ -110,12 +180,23 @@ func (t *Tracker) TrackConnection(conn net.Conn, proxyID string) {
 			RequestCount: device.RequestCount,
 			ProxyID:      device.ProxyID,
 		}
-		// Fire and forget - don't block on DB writes
-		go func() {
-			_ = t.db.SaveDevice(dbDevice)
-			// Also add to connection history
-			_ = t.db.AddConnectionHistory(ip, proxyID)
-		}()
+
+		// Non-blocking send to channel
+		select {
+		case t.dbWrites <- dbWrite{device: dbDevice}:
+			// Successfully queued
+		default:
+			// Channel full, log warning but don't block
+			log.Printf("[DeviceTracker] Database write channel full, dropping device write for %s", ip)
+		}
+
+		// Also queue connection history
+		select {
+		case t.dbWrites <- dbWrite{ip: ip, proxyID: proxyID, history: true}:
+			// Successfully queued
+		default:
+			log.Printf("[DeviceTracker] Database write channel full, dropping history write for %s", ip)
+		}
 	}
 }
 
@@ -149,11 +230,23 @@ func (t *Tracker) SetDeviceName(ip, name string) error {
 		device.Name = name
 	}
 
-	// Save to database if available
+	// Save to database if available (non-blocking)
 	if t.db != nil {
-		go func() {
-			_ = t.db.UpdateDeviceName(ip, name)
-		}()
+		dbDevice := &database.Device{
+			IP:           device.IP,
+			MAC:          device.MAC,
+			Name:         device.Name,
+			FirstSeen:    device.FirstSeen,
+			LastConnect:  device.LastConnect,
+			RequestCount: device.RequestCount,
+			ProxyID:      device.ProxyID,
+		}
+		select {
+		case t.dbWrites <- dbWrite{device: dbDevice}:
+			// Successfully queued
+		default:
+			log.Printf("[DeviceTracker] Database write channel full, dropping name update for %s", ip)
+		}
 	}
 
 	return nil
