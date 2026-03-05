@@ -21,6 +21,13 @@ import (
 	"time"
 )
 
+var (
+	// Version holds the current version of the application
+	Version = "dev"
+	// BuildTime holds the timestamp when the application was built
+	BuildTime = "unknown"
+)
+
 // generateSecurePassword generates a cryptographically secure random password
 func generateSecurePassword(length int) string {
 	bytes := make([]byte, length)
