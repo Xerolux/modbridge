@@ -103,8 +103,8 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "${{ steps.compute.outputs.tag }}"
-          git push origin "${{ steps.compute.outputs.tag }}"
+          git tag -f "${{ steps.compute.outputs.tag }}"
+          git push -f origin "${{ steps.compute.outputs.tag }}"
 
   # ─────────────────────────────────────────────────────────────────────────────
   # 2. Test (parallel with build-frontend)
