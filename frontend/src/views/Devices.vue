@@ -180,7 +180,7 @@
 
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
-import axios from 'axios';
+import axios from '../axios.js';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Button from 'primevue/button';
@@ -213,7 +213,7 @@ const devices = ref([]);
 const loading = ref(true);
 const error = ref(null);
 const searchTerm = ref('');
-const selectedSort = ref({ label: 'Name (A-Z)', value: 'name_asc' });
+const selectedSort = ref('name_asc');
 const deviceDetailsVisible = ref(false);
 const historyVisible = ref(false);
 const selectedDevice = ref(null);
@@ -246,7 +246,7 @@ const filteredDevices = computed(() => {
     );
   }
 
-  switch (selectedSort.value.value) {
+  switch (selectedSort.value) {
     case 'name_asc':
       result.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       break;
@@ -274,7 +274,9 @@ const fetchDevices = async () => {
     const res = await axios.get('/api/devices');
     devices.value = res.data.map(device => ({
       ...device,
-      connectionCount: 1 // Default value if not provided
+      connectionCount: device.request_count || 0,
+      firstSeen: device.first_seen,
+      lastSeen: device.last_connect,
     }));
     loading.value = false;
   } catch (e) {
