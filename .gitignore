@@ -44,3 +44,7 @@ temp/
 
 # Build artifacts
 build/
+
+# SSH Keys (NEVER commit\!)
+modbridge_server
+modbridge_server.pub
