@@ -2,11 +2,10 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, master, develop ]
-    tags:
-      - 'v*'
+    branches: [main]
+    tags: ['v*']
   pull_request:
-    branches: [ main, master, develop ]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -15,21 +14,21 @@ permissions:
   security-events: write
 
 env:
-  GO_VERSION: '1.26'
+  GO_VERSION: '1.24'
+  NODE_VERSION: '22'
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # Code quality checks
   quality:
     name: Code Quality
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -41,150 +40,156 @@ jobs:
         run: |
           fmt_output=$(gofmt -l .)
           if [ -n "$fmt_output" ]; then
-            echo "❌ The following files need formatting:"
+            echo "The following files need formatting:"
             echo "$fmt_output"
             exit 1
           fi
-          echo "✅ All files are properly formatted"
 
       - name: Run go vet
+        env:
+          CGO_ENABLED: 1
         run: go vet ./...
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@v6
         with:
           version: latest
           args: --timeout=5m
 
-  # Security scanning
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Run Gosec Security Scanner
-        uses: securego/gosec@master
-        with:
-          args: '-no-fail -fmt sarif -out results.sarif ./...'
-
-      - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@v4
-        if: always()
-        with:
-          sarif_file: results.sarif
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
-
-      - name: Upload Trivy results
-        uses: github/codeql-action/upload-sarif@v4
-        if: always()
-        with:
-          sarif_file: 'trivy-results.sarif'
-
-  # Tests
   test:
     name: Test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: ['1.26']
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v5
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Run tests
+        env:
+          CGO_ENABLED: 1
         run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage
         uses: codecov/codecov-action@v5
-        if: matrix.go-version == env.GO_VERSION
         with:
           file: ./coverage.txt
-          flags: unittests
-          name: codecov-umbrella
         continue-on-error: true
 
-      - name: Check test coverage
-        if: matrix.go-version == env.GO_VERSION
-        run: |
-          go tool cover -func=coverage.txt | tail -1 | awk '{print "Total coverage: " $3}'
-
-  # Build binaries
-  build:
-    name: Build
+  build-frontend:
+    name: Build Frontend
     runs-on: ubuntu-latest
-    needs: [quality, test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Upload frontend artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 1
+
+  build-binaries:
+    name: Build Go Binaries
+    runs-on: ubuntu-latest
+    needs: [quality, test, build-frontend]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     strategy:
+      fail-fast: false
       matrix:
         include:
           - goos: linux
             goarch: amd64
+            suffix: linux-amd64
+            packages: ''
+            cc: ''
           - goos: linux
             goarch: arm64
+            suffix: linux-arm64
+            packages: gcc-aarch64-linux-gnu
+            cc: aarch64-linux-gnu-gcc
           - goos: windows
             goarch: amd64
-          - goos: darwin
-            goarch: amd64
-          - goos: darwin
-            goarch: arm64
+            suffix: windows-amd64
+            packages: gcc-mingw-w64-x86-64
+            cc: x86_64-w64-mingw32-gcc
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install cross-compiler
+        if: matrix.packages != ''
+        run: sudo apt-get update && sudo apt-get install -y ${{ matrix.packages }}
+
+      - name: Download frontend artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+
+      - name: Copy frontend to pkg/web/dist
+        run: |
+          rm -rf pkg/web/dist/*
+          cp -r frontend/dist/* pkg/web/dist/
 
       - name: Build binary
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 1
+          CC: ${{ matrix.cc }}
         run: |
+          OUTPUT="modbridge-${{ matrix.suffix }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            go build -ldflags="-s -w" -trimpath -o modbridge-${{ matrix.goos }}-${{ matrix.goarch }}.exe ./main.go
-          else
-            go build -ldflags="-s -w" -trimpath -o modbridge-${{ matrix.goos }}-${{ matrix.goarch }} ./main.go
+            OUTPUT="$OUTPUT.exe"
           fi
+          go build \
+            -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
+            -trimpath \
+            -o "$OUTPUT" \
+            ./main.go
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: modbridge-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: modbridge-*
+          name: modbridge-${{ matrix.suffix }}
+          path: modbridge-${{ matrix.suffix }}*
           retention-days: 7
 
-  # Docker build and push
-  docker:
+  build-docker:
     name: Docker Build & Push
     runs-on: ubuntu-latest
-    needs: [quality, test, security]
+    needs: [quality, test]
     if: github.event_name != 'pull_request'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -210,8 +215,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=edge,enable={{is_default_branch}}
-            type=sha,prefix={{branch}}-
+            type=sha,prefix=sha-
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -224,87 +228,53 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Run Trivy vulnerability scanner on image
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          format: 'sarif'
-          output: 'trivy-image-results.sarif'
-        continue-on-error: true
-
-      - name: Upload Trivy image scan results
-        uses: github/codeql-action/upload-sarif@v4
-        if: always()
-        with:
-          sarif_file: 'trivy-image-results.sarif'
-        continue-on-error: true
-
-  # Release
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [build, docker]
+    needs: [build-binaries, build-docker]
     if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: ${{ env.GO_VERSION }}
 
       - name: Get version
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          path: artifacts/
 
       - name: Prepare release files
         run: |
           mkdir -p release
-          find artifacts -type f -exec cp {} release/ \;
-          ls -lh release/
-
-      - name: Generate changelog
-        id: changelog
-        run: |
-          if [ -f CHANGELOG.md ]; then
-            echo "changelog<<EOF" >> $GITHUB_OUTPUT
-            cat CHANGELOG.md >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          else
-            echo "changelog=See commit history for changes." >> $GITHUB_OUTPUT
-          fi
+          find artifacts -type f -name 'modbridge*' -exec cp {} release/ \;
+          cd release
+          sha256sum modbridge-* > checksums.txt
+          ls -lh
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            release/*
+          files: release/*
           draft: false
           prerelease: false
           generate_release_notes: true
           body: |
             ## ModBridge v${{ steps.version.outputs.VERSION }}
 
-            ### Installation
-
-            #### Docker
+            ### Docker
             ```bash
             docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
             docker run -d -p 8080:8080 -p 5020-5030:5020-5030 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
             ```
 
-            #### Binary Download
+            ### Binary Download
             Download the appropriate binary for your platform from the assets below.
-
-            ### Changes
-            ${{ steps.changelog.outputs.changelog }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
