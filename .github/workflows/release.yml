@@ -1,0 +1,279 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (z.B. v1.0.0)'
+        required: true
+        type: string
+      release_type:
+        description: 'Release-Typ'
+        required: true
+        default: release
+        type: choice
+        options:
+          - release
+          - beta
+          - alpha
+      make_latest:
+        description: 'Als "Latest Release" auf GitHub markieren'
+        required: true
+        type: boolean
+        default: false
+
+env:
+  GO_VERSION: '1.26'
+  NODE_VERSION: '22'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: xerolux/modbridge
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # 1. Prepare: Validate version, create git tag, compute all metadata
+  # ─────────────────────────────────────────────────────────────────────────────
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    outputs:
+      tag:        ${{ steps.compute.outputs.tag }}
+      docker_tag: ${{ steps.compute.outputs.docker_tag }}
+      prerelease: ${{ steps.compute.outputs.prerelease }}
+      docker_tags: ${{ steps.compute.outputs.docker_tags }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate & compute release info
+        id: compute
+        run: |
+          VERSION="${{ inputs.version }}"
+          TYPE="${{ inputs.release_type }}"
+          MAKE_LATEST="${{ inputs.make_latest }}"
+
+          # Auto-add v prefix if missing
+          [[ "$VERSION" != v* ]] && VERSION="v${VERSION}"
+
+          # Validate semver format (vX.Y.Z)
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ Ungültiges Format: '$VERSION'. Bitte v1.2.3 verwenden."
+            exit 1
+          fi
+
+          # Compute tag and docker_tag
+          if [ "$TYPE" = "release" ]; then
+            TAG="$VERSION"
+            DOCKER_TAG="${VERSION#v}"   # strip leading 'v' for Docker
+            PRERELEASE="false"
+          else
+            TAG="${VERSION}-${TYPE}"
+            DOCKER_TAG="${VERSION#v}-${TYPE}"
+            PRERELEASE="true"
+          fi
+
+          # Build comma-separated Docker tag list
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          TAGS="${IMAGE}:${TAG},${IMAGE}:${DOCKER_TAG}"
+
+          if [ "$TYPE" = "release" ]; then
+            MAJOR_MINOR=$(echo "${DOCKER_TAG}" | cut -d. -f1-2)
+            MAJOR=$(echo "${DOCKER_TAG}" | cut -d. -f1)
+            TAGS="${TAGS},${IMAGE}:${MAJOR_MINOR},${IMAGE}:${MAJOR}"
+            [ "$MAKE_LATEST" = "true" ] && TAGS="${TAGS},${IMAGE}:latest"
+          fi
+
+          echo "tag=${TAG}"               >> $GITHUB_OUTPUT
+          echo "docker_tag=${DOCKER_TAG}" >> $GITHUB_OUTPUT
+          echo "prerelease=${PRERELEASE}" >> $GITHUB_OUTPUT
+          echo "docker_tags=${TAGS}"      >> $GITHUB_OUTPUT
+
+          echo ""
+          echo "📦 Git Tag:      ${TAG}"
+          echo "🐳 Docker Tags:  ${TAGS}"
+          echo "🔖 Prerelease:   ${PRERELEASE}"
+          echo "⭐ Latest:        ${MAKE_LATEST}"
+
+      - name: Create and push git tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.compute.outputs.tag }}"
+          git push origin "${{ steps.compute.outputs.tag }}"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # 2. Test (parallel with build-frontend)
+  # ─────────────────────────────────────────────────────────────────────────────
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Run tests
+        env:
+          CGO_ENABLED: 1
+        run: go test -race ./...
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # 3. Build Frontend (parallel with test)
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install & build
+        working-directory: ./frontend
+        run: npm ci && npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 1
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # 4. Build Go Binaries (Linux amd64 + arm64)
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-binaries:
+    name: Build Binary (${{ matrix.suffix }})
+    runs-on: ubuntu-latest
+    needs: [test, build-frontend]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+            packages: ''
+            cc: ''
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+            packages: gcc-aarch64-linux-gnu
+            cc: aarch64-linux-gnu-gcc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Install cross-compiler
+        if: matrix.packages != ''
+        run: sudo apt-get update && sudo apt-get install -y ${{ matrix.packages }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+      - name: Copy frontend to embed path
+        run: |
+          rm -rf pkg/web/dist/*
+          cp -r frontend/dist/* pkg/web/dist/
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
+          CC: ${{ matrix.cc }}
+        run: |
+          go build \
+            -ldflags="-s -w -X main.Version=${{ needs.prepare.outputs.tag }}" \
+            -trimpath \
+            -o "modbridge-${{ matrix.suffix }}" \
+            ./main.go
+      - uses: actions/upload-artifact@v4
+        with:
+          name: modbridge-${{ matrix.suffix }}
+          path: modbridge-${{ matrix.suffix }}
+          retention-days: 7
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # 5. Build & Push Docker Image (Linux amd64 + arm64)
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-docker:
+    name: Docker Build & Push
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ needs.prepare.outputs.docker_tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # 6. Create GitHub Release
+  # ─────────────────────────────────────────────────────────────────────────────
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [prepare, build-binaries, build-docker]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+      - name: Prepare release files & checksums
+        run: |
+          mkdir -p release
+          find artifacts -type f -name 'modbridge*' -exec cp {} release/ \;
+          cd release && sha256sum modbridge-* > checksums.txt && ls -lh
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: "ModBridge ${{ needs.prepare.outputs.tag }}"
+          files: release/*
+          draft: false
+          prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
+          make_latest: ${{ inputs.make_latest == true && inputs.release_type == 'release' }}
+          generate_release_notes: true
+          body: |
+            ## ModBridge ${{ needs.prepare.outputs.tag }}
+
+            **Typ:** ${{ inputs.release_type }}
+
+            ### Docker
+            ```bash
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.docker_tag }}
+            docker run -d -p 8080:8080 -p 5020-5030:5020-5030 \
+              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.docker_tag }}
+            ```
+
+            ### Binaries
+            | Plattform | Datei |
+            |-----------|-------|
+            | Linux x64 | `modbridge-linux-amd64` |
+            | Linux ARM64 | `modbridge-linux-arm64` |
+
+            SHA256-Prüfsummen: siehe `checksums.txt`
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
