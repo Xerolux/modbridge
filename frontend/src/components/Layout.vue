@@ -91,7 +91,7 @@
                  <div class="flex items-center gap-2">
                      <div class="flex items-center gap-2 px-3">
                          <i :class="appStore.darkMode ? 'pi pi-moon' : 'pi pi-sun'"></i>
-                         <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="appStore.toggleDarkMode" />
+                         <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" />
                      </div>
                      <Button label="Logout" icon="pi pi-power-off" severity="danger" text @click="logout" />
                  </div>

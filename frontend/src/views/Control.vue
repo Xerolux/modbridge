@@ -175,7 +175,7 @@
 
 <script setup>
  import { ref, onMounted, onUnmounted, watch } from 'vue';
- import axios from 'axios';
+ import axios from '../axios.js';
  import Card from 'primevue/card';
  import Button from 'primevue/button';
  import Tag from 'primevue/tag';
