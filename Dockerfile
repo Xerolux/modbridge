@@ -45,7 +45,7 @@ RUN cd /build && bash ./build.sh
 # CGO is required for sqlite3
 RUN CGO_ENABLED=1 GOFLAGS=-trimpath \
     go build \
-    -ldflags="-s -w -X main.version=dev -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -ldflags="-s -w -X main.Version=dev -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     -o modbridge ./main.go
 
 # Verify the binary
