@@ -15,7 +15,7 @@
       "max_retries": 3,
       "description": "",
       "max_read_size": 100,
-      "tags": null
+      "tags": []
     }
   ],
   "log_level": "INFO",
@@ -27,7 +27,8 @@
   "tls_key_file": "",
   "session_timeout": 24,
   "cors_allowed_origins": [
-    "*"
+    "http://localhost:3000",
+    "http://localhost:8080"
   ],
   "cors_allowed_methods": [
     "GET",
