@@ -211,6 +211,8 @@ build_modbridge_from_source() {
         ./build.sh
     else
         cd frontend
+        # Increase Node.js memory limit for build
+        export NODE_OPTIONS="--max-old-space-size=2048"
         npm install
         npm run build
         cd ..
