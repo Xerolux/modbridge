@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(golangci-lint run --timeout=5m)",
+      "Bash(go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)",
+      "Bash(golangci-lint version)",
+      "Bash(gofmt -w pkg/database/database.go pkg/devices/devices.go pkg/pool/global_manager.go)",
+      "Bash(gofmt -w pkg/metrics/metrics.go pkg/metrics/prometheus_exporter.go pkg/batch/batcher.go)",
+      "Bash(gofmt -w pkg/pool/pool.go pkg/auth/auth.go pkg/auth/users.go)",
+      "Bash(gofmt -w pkg/web/web.go pkg/errors/errors.go pkg/logger/logger.go)",
+      "Bash(xargs gofmt -w)",
+      "mcp__zread__get_repo_structure",
+      "Bash(find . -name \"*.go\" -exec grep -l \"panic\\\\|os.Exit\\\\|log.Fatal\" {} ;)",
+      "Bash(chmod +x build.sh)",
+      "Bash(git add -A)"
+    ]
+  }
+}

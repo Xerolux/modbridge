@@ -34,7 +34,11 @@ RUN go mod download && go mod verify
 # Copy source code (but exclude frontend/dist which will be built separately)
 COPY . .
 
-# Copy frontend build to pkg/web/dist before building
+# Copy frontend build and fix underscore files for go:embed compatibility
+COPY --from=frontend-builder /frontend/dist ./frontend/dist
+RUN cd /frontend && ./build.sh
+
+# Copy fixed frontend build to pkg/web/dist before building
 COPY --from=frontend-builder /frontend/dist ./pkg/web/dist
 
 # Build the application with optimizations
