@@ -23,7 +23,8 @@ RUN apk add --no-cache \
     sqlite-dev \
     nodejs \
     npm \
-    curl
+    curl \
+    bash
 
 WORKDIR /build
 
