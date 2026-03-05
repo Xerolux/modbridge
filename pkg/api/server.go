@@ -527,6 +527,10 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 		s.mgr.StartAll()
 	case "stop_all":
 		s.mgr.StopAll()
+	case "restart_all":
+		s.mgr.StopAll()
+		time.Sleep(100 * time.Millisecond)
+		s.mgr.StartAll()
 	default:
 		err = fmt.Errorf("unknown action")
 	}
