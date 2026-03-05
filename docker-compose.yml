@@ -56,14 +56,14 @@ services:
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
 
-    # Resource limits (optimized for enterprise)
+    # Resource limits (optimized for single CPU)
     deploy:
       resources:
         limits:
-          cpus: '4'
+          cpus: '1'
           memory: 1G
         reservations:
-          cpus: '1'
+          cpus: '0.25'
           memory: 256M
 
     # Logging configuration
