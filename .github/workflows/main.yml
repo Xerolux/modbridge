@@ -17,7 +17,7 @@ env:
   GO_VERSION: '1.26'
   NODE_VERSION: '22'
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: xerolux/modbridge
 
 jobs:
   quality:
@@ -52,6 +52,8 @@ jobs:
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
+        env:
+          CGO_ENABLED: "1"
         with:
           version: latest
           args: --timeout=5m
@@ -128,11 +130,6 @@ jobs:
             suffix: linux-arm64
             packages: gcc-aarch64-linux-gnu
             cc: aarch64-linux-gnu-gcc
-          - goos: windows
-            goarch: amd64
-            suffix: windows-amd64
-            packages: gcc-mingw-w64-x86-64
-            cc: x86_64-w64-mingw32-gcc
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -166,9 +163,6 @@ jobs:
           CC: ${{ matrix.cc }}
         run: |
           OUTPUT="modbridge-${{ matrix.suffix }}"
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            OUTPUT="$OUTPUT.exe"
-          fi
           go build \
             -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
             -trimpath \
@@ -179,7 +173,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: modbridge-${{ matrix.suffix }}
-          path: modbridge-${{ matrix.suffix }}*
+          path: modbridge-${{ matrix.suffix }}
           retention-days: 7
 
   build-docker:
