@@ -8,7 +8,10 @@ COPY frontend/package*.json ./
 RUN npm ci
 
 COPY frontend/ ./
-RUN npm run build
+RUN npm run build && \
+    cd dist/assets && \
+    mv _plugin-vue_export-helper-DlAUqK2U.js plugin-vue_export-helper-DlAUqK2U.js && \
+    find ../.. -type f \( -name "*.js" -o -name "*.html" \) -exec sed -i 's|_plugin-vue_export-helper-DlAUqK2U.js|plugin-vue_export-helper-DlAUqK2U.js|g' {} +
 
 # Build stage for backend
 FROM golang:1.25-alpine AS builder
