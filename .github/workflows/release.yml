@@ -22,6 +22,10 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: write
+  packages: write
+
 env:
   GO_VERSION: '1.26'
   NODE_VERSION: '22'
@@ -233,8 +237,6 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     needs: [prepare, build-binaries, build-docker]
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Download all artifacts
