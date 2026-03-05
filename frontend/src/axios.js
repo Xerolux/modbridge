@@ -19,4 +19,18 @@ axios.interceptors.request.use(config => {
     return Promise.reject(error);
 });
 
+// Redirect to login on 401 responses (session expired)
+axios.interceptors.response.use(
+    response => response,
+    error => {
+        if (error.response && error.response.status === 401) {
+            // Only redirect if not already on login page
+            if (window.location.pathname !== '/login') {
+                window.location.href = '/login';
+            }
+        }
+        return Promise.reject(error);
+    }
+);
+
 export default axios;

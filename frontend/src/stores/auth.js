@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import axios from 'axios'
+import axios from '../axios.js'
 
 export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = ref(false)

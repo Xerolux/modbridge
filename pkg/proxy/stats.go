@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"sort"
 	"sync"
 	"time"
 )
@@ -121,37 +122,49 @@ func (s *EnhancedStats) recordLatency(latency time.Duration) {
 	s.totalLatency += latency
 }
 
-// GetPercentiles calculates latency percentiles
-func (s *EnhancedStats) GetPercentiles() LatencyPercentiles {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
+// getPercentilesLocked calculates latency percentiles (caller must hold at least RLock)
+func (s *EnhancedStats) getPercentilesLocked() LatencyPercentiles {
 	if len(s.latencies) == 0 {
 		return LatencyPercentiles{}
 	}
 
-	// Create sorted copy
+	// Create sorted copy using efficient sort
 	sorted := make([]time.Duration, len(s.latencies))
 	copy(sorted, s.latencies)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i] < sorted[j]
+	})
 
-	// Simple sort (for small arrays, more efficient than full quicksort)
-	for i := 0; i < len(sorted); i++ {
-		for j := i + 1; j < len(sorted); j++ {
-			if sorted[i] > sorted[j] {
-				sorted[i], sorted[j] = sorted[j], sorted[i]
-			}
-		}
+	n := len(sorted)
+	p999Idx := n * 999 / 1000
+	if p999Idx >= n {
+		p999Idx = n - 1
+	}
+	p99Idx := n * 99 / 100
+	if p99Idx >= n {
+		p99Idx = n - 1
+	}
+	p95Idx := n * 95 / 100
+	if p95Idx >= n {
+		p95Idx = n - 1
 	}
 
 	return LatencyPercentiles{
-		P50:  sorted[len(sorted)*50/100],
-		P95:  sorted[len(sorted)*95/100],
-		P99:  sorted[len(sorted)*99/100],
-		P999: sorted[len(sorted)*999/1000],
-		Mean: s.totalLatency / time.Duration(len(s.latencies)),
+		P50:  sorted[n*50/100],
+		P95:  sorted[p95Idx],
+		P99:  sorted[p99Idx],
+		P999: sorted[p999Idx],
+		Mean: s.totalLatency / time.Duration(n),
 		Min:  s.minLatency,
 		Max:  s.maxLatency,
 	}
+}
+
+// GetPercentiles calculates latency percentiles
+func (s *EnhancedStats) GetPercentiles() LatencyPercentiles {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.getPercentilesLocked()
 }
 
 // GetSnapshot returns a snapshot of current stats
@@ -159,9 +172,16 @@ func (s *EnhancedStats) GetSnapshot() map[string]interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	percentiles := s.GetPercentiles()
+	percentiles := s.getPercentilesLocked()
+
+	total := s.requests + s.errors
+	errorRate := 0.0
+	if total > 0 {
+		errorRate = float64(s.errors) / float64(total) * 100
+	}
+
 	requestsPerSecond := 0.0
-	if !s.lastRequestTime.IsZero() {
+	if !s.lastRequestTime.IsZero() && s.requests > 0 {
 		duration := time.Since(s.lastRequestTime).Seconds()
 		if duration > 0 {
 			requestsPerSecond = float64(s.requests) / duration
@@ -171,7 +191,7 @@ func (s *EnhancedStats) GetSnapshot() map[string]interface{} {
 	return map[string]interface{}{
 		"requests":           s.requests,
 		"errors":             s.errors,
-		"error_rate":         float64(s.errors) / float64(s.requests+s.errors) * 100,
+		"error_rate":         errorRate,
 		"active_connections": s.activeConnections,
 		"max_connections":    s.maxConns,
 		"total_connections":  s.totalConnections,
@@ -187,12 +207,10 @@ func (s *EnhancedStats) GetThroughput(window time.Duration) float64 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if len(s.latencies) == 0 {
+	if len(s.latencies) == 0 || window <= 0 {
 		return 0
 	}
 
-	// Simple approximation based on recent requests
-	// In a production system, we'd track actual timestamps
 	count := len(s.latencies)
 	return float64(count) / window.Seconds()
 }

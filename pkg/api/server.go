@@ -582,18 +582,25 @@ func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
 
 	ch := s.log.Subscribe()
 	defer s.log.Unsubscribe(ch)
+
+	timeout := time.NewTimer(30 * time.Minute)
+	defer timeout.Stop()
 
 	for {
 		select {
 		case <-r.Context().Done():
 			return
+		case <-timeout.C:
+			return
 		case entry := <-ch:
 			data, _ := json.Marshal(entry)
 			fmt.Fprintf(w, "data: %s\n\n", data)
 			flusher.Flush()
+			timeout.Reset(30 * time.Minute)
 		}
 	}
 }

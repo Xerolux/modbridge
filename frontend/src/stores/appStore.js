@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import axios from '../axios.js';
 
 export const useAppStore = defineStore('app', () => {
   const proxies = ref([]);
@@ -21,32 +22,25 @@ export const useAppStore = defineStore('app', () => {
 
   const fetchProxies = async () => {
     try {
-      const res = await fetch('/api/proxies');
-      if (!res.ok) throw new Error('Failed to fetch proxies');
-      const data = await res.json();
+      const res = await axios.get('/api/proxies');
       // Convert tags array to comma-separated string for editing
-      proxies.value = data.map(proxy => ({
+      proxies.value = res.data.map(proxy => ({
         ...proxy,
         tags: Array.isArray(proxy.tags) ? proxy.tags.join(', ') : proxy.tags || ''
       }));
     } catch (e) {
-      error.value = e.message;
+      error.value = e.response?.data || e.message;
     }
   };
 
   const addProxy = async (proxyData) => {
     isLoading.value = true;
     try {
-      const res = await fetch('/api/proxies', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(proxyData)
-      });
-      if (!res.ok) throw new Error('Failed to add proxy');
+      await axios.post('/api/proxies', proxyData);
       await fetchProxies();
       return true;
     } catch (e) {
-      error.value = e.message;
+      error.value = e.response?.data || e.message;
       return false;
     } finally {
       isLoading.value = false;
@@ -56,16 +50,11 @@ export const useAppStore = defineStore('app', () => {
   const updateProxy = async (proxyData) => {
     isLoading.value = true;
     try {
-      const res = await fetch('/api/proxies', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(proxyData)
-      });
-      if (!res.ok) throw new Error('Failed to update proxy');
+      await axios.put('/api/proxies', proxyData);
       await fetchProxies();
       return true;
     } catch (e) {
-      error.value = e.message;
+      error.value = e.response?.data || e.message;
       return false;
     } finally {
       isLoading.value = false;
@@ -75,14 +64,11 @@ export const useAppStore = defineStore('app', () => {
   const deleteProxy = async (id) => {
     isLoading.value = true;
     try {
-      const res = await fetch(`/api/proxies?id=${id}`, {
-        method: 'DELETE'
-      });
-      if (!res.ok) throw new Error('Failed to delete proxy');
+      await axios.delete(`/api/proxies?id=${id}`);
       await fetchProxies();
       return true;
     } catch (e) {
-      error.value = e.message;
+      error.value = e.response?.data || e.message;
       return false;
     } finally {
       isLoading.value = false;
@@ -91,11 +77,8 @@ export const useAppStore = defineStore('app', () => {
 
   const fetchWebPort = async () => {
     try {
-      const res = await fetch('/api/config/webport');
-      if (res.ok) {
-        const data = await res.json();
-        webPort.value = data.web_port;
-      }
+      const res = await axios.get('/api/config/webport');
+      webPort.value = res.data.web_port;
     } catch (e) {
       console.error('Failed to fetch web port', e);
     }
@@ -104,16 +87,11 @@ export const useAppStore = defineStore('app', () => {
   const saveWebPort = async (port) => {
     isLoading.value = true;
     try {
-      const res = await fetch('/api/config/webport', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ web_port: port })
-      });
-      if (!res.ok) throw new Error('Failed to save web port');
+      await axios.put('/api/config/webport', { web_port: port });
       webPort.value = port;
       return true;
     } catch (e) {
-      error.value = e.message;
+      error.value = e.response?.data || e.message;
       return false;
     } finally {
       isLoading.value = false;
@@ -122,49 +100,42 @@ export const useAppStore = defineStore('app', () => {
 
   const fetchStatus = async () => {
     try {
-      const res = await fetch('/api/status');
-      if (res.ok) {
-        const data = await res.json();
-        status.value = data;
-        // Optionally update proxies from status if detailed info is there,
-        // but explicit fetchProxies is safer for lists.
-      } else {
-        status.value = { setup_required: false, proxies: [] };
-      }
+      const res = await axios.get('/api/status');
+      status.value = res.data;
     } catch (e) {
       console.error('Status fetch failed', e);
     }
   };
 
   const restartSystem = async () => {
-      try {
-          await fetch('/api/system/restart', { method: 'POST' });
-          return true;
-      } catch (e) {
-          error.value = e.message;
-          return false;
-      }
-   };
+    try {
+      await axios.post('/api/system/restart');
+      return true;
+    } catch (e) {
+      error.value = e.response?.data || e.message;
+      return false;
+    }
+  };
 
   const exportDeviceHistory = async (format = 'json') => {
-      try {
-          const res = await fetch(`/api/devices/history?format=${format}`);
-          if (!res.ok) throw new Error('Failed to export');
-          const blob = await res.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `device_history.${format}`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          window.URL.revokeObjectURL(url);
-          return true;
-      } catch (e) {
-          error.value = e.message;
-          return false;
-      }
-   };
+    try {
+      const res = await axios.get(`/api/devices/history?format=${format}`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `device_history.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      return true;
+    } catch (e) {
+      error.value = e.response?.data || e.message;
+      return false;
+    }
+  };
 
   return {
      proxies,
