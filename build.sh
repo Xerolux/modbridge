@@ -1,8 +1,10 @@
 #!/bin/bash
+set -e
 # Build script that fixes go:embed issue with files starting with underscore
 
 echo "Building frontend..."
 cd frontend
+npm install
 npm run build
 cd ..
 
