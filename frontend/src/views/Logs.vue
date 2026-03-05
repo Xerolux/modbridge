@@ -45,6 +45,10 @@
 
      eventSource.value.onerror = () => {
        isConnected.value = false;
+       if (eventSource.value) {
+         eventSource.value.close();
+         eventSource.value = null;
+       }
        setTimeout(connectLogStream, 5000);
      };
    } catch (err) {

@@ -161,7 +161,7 @@ import InputNumber from 'primevue/inputnumber';
 import Checkbox from 'primevue/checkbox';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
-import axios from 'axios';
+import axios from '../axios.js';
 
 const props = defineProps({
   visible: {

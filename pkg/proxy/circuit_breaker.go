@@ -174,7 +174,7 @@ func (cb *CircuitBreaker) GetMetrics() map[string]interface{} {
 		"rejected_requests": cb.rejectedRequests,
 		"last_failure_time": cb.lastFailureTime,
 		"last_state_change": cb.lastStateChange,
-		"failure_rate":      float64(cb.totalFailures) / float64(cb.totalRequests) * 100,
+		"failure_rate":      safeFailureRate(cb.totalFailures, cb.totalRequests),
 	}
 }
 
@@ -189,6 +189,14 @@ func (cb *CircuitBreaker) Reset() {
 	cb.lastStateChange = time.Now()
 	cb.lastResetTime = time.Now()
 	// Don't reset metrics for observability
+}
+
+// safeFailureRate calculates failure rate avoiding division by zero
+func safeFailureRate(failures, total int64) float64 {
+	if total == 0 {
+		return 0
+	}
+	return float64(failures) / float64(total) * 100
 }
 
 // Private transition methods

@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -273,11 +272,5 @@ func (m *Manager) Update(fn func(*Config) error) error {
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
 
-	// Debug logging
-	if err := enc.Encode(m.cfg); err != nil {
-		fmt.Printf("ERROR encoding config: %v\n", err)
-		return err
-	}
-	fmt.Printf("Config saved successfully\n")
-	return nil
+	return enc.Encode(m.cfg)
 }
