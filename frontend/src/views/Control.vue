@@ -194,7 +194,7 @@
  const loading = ref(true);
  const toast = useToast();
  const confirm = useConfirm();
- let eventSource = null;
+ let disconnectFn = null;
 
  const showProxyDialog = ref(false);
  const isEditMode = ref(false);
@@ -231,6 +231,7 @@
      loading.value = false;
 
      const { data, disconnect, isConnected } = useEventSource('/api/proxies/stream');
+     disconnectFn = disconnect;
 
      watch(isConnected, (connected) => {
          if (!connected) {
@@ -268,8 +269,8 @@
  });
 
  onUnmounted(() => {
-     if (eventSource) {
-         eventSource.disconnect();
+     if (disconnectFn) {
+         disconnectFn();
      }
  });
 

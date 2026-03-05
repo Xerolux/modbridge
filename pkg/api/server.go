@@ -21,16 +21,17 @@ import (
 
 // Server is the API server.
 type Server struct {
-	cfgMgr      *config.Manager
-	mgr         *manager.Manager
-	auth        *auth.Authenticator
-	log         *logger.Logger
-	cors        *middleware.CORSMiddleware
-	security    *middleware.SecurityMiddleware
-	rateLimiter *middleware.RateLimiter
-	csrf        *middleware.CSRFMiddleware
-	validator   *middleware.Validator
-	metrics     *metrics.Metrics
+	cfgMgr           *config.Manager
+	mgr              *manager.Manager
+	auth             *auth.Authenticator
+	log              *logger.Logger
+	cors             *middleware.CORSMiddleware
+	security         *middleware.SecurityMiddleware
+	rateLimiter      *middleware.RateLimiter
+	loginRateLimiter *middleware.RateLimiter
+	csrf             *middleware.CSRFMiddleware
+	validator        *middleware.Validator
+	metrics          *metrics.Metrics
 }
 
 // NewServer creates a new API server.
@@ -46,21 +47,23 @@ func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator,
 	// Initialize middlewares
 	corsMW := middleware.NewCORSMiddleware([]string{})
 	secMW := middleware.NewSecurityMiddleware()
-	rateLimiter := middleware.NewRateLimiter(60, 100) // 60 requests/minute, burst 100
+	rateLimiter := middleware.NewRateLimiter(60, 100)
+	loginRateLimiter := middleware.NewRateLimiter(5, 10)
 	csrfMW := middleware.NewCSRFMiddleware(csrfSecret)
 	validator := middleware.NewValidator()
 
 	return &Server{
-		cfgMgr:      cfg,
-		mgr:         mgr,
-		auth:        a,
-		log:         l,
-		cors:        corsMW,
-		security:    secMW,
-		rateLimiter: rateLimiter,
-		csrf:        csrfMW,
-		validator:   validator,
-		metrics:     metrics.NewMetrics(),
+		cfgMgr:           cfg,
+		mgr:              mgr,
+		auth:             a,
+		log:              l,
+		cors:             corsMW,
+		security:         secMW,
+		rateLimiter:      rateLimiter,
+		loginRateLimiter: loginRateLimiter,
+		csrf:             csrfMW,
+		validator:        validator,
+		metrics:          metrics.NewMetrics(),
 	}
 }
 
@@ -86,7 +89,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/ready", publicMW(s.handleReady))
 	mux.HandleFunc("/api/status", publicMW(s.handleStatus))
 	mux.HandleFunc("/api/metrics", s.cors.Middleware(s.handleMetrics))
-	mux.HandleFunc("/api/login", s.cors.Middleware(s.security.Middleware(s.handleLogin)))
+	mux.HandleFunc("/api/login", s.cors.Middleware(s.security.Middleware(s.loginRateLimiter.Middleware(s.handleLogin))))
 	mux.HandleFunc("/api/setup", s.cors.Middleware(s.security.Middleware(s.handleSetup)))
 
 	// Pprof endpoints (debug mode only)

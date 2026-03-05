@@ -65,7 +65,9 @@ func main() {
 
 	// 4. Auth
 	authenticator := auth.NewAuthenticator()
-	go authenticator.CleanupExpiredSessions()
+	authCtx, authCancel := context.WithCancel(context.Background())
+	defer authCancel()
+	go authenticator.CleanupExpiredSessions(authCtx)
 
 	// 5. API Server
 	apiServer := api.NewServer(cfgMgr, mgr, authenticator, l)

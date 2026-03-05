@@ -73,34 +73,38 @@ func (l *Logger) Log(level LogLevel, proxyID, msg string) {
 		Message:   msg,
 	}
 
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	// Critical section 1: File write and ring buffer operations
+	func() {
+		l.mu.Lock()
+		defer l.mu.Unlock()
 
-	// 1. Write to file
-	if l.file != nil {
-		if jsonBytes, err := json.Marshal(entry); err == nil {
-			_, _ = l.file.Write(jsonBytes)
-			_, _ = l.file.WriteString("\n")
+		// 1. Write to file
+		if l.file != nil {
+			if jsonBytes, err := json.Marshal(entry); err == nil {
+				_, _ = l.file.Write(jsonBytes)
+				_, _ = l.file.WriteString("\n")
+			}
 		}
-	}
 
-	// 2. Add to ring buffer
-	if len(l.ringBuffer) >= l.ringSize {
-		// Shift
-		l.ringBuffer = l.ringBuffer[1:]
-	}
-	l.ringBuffer = append(l.ringBuffer, entry)
+		// 2. Add to ring buffer
+		if len(l.ringBuffer) >= l.ringSize {
+			l.ringBuffer = l.ringBuffer[1:]
+		}
+		l.ringBuffer = append(l.ringBuffer, entry)
+	}()
 
-	// 3. Broadcast to subscribers (take snapshot to avoid holding lock during sends)
-	// Make a copy of subscriber channels to avoid race condition
-	subscribers := make([]chan LogEntry, 0, len(l.subscribers))
-	for ch := range l.subscribers {
-		subscribers = append(subscribers, ch)
-	}
+	// Critical section 2: Get subscriber snapshot
+	subscribers := func() []chan LogEntry {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+		subs := make([]chan LogEntry, 0, len(l.subscribers))
+		for ch := range l.subscribers {
+			subs = append(subs, ch)
+		}
+		return subs
+	}()
 
-	// Release lock before broadcasting to avoid blocking other operations
-	l.mu.Unlock()
-
+	// Broadcast to subscribers (outside of lock)
 	for _, ch := range subscribers {
 		select {
 		case ch <- entry:
@@ -108,9 +112,6 @@ func (l *Logger) Log(level LogLevel, proxyID, msg string) {
 			// Drop if channel full to avoid blocking logger
 		}
 	}
-
-	// Re-acquire lock for the rest of the function (defer will handle it)
-	l.mu.Lock()
 
 	// Print to stdout for debug
 	fmt.Printf("[%s] [%s] %s: %s\n", entry.Timestamp, entry.Level, entry.ProxyID, entry.Message)

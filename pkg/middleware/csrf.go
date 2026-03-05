@@ -5,37 +5,61 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"net/http"
+	"sync"
+	"time"
 )
+
+type csrfEntry struct {
+	token     string
+	createdAt time.Time
+}
 
 // CSRFMiddleware provides CSRF protection using double-submit cookie pattern
 type CSRFMiddleware struct {
-	csrfTokens map[string]string
+	mu         sync.Mutex
+	csrfTokens map[string]csrfEntry
 	secret     []byte
+	maxAge     time.Duration
 }
 
 // NewCSRFMiddleware creates a new CSRF middleware
 func NewCSRFMiddleware(secret string) *CSRFMiddleware {
-	return &CSRFMiddleware{
-		csrfTokens: make(map[string]string),
+	m := &CSRFMiddleware{
+		csrfTokens: make(map[string]csrfEntry),
 		secret:     []byte(secret),
+		maxAge:     24 * time.Hour,
 	}
+	go m.cleanup()
+	return m
 }
 
 // GenerateToken generates a new CSRF token
 func (m *CSRFMiddleware) GenerateToken(sessionID string) string {
 	token := generateRandomToken(32)
-	m.csrfTokens[sessionID] = token
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.csrfTokens[sessionID] = csrfEntry{
+		token:     token,
+		createdAt: time.Now(),
+	}
 	return token
 }
 
 // ValidateToken validates a CSRF token
 func (m *CSRFMiddleware) ValidateToken(sessionID, token string) bool {
-	storedToken, exists := m.csrfTokens[sessionID]
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entry, exists := m.csrfTokens[sessionID]
 	if !exists {
 		return false
 	}
 
-	return subtle.ConstantTimeCompare([]byte(storedToken), []byte(token)) == 1
+	if time.Since(entry.createdAt) > m.maxAge {
+		delete(m.csrfTokens, sessionID)
+		return false
+	}
+
+	return subtle.ConstantTimeCompare([]byte(entry.token), []byte(token)) == 1
 }
 
 // Middleware returns a CSRF protection middleware
@@ -97,12 +121,26 @@ func (m *CSRFMiddleware) shouldSkipCSRF(r *http.Request) bool {
 	return false
 }
 
+// cleanup periodically removes expired CSRF tokens
+func (m *CSRFMiddleware) cleanup() {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		m.mu.Lock()
+		for sessionID, entry := range m.csrfTokens {
+			if time.Since(entry.createdAt) > m.maxAge {
+				delete(m.csrfTokens, sessionID)
+			}
+		}
+		m.mu.Unlock()
+	}
+}
+
 // generateRandomToken generates a cryptographically secure random token
 func generateRandomToken(length int) string {
 	bytes := make([]byte, length)
 	if _, err := rand.Read(bytes); err != nil {
-		// Fallback to less secure method if crypto/rand fails
-		// This should never happen in practice
 		panic("failed to generate random token: " + err.Error())
 	}
 	return hex.EncodeToString(bytes)[:length]
