@@ -123,8 +123,15 @@ func (p *Pool) Get(ctx context.Context) (net.Conn, error) {
 		case <-timer.C:
 			return nil, ErrPoolExhausted
 		case pc := <-p.conns:
-			// Check if connection is still valid
 			if time.Since(pc.lastUsed) > p.maxIdleTime {
+				pc.conn.Close()
+				p.mu.Lock()
+				p.size--
+				p.mu.Unlock()
+				continue
+			}
+
+			if !isConnHealthy(pc.conn) {
 				pc.conn.Close()
 				p.mu.Lock()
 				p.size--
@@ -288,4 +295,24 @@ func (w *wrappedConn) Close() error {
 		w.pool.put(w.pc)
 	})
 	return nil
+}
+
+func isConnHealthy(conn net.Conn) bool {
+	if conn == nil {
+		return false
+	}
+
+	conn.SetReadDeadline(time.Now().Add(1 * time.Millisecond))
+	oneByte := make([]byte, 1)
+	_, err := conn.Read(oneByte)
+	conn.SetReadDeadline(time.Time{})
+
+	if err != nil {
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			return true
+		}
+		return false
+	}
+
+	return false
 }

@@ -181,6 +181,20 @@ import Toast from 'primevue/toast';
 import { useToast } from 'primevue/usetoast';
 import { useAppStore } from '../stores/appStore';
 
+const FilterMatchMode = {
+  STARTS_WITH: 'startsWith',
+  CONTAINS: 'contains',
+  NOT_CONTAINS: 'notContains',
+  ENDS_WITH: 'endsWith',
+  EQUALS: 'equals',
+  NOT_EQUALS: 'notEquals',
+  IN: 'in',
+  DATE_IS: 'dateIs',
+  DATE_IS_NOT: 'dateIsNot',
+  DATE_BEFORE: 'dateBefore',
+  DATE_AFTER: 'dateAfter'
+};
+
 const store = useAppStore();
 const toast = useToast();
 
