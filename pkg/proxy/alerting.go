@@ -91,18 +91,18 @@ func (wc *WebhookChannel) Send(alert Alert) error {
 
 // AlertManager manages alerts and notifications
 type AlertManager struct {
-	mu              sync.RWMutex
-	channels        []AlertChannel
-	alertHistory    []Alert
-	maxHistory      int
-	rules           []AlertRule
-	muStats         sync.Mutex
-	alertCounts     map[AlertSeverity]int64
-	lastAlert       time.Time
-	ctx             context.Context
-	cancel          context.CancelFunc
-	wg              sync.WaitGroup
-	running         bool
+	mu           sync.RWMutex
+	channels     []AlertChannel
+	alertHistory []Alert
+	maxHistory   int
+	rules        []AlertRule
+	muStats      sync.Mutex
+	alertCounts  map[AlertSeverity]int64
+	lastAlert    time.Time
+	ctx          context.Context
+	cancel       context.CancelFunc
+	wg           sync.WaitGroup
+	running      bool
 }
 
 // AlertRule defines when to trigger alerts
@@ -286,15 +286,15 @@ func (am *AlertManager) GetStats() map[string]interface{} {
 	am.mu.RUnlock()
 
 	return map[string]interface{}{
-		"total_alerts":       totalAlerts,
-		"active_alerts":      activeAlerts,
-		"critical_count":     am.alertCounts[SeverityCritical],
-		"error_count":        am.alertCounts[SeverityError],
-		"warning_count":      am.alertCounts[SeverityWarning],
-		"info_count":         am.alertCounts[SeverityInfo],
-		"last_alert":         am.lastAlert,
-		"channels":           len(am.channels),
-		"rules":              len(am.rules),
+		"total_alerts":   totalAlerts,
+		"active_alerts":  activeAlerts,
+		"critical_count": am.alertCounts[SeverityCritical],
+		"error_count":    am.alertCounts[SeverityError],
+		"warning_count":  am.alertCounts[SeverityWarning],
+		"info_count":     am.alertCounts[SeverityInfo],
+		"last_alert":     am.lastAlert,
+		"channels":       len(am.channels),
+		"rules":          len(am.rules),
 	}
 }
 

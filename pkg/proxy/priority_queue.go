@@ -19,34 +19,34 @@ const (
 
 // Request represents a queued request
 type Request struct {
-	ID            int64
-	Priority      RequestPriority
-	Data          []byte
-	ResponseChan  chan []byte
-	ErrorChan     chan error
-	SubmittedAt   time.Time
-	Deadline      time.Time
-	RetryCount    int
-	MaxRetries    int
+	ID           int64
+	Priority     RequestPriority
+	Data         []byte
+	ResponseChan chan []byte
+	ErrorChan    chan error
+	SubmittedAt  time.Time
+	Deadline     time.Time
+	RetryCount   int
+	MaxRetries   int
 }
 
 // PriorityQueue manages prioritized request queues
 type PriorityQueue struct {
-	mu            sync.Mutex
-	queues        [4][]*Request // One queue per priority level
-	cond          *sync.Cond
-	maxSize       int
-	maxWaitTime   time.Duration
-	ctx           context.Context
-	cancel        context.CancelFunc
-	wg            sync.WaitGroup
-	running       bool
+	mu          sync.Mutex
+	queues      [4][]*Request // One queue per priority level
+	cond        *sync.Cond
+	maxSize     int
+	maxWaitTime time.Duration
+	ctx         context.Context
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	running     bool
 
 	// Metrics
-	totalEnqueued  int64
-	totalDequeued  int64
-	totalRejected  int64
-	totalTimeout   int64
+	totalEnqueued int64
+	totalDequeued int64
+	totalRejected int64
+	totalTimeout  int64
 }
 
 // PriorityQueueConfig holds configuration
@@ -277,17 +277,17 @@ func (pq *PriorityQueue) GetStats() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"total_queued":    totalSize,
-		"max_size":        pq.maxSize,
-		"utilization":     float64(totalSize) / float64(pq.maxSize) * 100,
-		"critical_queue":  sizes[PriorityCritical],
-		"high_queue":      sizes[PriorityHigh],
-		"normal_queue":    sizes[PriorityNormal],
-		"low_queue":       sizes[PriorityLow],
-		"total_enqueued":  pq.totalEnqueued,
-		"total_dequeued":  pq.totalDequeued,
-		"total_rejected":  pq.totalRejected,
-		"total_timeout":   pq.totalTimeout,
+		"total_queued":   totalSize,
+		"max_size":       pq.maxSize,
+		"utilization":    float64(totalSize) / float64(pq.maxSize) * 100,
+		"critical_queue": sizes[PriorityCritical],
+		"high_queue":     sizes[PriorityHigh],
+		"normal_queue":   sizes[PriorityNormal],
+		"low_queue":      sizes[PriorityLow],
+		"total_enqueued": pq.totalEnqueued,
+		"total_dequeued": pq.totalDequeued,
+		"total_rejected": pq.totalRejected,
+		"total_timeout":  pq.totalTimeout,
 	}
 }
 

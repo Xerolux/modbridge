@@ -21,21 +21,21 @@ type Device struct {
 
 // dbWrite represents a database write operation.
 type dbWrite struct {
-	device   *database.Device
-	ip       string
-	proxyID  string
-	history  bool // true if this is a connection history write
+	device  *database.Device
+	ip      string
+	proxyID string
+	history bool // true if this is a connection history write
 }
 
 // Tracker tracks connected devices with persistent storage.
 type Tracker struct {
-	mu        sync.RWMutex
-	devices   map[string]*Device // key: IP address (cache)
-	db        *database.DB       // persistent storage
-	dbWrites  chan dbWrite       // channel for async database writes
-	wg        sync.WaitGroup     // wait group for graceful shutdown
-	stopOnce  sync.Once          // ensures stop is called only once
-	stopped   chan struct{}      // signals when writer is stopped
+	mu       sync.RWMutex
+	devices  map[string]*Device // key: IP address (cache)
+	db       *database.DB       // persistent storage
+	dbWrites chan dbWrite       // channel for async database writes
+	wg       sync.WaitGroup     // wait group for graceful shutdown
+	stopOnce sync.Once          // ensures stop is called only once
+	stopped  chan struct{}      // signals when writer is stopped
 }
 
 // NewTracker creates a new device tracker with database support.

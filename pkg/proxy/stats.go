@@ -8,9 +8,9 @@ import (
 // EnhancedStats provides detailed performance metrics
 type EnhancedStats struct {
 	// Basic counters (atomic for lock-free access)
-	requests    int64
-	errors      int64
-	bytesRead   int64
+	requests     int64
+	errors       int64
+	bytesRead    int64
 	bytesWritten int64
 
 	// Timing metrics
@@ -33,13 +33,13 @@ type EnhancedStats struct {
 
 // LatencyPercentiles returns latency statistics
 type LatencyPercentiles struct {
-	P50   time.Duration `json:"p50"`
-	P95   time.Duration `json:"p95"`
-	P99   time.Duration `json:"p99"`
-	P999  time.Duration `json:"p999"`
-	Mean  time.Duration `json:"mean"`
-	Min   time.Duration `json:"min"`
-	Max   time.Duration `json:"max"`
+	P50  time.Duration `json:"p50"`
+	P95  time.Duration `json:"p95"`
+	P99  time.Duration `json:"p99"`
+	P999 time.Duration `json:"p999"`
+	Mean time.Duration `json:"mean"`
+	Min  time.Duration `json:"min"`
+	Max  time.Duration `json:"max"`
 }
 
 // NewEnhancedStats creates a new enhanced stats tracker
@@ -144,13 +144,13 @@ func (s *EnhancedStats) GetPercentiles() LatencyPercentiles {
 	}
 
 	return LatencyPercentiles{
-		P50:   sorted[len(sorted)*50/100],
-		P95:   sorted[len(sorted)*95/100],
-		P99:   sorted[len(sorted)*99/100],
-		P999:  sorted[len(sorted)*999/1000],
-		Mean:  s.totalLatency / time.Duration(len(s.latencies)),
-		Min:   s.minLatency,
-		Max:   s.maxLatency,
+		P50:  sorted[len(sorted)*50/100],
+		P95:  sorted[len(sorted)*95/100],
+		P99:  sorted[len(sorted)*99/100],
+		P999: sorted[len(sorted)*999/1000],
+		Mean: s.totalLatency / time.Duration(len(s.latencies)),
+		Min:  s.minLatency,
+		Max:  s.maxLatency,
 	}
 }
 

@@ -9,19 +9,19 @@ import (
 type CircuitBreakerState int
 
 const (
-	StateClosed CircuitBreakerState = iota // Normal operation
-	StateOpen                                 // Failing, reject requests
-	StateHalfOpen                             // Testing if recovery is possible
+	StateClosed   CircuitBreakerState = iota // Normal operation
+	StateOpen                                // Failing, reject requests
+	StateHalfOpen                            // Testing if recovery is possible
 )
 
 // CircuitBreaker implements the circuit breaker pattern to prevent cascading failures
 type CircuitBreaker struct {
-	mu                sync.RWMutex
-	state             CircuitBreakerState
-	failureCount      int
-	successCount      int
-	lastFailureTime   time.Time
-	lastStateChange   time.Time
+	mu              sync.RWMutex
+	state           CircuitBreakerState
+	failureCount    int
+	successCount    int
+	lastFailureTime time.Time
+	lastStateChange time.Time
 
 	// Configuration
 	threshold        int           // Failures before opening
@@ -30,28 +30,28 @@ type CircuitBreaker struct {
 	successThreshold int           // Successes to close again
 
 	// Metrics
-	totalRequests      int64
-	totalFailures      int64
-	totalSuccesses     int64
-	rejectedRequests   int64
-	lastResetTime      time.Time
+	totalRequests    int64
+	totalFailures    int64
+	totalSuccesses   int64
+	rejectedRequests int64
+	lastResetTime    time.Time
 }
 
 // CircuitBreakerConfig holds circuit breaker configuration
 type CircuitBreakerConfig struct {
-	FailureThreshold    int           // Consecutive failures to open circuit (default: 5)
-	HalfOpenAttempts    int           // Attempts in half-open state (default: 3)
-	OpenTimeout         time.Duration // Time in open state (default: 60s)
-	SuccessThreshold    int           // Successes to close again (default: 2)
+	FailureThreshold int           // Consecutive failures to open circuit (default: 5)
+	HalfOpenAttempts int           // Attempts in half-open state (default: 3)
+	OpenTimeout      time.Duration // Time in open state (default: 60s)
+	SuccessThreshold int           // Successes to close again (default: 2)
 }
 
 // DefaultCircuitBreakerConfig returns sensible defaults
 func DefaultCircuitBreakerConfig() CircuitBreakerConfig {
 	return CircuitBreakerConfig{
-		FailureThreshold:    5,
-		HalfOpenAttempts:    3,
-		OpenTimeout:         60 * time.Second,
-		SuccessThreshold:    2,
+		FailureThreshold: 5,
+		HalfOpenAttempts: 3,
+		OpenTimeout:      60 * time.Second,
+		SuccessThreshold: 2,
 	}
 }
 
@@ -71,12 +71,12 @@ func NewCircuitBreaker(config CircuitBreakerConfig) *CircuitBreaker {
 	}
 
 	return &CircuitBreaker{
-		state:             StateClosed,
-		threshold:         config.FailureThreshold,
-		halfOpenAttempts:  config.HalfOpenAttempts,
-		timeout:           config.OpenTimeout,
-		successThreshold:  config.SuccessThreshold,
-		lastResetTime:     time.Now(),
+		state:            StateClosed,
+		threshold:        config.FailureThreshold,
+		halfOpenAttempts: config.HalfOpenAttempts,
+		timeout:          config.OpenTimeout,
+		successThreshold: config.SuccessThreshold,
+		lastResetTime:    time.Now(),
 	}
 }
 
@@ -165,16 +165,16 @@ func (cb *CircuitBreaker) GetMetrics() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"state":              stateName,
-		"failure_count":      cb.failureCount,
-		"success_count":      cb.successCount,
-		"total_requests":     cb.totalRequests,
-		"total_failures":     cb.totalFailures,
-		"total_successes":    cb.totalSuccesses,
-		"rejected_requests":  cb.rejectedRequests,
-		"last_failure_time":  cb.lastFailureTime,
-		"last_state_change":  cb.lastStateChange,
-		"failure_rate":       float64(cb.totalFailures) / float64(cb.totalRequests) * 100,
+		"state":             stateName,
+		"failure_count":     cb.failureCount,
+		"success_count":     cb.successCount,
+		"total_requests":    cb.totalRequests,
+		"total_failures":    cb.totalFailures,
+		"total_successes":   cb.totalSuccesses,
+		"rejected_requests": cb.rejectedRequests,
+		"last_failure_time": cb.lastFailureTime,
+		"last_state_change": cb.lastStateChange,
+		"failure_rate":      float64(cb.totalFailures) / float64(cb.totalRequests) * 100,
 	}
 }
 

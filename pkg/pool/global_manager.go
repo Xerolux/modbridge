@@ -24,11 +24,11 @@ type GlobalConnectionManager struct {
 
 // GlobalManagerConfig holds configuration for the global manager
 type GlobalManagerConfig struct {
-	MaxGlobalConnections    int           // Maximum total connections (default: 10000)
-	HealthCheckInterval     time.Duration // How often to check connection health (default: 30s)
-	IdleTimeout             time.Duration // How long before idle connections are closed (default: 5min)
-	MaxIdlePerPool          int           // Maximum idle connections per pool (default: 100)
-	CleanupInterval         time.Duration // How often to cleanup idle connections (default: 1min)
+	MaxGlobalConnections int           // Maximum total connections (default: 10000)
+	HealthCheckInterval  time.Duration // How often to check connection health (default: 30s)
+	IdleTimeout          time.Duration // How long before idle connections are closed (default: 5min)
+	MaxIdlePerPool       int           // Maximum idle connections per pool (default: 100)
+	CleanupInterval      time.Duration // How often to cleanup idle connections (default: 1min)
 }
 
 // DefaultGlobalManagerConfig returns sensible defaults
@@ -61,9 +61,9 @@ func NewGlobalConnectionManager(config GlobalManagerConfig) (*GlobalConnectionMa
 	}
 
 	gm := &GlobalConnectionManager{
-		pools:        make(map[string]*Pool),
-		globalLimit:  config.MaxGlobalConnections,
-		config:       config,
+		pools:         make(map[string]*Pool),
+		globalLimit:   config.MaxGlobalConnections,
+		config:        config,
 		healthChecker: NewHealthChecker(config.HealthCheckInterval),
 	}
 
@@ -228,19 +228,19 @@ func (gm *GlobalConnectionManager) Close() error {
 
 // HealthChecker tracks health issues
 type HealthChecker struct {
-	mu             sync.RWMutex
-	issues         map[string]*HealthIssue // key: targetAddress
-	lastCheck      time.Time
-	checkInterval  time.Duration
+	mu            sync.RWMutex
+	issues        map[string]*HealthIssue // key: targetAddress
+	lastCheck     time.Time
+	checkInterval time.Duration
 }
 
 // HealthIssue represents a health issue
 type HealthIssue struct {
-	Type        string
-	Count       int
-	FirstSeen   time.Time
-	LastSeen    time.Time
-	Severity    string // "info", "warning", "critical"
+	Type      string
+	Count     int
+	FirstSeen time.Time
+	LastSeen  time.Time
+	Severity  string // "info", "warning", "critical"
 }
 
 // NewHealthChecker creates a new health checker
