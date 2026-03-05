@@ -10,6 +10,15 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
+# Fix underscore files for go:embed compatibility
+RUN find dist/assets -name "_*" -type f | while read file; do \
+        dir=$(dirname "$file"); \
+        basename=$(basename "$file"); \
+        newname="${basename#_}"; \
+        mv "$file" "$dir/$newname"; \
+        find dist -name "*.js" -o -name "*.html" | xargs sed -i "s|/$basename|/$newname|g"; \
+    done
+
 # Build stage for backend
 FROM golang:1.24-alpine AS builder
 
@@ -37,9 +46,6 @@ COPY . .
 
 # Copy frontend build to pkg/web/dist
 COPY --from=frontend-builder /frontend/dist ./pkg/web/dist
-
-# Fix underscore files for go:embed compatibility
-RUN cd /build && bash ./build.sh
 
 # Build the application with optimizations
 # CGO is required for sqlite3
