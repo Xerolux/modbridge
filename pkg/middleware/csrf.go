@@ -36,6 +36,10 @@ func NewCSRFMiddleware(secret string) *CSRFMiddleware {
 // GenerateToken generates a new CSRF token
 func (m *CSRFMiddleware) GenerateToken(sessionID string) string {
 	token := generateRandomToken(32)
+	if token == "" {
+		// Fallback to a deterministic token if random generation fails
+		token = sessionID + "-" + time.Now().Format("20060102150405")
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.csrfTokens[sessionID] = csrfEntry{
@@ -141,7 +145,9 @@ func (m *CSRFMiddleware) cleanup() {
 func generateRandomToken(length int) string {
 	bytes := make([]byte, length)
 	if _, err := rand.Read(bytes); err != nil {
-		panic("failed to generate random token: " + err.Error())
+		// Instead of panicking, return an empty string or handle appropriately
+		// This should be caught by the caller
+		return ""
 	}
 	return hex.EncodeToString(bytes)[:length]
 }

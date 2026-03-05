@@ -12,9 +12,7 @@ func (s *Server) handleLogDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", "attachment; filename=proxy.log")
 	w.Header().Set("Content-Type", "application/json")
 	logs := s.log.GetRecent(10000)
-	for _, l := range logs {
-		json.NewEncoder(w).Encode(l)
-	}
+	json.NewEncoder(w).Encode(logs)
 }
 
 func (s *Server) handleConfigExport(w http.ResponseWriter, r *http.Request) {
