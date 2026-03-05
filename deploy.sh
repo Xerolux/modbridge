@@ -115,7 +115,7 @@ $SSH_CMD bash << REMOTE_SCRIPT
 
     echo "Building binary (CGO_ENABLED=1 for SQLite3)..."
     CGO_ENABLED=1 go build \
-        -ldflags="-s -w -X main.version=\$(git describe --tags --always --dirty)" \
+        -ldflags="-s -w -X main.Version=\$(git describe --tags --always --dirty)" \
         -o modbridge-new \
         ./main.go
 
