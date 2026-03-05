@@ -2,7 +2,7 @@
  import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
  import { useEventSource } from '../utils/eventSource';
  import Checkbox from 'primevue/checkbox';
- import axios from 'axios';
+ import axios from '../axios.js';
 
  const logs = ref([]);
  const isConnected = ref(false);
@@ -127,9 +127,9 @@
           :key="index"
           class="mb-1 border-b border-gray-700 pb-1"
         >
-          <span class="text-gray-400">[{{ formatDate(log.time) }}]</span>
+          <span class="text-gray-400">[{{ formatDate(log.timestamp) }}]</span>
           <span :class="getLevelColor(log.level)" class="mx-2 font-bold">{{ log.level }}</span>
-          <span class="text-blue-300">{{ log.component }}:</span>
+          <span class="text-blue-300">{{ log.proxy_id || 'SYSTEM' }}:</span>
           <span class="text-white ml-2">{{ log.message }}</span>
         </div>
       </div>

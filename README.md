@@ -119,6 +119,95 @@ Nach der Installation: Öffnen Sie **http://localhost:8080** in Ihrem Browser.
 
 ---
 
+## 🔨 Building from Source
+
+### Automated Build (GitHub Actions)
+
+Das Projekt nutzt GitHub Actions CI/CD für automatisierte Builds:
+
+**Was der Workflow macht:**
+1. ✅ Frontend buildet mit Node.js 22
+2. ✅ Go-Binaries für Linux (AMD64/ARM64) und Windows (AMD64)
+3. ✅ Docker-Images mit Multi-Arch Support
+4. ✅ Automatische Releases bei Tags (v*)
+
+**Manuellen Build auslösen:**
+```bash
+# Gehe zu: Actions → Build and Release → Run workflow
+```
+
+**Release erstellen:**
+```bash
+# Tag erstellen und pushen → automatisches Release
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+**Download fertiger Binaries:**
+- https://github.com/Xerolux/modbridge/releases
+
+**Docker Images:**
+```bash
+docker pull ghcr.io/xerolux/modbridge:latest
+```
+
+**Benötigte GitHub Secrets für Docker-Push:**
+```
+Settings → Secrets and variables → Actions → New repository secret
+
+DOCKER_USERNAME      = Dein Docker Hub Username
+DOCKER_PASSWORD      = Docker Hub Access Token (nicht Passwort!)
+```
+
+**Access Token erstellen:**
+1. Docker Hub → Account Settings → Security
+2. New Access Token
+3. Read & Write Permissions
+4. Token kopieren und als DOCKER_PASSWORD Secret hinzufügen
+
+### Lokal Bauen
+
+**Voraussetzungen:**
+- Go 1.25+
+- Node.js 22+
+
+**Schritte:**
+```bash
+# Repository klonen
+git clone https://github.com/Xerolux/modbridge.git
+cd modbridge
+
+# Frontend builden
+cd frontend
+npm install
+npm run build
+cd ..
+
+# Frontend in Go-Projekt kopieren
+rm -rf pkg/web/dist/*
+cp -r frontend/dist/* pkg/web/dist/
+
+# Go-Binary builden
+go build -ldflags="-s -w" -o modbridge ./main.go
+
+# Binary starten
+./modbridge
+```
+
+**Cross-Compile für andere Plattformen:**
+```bash
+# Linux AMD64
+GOOS=linux GOARCH=amd64 go build -o modbridge-linux-amd64 ./main.go
+
+# Windows
+GOOS=windows GOARCH=amd64 go build -o modbridge.exe ./main.go
+
+# macOS ARM64 (Apple Silicon)
+GOOS=darwin GOARCH=arm64 go build -o modbridge-darwin-arm64 ./main.go
+```
+
+---
+
 ## 🔧 Installation
 
 ### Methode 1: Docker

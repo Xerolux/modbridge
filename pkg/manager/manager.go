@@ -310,7 +310,7 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 	return res
 }
 
-// StopAll stops all running proxies.
+// StopAll stops all running proxies and cleans up resources.
 func (m *Manager) StopAll() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -320,6 +320,9 @@ func (m *Manager) StopAll() {
 			p.Stop()
 		}
 	}
+
+	// Stop device tracker and flush pending database writes
+	m.deviceTracker.Stop()
 }
 
 // StartAll starts all enabled proxies.

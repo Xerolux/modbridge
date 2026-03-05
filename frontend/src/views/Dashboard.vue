@@ -101,7 +101,7 @@
 import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { GridStack } from 'gridstack';
 import 'gridstack/dist/gridstack.min.css';
-import axios from 'axios';
+import axios from '../axios.js';
 import Button from 'primevue/button';
 import Dialog from 'primevue/dialog';
 import Dropdown from 'primevue/dropdown';

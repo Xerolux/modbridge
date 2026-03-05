@@ -13,8 +13,9 @@ export const useAppStore = defineStore('app', () => {
   const error = ref(null);
   const darkMode = ref(localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches));
 
-  const toggleDarkMode = () => {
-    darkMode.value = !darkMode.value;
+  const toggleDarkMode = (value) => {
+    // If value is provided, use it; otherwise toggle
+    darkMode.value = value !== undefined ? value : !darkMode.value;
     localStorage.setItem('theme', darkMode.value ? 'dark' : 'light');
   };
 
@@ -22,7 +23,12 @@ export const useAppStore = defineStore('app', () => {
     try {
       const res = await fetch('/api/proxies');
       if (!res.ok) throw new Error('Failed to fetch proxies');
-      proxies.value = await res.json();
+      const data = await res.json();
+      // Convert tags array to comma-separated string for editing
+      proxies.value = data.map(proxy => ({
+        ...proxy,
+        tags: Array.isArray(proxy.tags) ? proxy.tags.join(', ') : proxy.tags || ''
+      }));
     } catch (e) {
       error.value = e.message;
     }

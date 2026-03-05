@@ -6,6 +6,7 @@ import (
 	"io"
 	"modbusproxy/pkg/devices"
 	"modbusproxy/pkg/logger"
+	"modbusproxy/pkg/middleware"
 	"modbusproxy/pkg/modbus"
 	"modbusproxy/pkg/pool"
 	"net"
@@ -13,6 +14,19 @@ import (
 	"sync/atomic"
 	"time"
 )
+
+// getNextRequestID generates a unique request ID
+func (p *ProxyInstance) getNextRequestID() int64 {
+	return atomic.AddInt64(&p.requestID, 1)
+}
+
+// min returns the minimum of two unsigned integers
+func min(a, b uint) uint {
+	if a < b {
+		return a
+	}
+	return b
+}
 
 // ProxyInstance represents a running proxy.
 type ProxyInstance struct {
@@ -26,16 +40,24 @@ type ProxyInstance struct {
 	ConnectionTimeout time.Duration
 	ReadTimeout       time.Duration
 	MaxRetries        int
+	MaxConns          int // Maximum concurrent connections (0 = unlimited)
 
-	listener net.Listener
-	connPool *pool.Pool
-	targetMu sync.Mutex
+	listener  net.Listener
+	connPool  *pool.Pool
+	splitMu   sync.Mutex    // Only for split read operations
+	connSem   chan struct{} // Semaphore for limiting concurrent connections
+	connSemMu sync.Mutex    // Protects connSem initialization
 
 	log           *logger.Logger
 	deviceTracker *devices.Tracker
 	ctx           context.Context
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
+
+	// Enhanced features
+	circuitBreaker *CircuitBreaker
+	enhancedStats  *EnhancedStats
+	requestID      int64 // Atomic counter for request IDs
 
 	Stats Stats
 }
@@ -59,6 +81,7 @@ func NewProxyInstance(id, name, listen, target string, maxReadSize int, l *logge
 		ConnectionTimeout: 5 * time.Second, // Default
 		ReadTimeout:       5 * time.Second, // Default
 		MaxRetries:        3,               // Default
+		MaxConns:          500,             // Default: limit concurrent connections
 		log:               l,
 		deviceTracker:     tracker,
 		Stats:             Stats{Status: "Stopped"},
@@ -71,6 +94,17 @@ func (p *ProxyInstance) Start() error {
 		return nil
 	}
 
+	// Validate addresses before starting
+	validator := middleware.NewValidator()
+	if err := validator.ValidatePort(p.ListenAddr); err != nil {
+		p.Stats.Status = "Error"
+		return fmt.Errorf("invalid listen address: %w", err)
+	}
+	if err := validator.ValidatePort(p.TargetAddr); err != nil {
+		p.Stats.Status = "Error"
+		return fmt.Errorf("invalid target address: %w", err)
+	}
+
 	l, err := net.Listen("tcp", p.ListenAddr)
 	if err != nil {
 		p.Stats.Status = "Error"
@@ -81,8 +115,8 @@ func (p *ProxyInstance) Start() error {
 
 	// Create connection pool for target with optimized settings
 	poolCfg := pool.Config{
-		InitialSize:    2, // Optimized: Better initial capacity
-		MaxSize:        20, // Optimized: Increased for higher concurrency
+		InitialSize:    2,                // Optimized: Better initial capacity
+		MaxSize:        20,               // Optimized: Increased for higher concurrency
 		MaxIdleTime:    10 * time.Minute, // Optimized: Longer idle time for reusability
 		AcquireTimeout: p.ConnectionTimeout,
 		Dialer: func(ctx context.Context) (net.Conn, error) {
@@ -102,11 +136,23 @@ func (p *ProxyInstance) Start() error {
 		return err
 	}
 
+	// Initialize connection semaphore if MaxConns > 0
+	p.connSemMu.Lock()
+	if p.MaxConns > 0 {
+		p.connSem = make(chan struct{}, p.MaxConns)
+	}
+	p.connSemMu.Unlock()
+
+	// Initialize enhanced features
+	p.circuitBreaker = NewCircuitBreaker(DefaultCircuitBreakerConfig())
+	p.enhancedStats = NewEnhancedStats(1000) // Track last 1000 requests
+	p.requestID = 0
+
 	p.ctx, p.cancel = context.WithCancel(context.Background())
 	p.Stats.Status = "Running"
 	p.Stats.LastStart = time.Now()
 
-	p.log.Info(p.ID, fmt.Sprintf("Started proxy listening on %s -> %s", p.ListenAddr, p.TargetAddr))
+	p.log.Info(p.ID, fmt.Sprintf("Started proxy listening on %s -> %s (max conns: %d)", p.ListenAddr, p.TargetAddr, p.MaxConns))
 
 	p.wg.Add(1)
 	go p.acceptLoop()
@@ -150,14 +196,37 @@ func (p *ProxyInstance) acceptLoop() {
 				continue
 			}
 		}
+
+		// Check connection limit (if configured)
+		p.connSemMu.Lock()
+		sem := p.connSem
+		p.connSemMu.Unlock()
+
+		if sem != nil {
+			select {
+			case sem <- struct{}{}: // Acquire semaphore slot
+				// Proceed with connection
+			case <-time.After(5 * time.Second):
+				// Connection limit reached, drop this connection
+				conn.Close()
+				p.log.Info(p.ID, "Connection limit reached, dropping connection")
+				continue
+			}
+		}
+
 		p.wg.Add(1)
-		go p.handleClient(conn)
+		go p.handleClient(conn, sem)
 	}
 }
 
-func (p *ProxyInstance) handleClient(clientConn net.Conn) {
+func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 	defer p.wg.Done()
 	defer clientConn.Close()
+
+	// Release semaphore slot when done
+	if sem != nil {
+		defer func() { <-sem }()
+	}
 
 	// Track the device connection
 	if p.deviceTracker != nil {
@@ -184,6 +253,24 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn) {
 			return
 		}
 
+		// Debug: Log incoming Modbus request
+		p.log.Debug(p.ID, fmt.Sprintf("Received Modbus request: %X (%d bytes)", reqFrame, len(reqFrame)))
+
+		// Check circuit breaker BEFORE forwarding
+		if !p.circuitBreaker.AllowRequest() {
+			p.log.Error(p.ID, "Circuit breaker is OPEN, rejecting request")
+			p.Stats.Errors.Add(1)
+			// Send error response to client
+			// Modbus exception: Gateway Target Device Failed to Respond
+			exceptionResp := modbus.CreateExceptionResponse(reqFrame, 0x0B)
+			clientConn.Write(exceptionResp)
+			continue
+		}
+
+		// Generate unique request ID and track start time
+		reqID := p.getNextRequestID()
+		p.enhancedStats.RecordRequestStart(reqID)
+
 		var respFrame []byte
 		var errFwd error
 
@@ -194,12 +281,23 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn) {
 			respFrame, errFwd = p.forwardRequest(reqFrame)
 		}
 
+		// Record completion
+		bytesRead := len(reqFrame)
+		bytesWritten := 0
 		if errFwd != nil {
 			p.log.Error(p.ID, fmt.Sprintf("Forward error: %v", errFwd))
 			p.Stats.Errors.Add(1)
+			p.circuitBreaker.RecordFailure()
+			p.enhancedStats.RecordRequestComplete(reqID, bytesRead, 0, errFwd)
 			return
 		}
 		p.Stats.Requests.Add(1)
+		p.circuitBreaker.RecordSuccess()
+		bytesWritten = len(respFrame)
+		p.enhancedStats.RecordRequestComplete(reqID, bytesRead, bytesWritten, nil)
+
+		// Debug: Log Modbus response
+		p.log.Debug(p.ID, fmt.Sprintf("Sending Modbus response: %X (%d bytes)", respFrame, len(respFrame)))
 
 		if _, err := clientConn.Write(respFrame); err != nil {
 			p.log.Error(p.ID, fmt.Sprintf("Write response error: %v", err))
@@ -220,22 +318,14 @@ func (p *ProxyInstance) handleSplitRead(reqFrame []byte) ([]byte, error) {
 		return p.forwardRequest(reqFrame)
 	}
 
-	// Split logic
+	// Split logic - use lock to ensure atomicity of the split operation
+	p.splitMu.Lock()
+	defer p.splitMu.Unlock()
+
 	expectedBytes := int(quantity) * 2 // 2 bytes per register
 	aggregatedData := make([]byte, 0, expectedBytes)
 	remaining := quantity
 	currentAddr := startAddr
-
-	// We need to use the target connection lock for the whole sequence?
-	// If we don't, other requests might interleave.
-	// Interleaving is generally fine for Modbus TCP unless the device is very sensitive.
-	// But to be safe and atomic for the "Read Block", let's lock.
-	// However, `forwardRequest` locks internally.
-	// We can't lock `p.targetMu` here easily without refactoring `forwardRequest` or extracting the inner logic.
-
-	// Refactoring to expose an internal unlocked forward function is better.
-	p.targetMu.Lock()
-	defer p.targetMu.Unlock()
 
 	for remaining > 0 {
 		chunkSize := uint16(p.MaxReadSize)
@@ -243,13 +333,11 @@ func (p *ProxyInstance) handleSplitRead(reqFrame []byte) ([]byte, error) {
 			chunkSize = remaining
 		}
 
-		// Create sub-request
-		// We use the same TxID? Or a counter?
-		// The target doesn't care about TxID usually, but good to be consistent.
+		// Create sub-request with TxID=0 (target doesn't care)
 		subReq := modbus.CreateReadRequest(0, unitID, fc, currentAddr, chunkSize)
 
-		// Send using internal (unlocked) forward
-		subResp, err := p.forwardRequestLocked(subReq)
+		// Forward request
+		subResp, err := p.forwardRequest(subReq)
 		if err != nil {
 			return nil, err
 		}
@@ -260,7 +348,6 @@ func (p *ProxyInstance) handleSplitRead(reqFrame []byte) ([]byte, error) {
 			// Check if it's an exception
 			if len(subResp) > 7 && (subResp[7]&0x80) != 0 {
 				// It is an exception. Return it immediately (with corrected TxID).
-				// Fix TxID
 				subResp[0] = byte(txID >> 8)
 				subResp[1] = byte(txID)
 				return subResp, nil
@@ -282,15 +369,19 @@ func (p *ProxyInstance) handleSplitRead(reqFrame []byte) ([]byte, error) {
 	return respFrame, nil
 }
 
-// forwardRequestLocked assumes p.targetMu is already locked.
-func (p *ProxyInstance) forwardRequestLocked(req []byte) ([]byte, error) {
+// forwardRequest sends a request to the target and returns the response.
+// Uses connection pool for concurrent request handling.
+func (p *ProxyInstance) forwardRequest(req []byte) ([]byte, error) {
 	var lastErr error
 
 	for attempt := 0; attempt <= p.MaxRetries; attempt++ {
 		if attempt > 0 {
-			// Exponential backoff
-			backoff := time.Duration(1<<uint(attempt-1)) * 100 * time.Millisecond
-			time.Sleep(backoff)
+			// Exponential backoff with cap to prevent overflow
+			backoffDuration := time.Duration(1<<min(uint(attempt-1), 10)) * 100 * time.Millisecond
+			if backoffDuration > 30*time.Second {
+				backoffDuration = 30 * time.Second
+			}
+			time.Sleep(backoffDuration)
 		}
 
 		// Get connection from pool
@@ -333,10 +424,4 @@ func (p *ProxyInstance) forwardRequestLocked(req []byte) ([]byte, error) {
 	}
 
 	return nil, fmt.Errorf("failed after %d retries: %w", p.MaxRetries, lastErr)
-}
-
-func (p *ProxyInstance) forwardRequest(req []byte) ([]byte, error) {
-	p.targetMu.Lock()
-	defer p.targetMu.Unlock()
-	return p.forwardRequestLocked(req)
 }

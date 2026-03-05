@@ -33,10 +33,9 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const logout = async () => {
-    // Ideally call logout API if it exists, but just clearing state for now
-    // Or set cookie expiration. The backend uses HTTP-only cookies.
-    // If we assume the cookie is removed by browser on session end or we need an endpoint.
-    // The backend doesn't have explicit logout endpoint, but we can just redirect to login.
+    // Clear session cookie by setting it to expire in the past
+    document.cookie = 'session_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+    document.cookie = 'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
     isAuthenticated.value = false
   }
 

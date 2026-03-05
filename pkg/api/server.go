@@ -1,8 +1,11 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"modbusproxy/pkg/auth"
 	"modbusproxy/pkg/config"
 	"modbusproxy/pkg/logger"
@@ -12,6 +15,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,38 +23,49 @@ import (
 
 // Server is the API server.
 type Server struct {
-	cfgMgr      *config.Manager
-	mgr         *manager.Manager
-	auth        *auth.Authenticator
-	log         *logger.Logger
-	cors        *middleware.CORSMiddleware
-	security    *middleware.SecurityMiddleware
-	rateLimiter *middleware.RateLimiter
-	csrf        *middleware.CSRFMiddleware
-	validator   *middleware.Validator
-	metrics     *metrics.Metrics
+	cfgMgr           *config.Manager
+	mgr              *manager.Manager
+	auth             *auth.Authenticator
+	log              *logger.Logger
+	cors             *middleware.CORSMiddleware
+	security         *middleware.SecurityMiddleware
+	rateLimiter      *middleware.RateLimiter
+	loginRateLimiter *middleware.RateLimiter
+	csrf             *middleware.CSRFMiddleware
+	validator        *middleware.Validator
+	metrics          *metrics.Metrics
 }
 
 // NewServer creates a new API server.
 func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator, l *logger.Logger) *Server {
+	// Generate random CSRF secret at startup
+	csrfSecretBytes := make([]byte, 32)
+	if _, err := rand.Read(csrfSecretBytes); err != nil {
+		l.Error("SYSTEM", "Failed to generate CSRF secret, using fallback")
+		csrfSecretBytes = []byte("fallback-secret-change-in-production")
+	}
+	csrfSecret := hex.EncodeToString(csrfSecretBytes)
+
 	// Initialize middlewares
 	corsMW := middleware.NewCORSMiddleware([]string{})
 	secMW := middleware.NewSecurityMiddleware()
-	rateLimiter := middleware.NewRateLimiter(60, 100) // 60 requests/minute, burst 100
-	csrfMW := middleware.NewCSRFMiddleware("modbridge-csrf-secret")
+	rateLimiter := middleware.NewRateLimiter(60, 100)
+	loginRateLimiter := middleware.NewRateLimiter(5, 10)
+	csrfMW := middleware.NewCSRFMiddleware(csrfSecret)
 	validator := middleware.NewValidator()
 
 	return &Server{
-		cfgMgr:      cfg,
-		mgr:         mgr,
-		auth:        a,
-		log:         l,
-		cors:        corsMW,
-		security:    secMW,
-		rateLimiter: rateLimiter,
-		csrf:        csrfMW,
-		validator:   validator,
-		metrics:     metrics.NewMetrics(),
+		cfgMgr:           cfg,
+		mgr:              mgr,
+		auth:             a,
+		log:              l,
+		cors:             corsMW,
+		security:         secMW,
+		rateLimiter:      rateLimiter,
+		loginRateLimiter: loginRateLimiter,
+		csrf:             csrfMW,
+		validator:        validator,
+		metrics:          metrics.NewMetrics(),
 	}
 }
 
@@ -76,7 +91,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/ready", publicMW(s.handleReady))
 	mux.HandleFunc("/api/status", publicMW(s.handleStatus))
 	mux.HandleFunc("/api/metrics", s.cors.Middleware(s.handleMetrics))
-	mux.HandleFunc("/api/login", s.cors.Middleware(s.security.Middleware(s.handleLogin)))
+	mux.HandleFunc("/api/login", s.cors.Middleware(s.security.Middleware(s.loginRateLimiter.Middleware(s.handleLogin))))
 	mux.HandleFunc("/api/setup", s.cors.Middleware(s.security.Middleware(s.handleSetup)))
 
 	// Pprof endpoints (debug mode only)
@@ -109,9 +124,11 @@ func (s *Server) Routes(mux *http.ServeMux) {
 // handleHealth is a health check endpoint.
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status": "ok",
-	})
+	}); err != nil {
+		s.log.Error("API", fmt.Sprintf("Failed to encode health response: %v", err))
+	}
 }
 
 // handleReady is a readiness check endpoint.
@@ -134,7 +151,9 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(statusCode)
-	_ = json.NewEncoder(w).Encode(ready)
+	if err := json.NewEncoder(w).Encode(ready); err != nil {
+		s.log.Error("API", fmt.Sprintf("Failed to encode ready response: %v", err))
+	}
 }
 
 // handleMetrics returns Prometheus metrics.
@@ -149,7 +168,9 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"setup_required": cfg.AdminPassHash == "",
 		"proxies":        s.mgr.GetProxies(),
 	}
-	_ = json.NewEncoder(w).Encode(status)
+	if err := json.NewEncoder(w).Encode(status); err != nil {
+		s.log.Error("API", fmt.Sprintf("Failed to encode status response: %v", err))
+	}
 }
 
 func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
@@ -322,6 +343,8 @@ func (s *Server) handleProxiesStream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
+	s.log.Info("API", fmt.Sprintf("handleProxies called: %s %s", r.Method, r.URL.Path))
+
 	if r.Method == http.MethodGet {
 		_ = json.NewEncoder(w).Encode(s.mgr.GetProxies())
 		return
@@ -357,10 +380,93 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPut {
-		var req config.ProxyConfig
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// Read raw JSON to handle flexible tags field
+		var rawMap map[string]interface{}
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			s.log.Error("API", fmt.Sprintf("Failed to read body: %v", err))
+			http.Error(w, "Failed to read body", http.StatusBadRequest)
+			return
+		}
+
+		s.log.Info("API", fmt.Sprintf("PUT /api/proxies body: %s", string(bodyBytes)))
+
+		if err := json.Unmarshal(bodyBytes, &rawMap); err != nil {
+			s.log.Error("API", fmt.Sprintf("Failed to unmarshal to map: %v", err))
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
+		}
+
+		// Build ProxyConfig manually from rawMap to handle tags flexibly
+		req := config.ProxyConfig{}
+
+		// Parse required fields
+		if v, ok := rawMap["id"].(string); ok {
+			req.ID = v
+		}
+		if v, ok := rawMap["name"].(string); ok {
+			req.Name = v
+		}
+		if v, ok := rawMap["listen_addr"].(string); ok {
+			req.ListenAddr = v
+		}
+		if v, ok := rawMap["target_addr"].(string); ok {
+			req.TargetAddr = v
+		}
+		if v, ok := rawMap["enabled"].(bool); ok {
+			req.Enabled = v
+		}
+		if v, ok := rawMap["paused"].(bool); ok {
+			req.Paused = v
+		}
+		if v, ok := rawMap["description"].(string); ok {
+			req.Description = v
+		}
+
+		// Parse numeric fields
+		if v, ok := rawMap["connection_timeout"].(float64); ok {
+			req.ConnectionTimeout = int(v)
+		}
+		if v, ok := rawMap["read_timeout"].(float64); ok {
+			req.ReadTimeout = int(v)
+		}
+		if v, ok := rawMap["max_retries"].(float64); ok {
+			req.MaxRetries = int(v)
+		}
+		if v, ok := rawMap["max_read_size"].(float64); ok {
+			req.MaxReadSize = int(v)
+		}
+
+		// Handle tags field flexibly (string or array)
+		if tagsVal, ok := rawMap["tags"]; ok {
+			switch v := tagsVal.(type) {
+			case string:
+				if v == "" {
+					req.Tags = config.FlexibleTags{}
+				} else {
+					tags := strings.Split(v, ",")
+					result := make([]string, 0, len(tags))
+					for _, tag := range tags {
+						trimmed := strings.TrimSpace(tag)
+						if trimmed != "" {
+							result = append(result, trimmed)
+						}
+					}
+					req.Tags = config.FlexibleTags(result)
+				}
+			case []interface{}:
+				result := make([]string, 0, len(v))
+				for _, item := range v {
+					if str, ok := item.(string); ok {
+						result = append(result, str)
+					}
+				}
+				req.Tags = config.FlexibleTags(result)
+			default:
+				req.Tags = config.FlexibleTags{}
+			}
+		} else {
+			req.Tags = config.FlexibleTags{}
 		}
 
 		if err := s.validator.ValidateProxyConfig(req); err != nil {
@@ -421,6 +527,10 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 		s.mgr.StartAll()
 	case "stop_all":
 		s.mgr.StopAll()
+	case "restart_all":
+		s.mgr.StopAll()
+		time.Sleep(100 * time.Millisecond)
+		s.mgr.StartAll()
 	default:
 		err = fmt.Errorf("unknown action")
 	}
@@ -434,7 +544,9 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	logs := s.log.GetRecent(100)
-	_ = json.NewEncoder(w).Encode(logs)
+	if err := json.NewEncoder(w).Encode(logs); err != nil {
+		s.log.Error("API", fmt.Sprintf("Failed to encode logs response: %v", err))
+	}
 }
 
 func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
@@ -473,15 +585,14 @@ func (s *Server) handleSystemRestart(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status":"restarting"}`))
 
-	// Stop all proxies gracefully
+	// Stop all proxies gracefully and exit for restart
 	go func() {
 		time.Sleep(500 * time.Millisecond)
 		s.mgr.StopAll()
 		time.Sleep(500 * time.Millisecond)
 		s.log.Info("System restarting now", "")
 		// Exit with code 0 so the process manager (systemd, docker, etc.) can restart it
-		// Note: This assumes the service is running under a process manager
-		panic("Restart requested") // This will trigger main's recover and graceful shutdown
+		os.Exit(0)
 	}()
 }
 

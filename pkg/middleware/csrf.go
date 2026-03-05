@@ -1,39 +1,65 @@
 package middleware
 
 import (
+	"crypto/rand"
 	"crypto/subtle"
+	"encoding/hex"
 	"net/http"
+	"sync"
+	"time"
 )
+
+type csrfEntry struct {
+	token     string
+	createdAt time.Time
+}
 
 // CSRFMiddleware provides CSRF protection using double-submit cookie pattern
 type CSRFMiddleware struct {
-	csrfTokens map[string]string
+	mu         sync.Mutex
+	csrfTokens map[string]csrfEntry
 	secret     []byte
+	maxAge     time.Duration
 }
 
 // NewCSRFMiddleware creates a new CSRF middleware
 func NewCSRFMiddleware(secret string) *CSRFMiddleware {
-	return &CSRFMiddleware{
-		csrfTokens: make(map[string]string),
+	m := &CSRFMiddleware{
+		csrfTokens: make(map[string]csrfEntry),
 		secret:     []byte(secret),
+		maxAge:     24 * time.Hour,
 	}
+	go m.cleanup()
+	return m
 }
 
 // GenerateToken generates a new CSRF token
 func (m *CSRFMiddleware) GenerateToken(sessionID string) string {
 	token := generateRandomToken(32)
-	m.csrfTokens[sessionID] = token
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.csrfTokens[sessionID] = csrfEntry{
+		token:     token,
+		createdAt: time.Now(),
+	}
 	return token
 }
 
 // ValidateToken validates a CSRF token
 func (m *CSRFMiddleware) ValidateToken(sessionID, token string) bool {
-	storedToken, exists := m.csrfTokens[sessionID]
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entry, exists := m.csrfTokens[sessionID]
 	if !exists {
 		return false
 	}
 
-	return subtle.ConstantTimeCompare([]byte(storedToken), []byte(token)) == 1
+	if time.Since(entry.createdAt) > m.maxAge {
+		delete(m.csrfTokens, sessionID)
+		return false
+	}
+
+	return subtle.ConstantTimeCompare([]byte(entry.token), []byte(token)) == 1
 }
 
 // Middleware returns a CSRF protection middleware
@@ -95,18 +121,27 @@ func (m *CSRFMiddleware) shouldSkipCSRF(r *http.Request) bool {
 	return false
 }
 
-// generateRandomToken generates a random token
-func generateRandomToken(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[i%len(charset)]
+// cleanup periodically removes expired CSRF tokens
+func (m *CSRFMiddleware) cleanup() {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		m.mu.Lock()
+		for sessionID, entry := range m.csrfTokens {
+			if time.Since(entry.createdAt) > m.maxAge {
+				delete(m.csrfTokens, sessionID)
+			}
+		}
+		m.mu.Unlock()
 	}
-	return string(b)
 }
 
-// initRandom initializes random token generator
-func init() {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	_ = charset
+// generateRandomToken generates a cryptographically secure random token
+func generateRandomToken(length int) string {
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		panic("failed to generate random token: " + err.Error())
+	}
+	return hex.EncodeToString(bytes)[:length]
 }
