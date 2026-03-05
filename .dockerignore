@@ -1,12 +1,10 @@
 # Git
 .git
 .gitignore
-.github
 
-# CI/CD
+# CI/CD (keep .github for workflow files, but ignore other CI systems)
 .travis.yml
 .gitlab-ci.yml
-.github/
 
 # Documentation
 *.md
