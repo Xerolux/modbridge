@@ -13,7 +13,7 @@ import (
 type LoadBalancingPolicy int
 
 const (
-	RoundRobin    LoadBalancingPolicy = iota
+	RoundRobin LoadBalancingPolicy = iota
 	LeastConnections
 	WeightedRoundRobin
 	IPHash
@@ -34,16 +34,16 @@ type TargetEndpoint struct {
 
 // LoadBalancer manages multiple target endpoints
 type LoadBalancer struct {
-	mu              sync.RWMutex
-	endpoints       []*TargetEndpoint
-	policy          LoadBalancingPolicy
-	currentIndex    uint32
-	healthChecker   *EndpointHealthChecker
-	ctx             context.Context
-	cancel          context.CancelFunc
-	wg              sync.WaitGroup
-	running         bool
-	config          LoadBalancerConfig
+	mu            sync.RWMutex
+	endpoints     []*TargetEndpoint
+	policy        LoadBalancingPolicy
+	currentIndex  uint32
+	healthChecker *EndpointHealthChecker
+	ctx           context.Context
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
+	running       bool
+	config        LoadBalancerConfig
 }
 
 // LoadBalancerConfig holds configuration
@@ -292,13 +292,13 @@ func (lb *LoadBalancer) GetStats() map[string]interface{} {
 	for _, ep := range lb.endpoints {
 		ep.mu.RLock()
 		endpointStats = append(endpointStats, map[string]interface{}{
-			"address":          ep.Address,
-			"is_healthy":       ep.IsHealthy,
-			"current_conns":    atomic.LoadInt32(&ep.CurrentConns),
-			"total_requests":   atomic.LoadInt64(&ep.TotalRequests),
-			"fail_count":       atomic.LoadInt64(&ep.FailCount),
-			"weight":           ep.Weight,
-			"last_check":       ep.LastCheck,
+			"address":        ep.Address,
+			"is_healthy":     ep.IsHealthy,
+			"current_conns":  atomic.LoadInt32(&ep.CurrentConns),
+			"total_requests": atomic.LoadInt64(&ep.TotalRequests),
+			"fail_count":     atomic.LoadInt64(&ep.FailCount),
+			"weight":         ep.Weight,
+			"last_check":     ep.LastCheck,
 		})
 		totalRequests += atomic.LoadInt64(&ep.TotalRequests)
 		totalActive += atomic.LoadInt32(&ep.CurrentConns)
@@ -334,11 +334,11 @@ func (lb *LoadBalancer) Stop() {
 
 // EndpointHealthChecker manages health checks for endpoints
 type EndpointHealthChecker struct {
-	lb               *LoadBalancer
-	mu               sync.RWMutex
-	failCounts       map[string]int
-	successCounts    map[string]int
-	config           LoadBalancerConfig
+	lb            *LoadBalancer
+	mu            sync.RWMutex
+	failCounts    map[string]int
+	successCounts map[string]int
+	config        LoadBalancerConfig
 }
 
 // NewEndpointHealthChecker creates a new health checker

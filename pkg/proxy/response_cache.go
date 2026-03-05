@@ -17,13 +17,13 @@ type ResponseCacheEntry struct {
 
 // ResponseCache provides intelligent response caching for Modbus
 type ResponseCache struct {
-	mu            sync.RWMutex
-	cache         map[uint64]*ResponseCacheEntry
-	maxSize       int
-	ttl           time.Duration
-	stats         CacheStats
+	mu             sync.RWMutex
+	cache          map[uint64]*ResponseCacheEntry
+	maxSize        int
+	ttl            time.Duration
+	stats          CacheStats
 	evictionPolicy EvictionPolicy
-	muStats       sync.Mutex
+	muStats        sync.Mutex
 }
 
 // EvictionPolicy defines cache eviction strategy
@@ -31,8 +31,8 @@ type EvictionPolicy int
 
 const (
 	EvictLRU EvictionPolicy = iota // Least Recently Used
-	EvictLFU                        // Least Frequently Used
-	EvictTTL                        // Time-based only
+	EvictLFU                       // Least Frequently Used
+	EvictTTL                       // Time-based only
 )
 
 // CacheStats holds cache statistics
@@ -69,9 +69,9 @@ func NewResponseCache(config ResponseCacheConfig) *ResponseCache {
 	}
 
 	return &ResponseCache{
-		cache:         make(map[uint64]*ResponseCacheEntry),
-		maxSize:       config.MaxSize,
-		ttl:           config.TTL,
+		cache:          make(map[uint64]*ResponseCacheEntry),
+		maxSize:        config.MaxSize,
+		ttl:            config.TTL,
 		evictionPolicy: config.EvictionPolicy,
 	}
 }

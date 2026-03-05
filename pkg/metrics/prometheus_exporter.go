@@ -20,12 +20,12 @@ type PrometheusExporter struct {
 
 // Metric represents a single metric
 type Metric struct {
-	Name        string
-	Type        MetricType
-	Value       float64
-	Labels      map[string]string
-	Help        string
-	Timestamp   time.Time
+	Name      string
+	Type      MetricType
+	Value     float64
+	Labels    map[string]string
+	Help      string
+	Timestamp time.Time
 }
 
 // MetricType defines the type of metric

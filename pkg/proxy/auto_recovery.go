@@ -10,16 +10,16 @@ import (
 
 // RecoveryManager manages automatic recovery from failures
 type RecoveryManager struct {
-	mu              sync.RWMutex
-	recoveryTasks   map[string]*RecoveryTask
-	maxConcurrent   int
-	currentTasks    int
-	config          RecoveryConfig
-	ctx             context.Context
-	cancel          context.CancelFunc
-	wg              sync.WaitGroup
-	running         bool
-	onRecovery      func(string) error
+	mu            sync.RWMutex
+	recoveryTasks map[string]*RecoveryTask
+	maxConcurrent int
+	currentTasks  int
+	config        RecoveryConfig
+	ctx           context.Context
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
+	running       bool
+	onRecovery    func(string) error
 }
 
 // RecoveryTask represents a recovery operation
@@ -48,10 +48,10 @@ const (
 
 // RecoveryConfig holds configuration for recovery manager
 type RecoveryConfig struct {
-	MaxConcurrent   int           // Maximum concurrent recovery tasks (default: 5)
-	RetryInterval   time.Duration // Time between retries (default: 30s)
-	MaxAttempts     int           // Maximum recovery attempts (default: 3)
-	TaskTimeout     time.Duration // Timeout for each recovery task (default: 60s)
+	MaxConcurrent int           // Maximum concurrent recovery tasks (default: 5)
+	RetryInterval time.Duration // Time between retries (default: 30s)
+	MaxAttempts   int           // Maximum recovery attempts (default: 3)
+	TaskTimeout   time.Duration // Timeout for each recovery task (default: 60s)
 }
 
 // DefaultRecoveryConfig returns sensible defaults
@@ -255,10 +255,10 @@ func (rm *RecoveryManager) GetStats() map[string]interface{} {
 	defer rm.mu.RUnlock()
 
 	stats := map[string]interface{}{
-		"total_tasks":     len(rm.recoveryTasks),
-		"current_tasks":   rm.currentTasks,
-		"max_concurrent":  rm.maxConcurrent,
-		"running":         rm.running,
+		"total_tasks":    len(rm.recoveryTasks),
+		"current_tasks":  rm.currentTasks,
+		"max_concurrent": rm.maxConcurrent,
+		"running":        rm.running,
 	}
 
 	pending := 0

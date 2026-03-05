@@ -9,40 +9,40 @@ import (
 
 // DeadConnectionDetector monitors and detects dead/unhealthy connections
 type DeadConnectionDetector struct {
-	mu                sync.RWMutex
-	connections       map[string]*ConnectionInfo
-	checkInterval     time.Duration
-	maxIdleTime       time.Duration
-	maxErrors         int
-	muStats           sync.Mutex
-	detectedCount     int64
-	recoveredCount    int64
-	lastCheck         time.Time
-	ctx               context.Context
-	cancel            context.CancelFunc
-	wg                sync.WaitGroup
-	running           bool
+	mu             sync.RWMutex
+	connections    map[string]*ConnectionInfo
+	checkInterval  time.Duration
+	maxIdleTime    time.Duration
+	maxErrors      int
+	muStats        sync.Mutex
+	detectedCount  int64
+	recoveredCount int64
+	lastCheck      time.Time
+	ctx            context.Context
+	cancel         context.CancelFunc
+	wg             sync.WaitGroup
+	running        bool
 }
 
 // ConnectionInfo holds information about a connection
 type ConnectionInfo struct {
-	Conn           net.Conn
-	RemoteAddr     string
-	LastActivity   time.Time
-	ErrorCount     int
-	LastError      error
-	LastErrorTime  time.Time
-	IsDead         bool
-	CreatedAt      time.Time
-	BytesRead      int64
-	BytesWritten   int64
+	Conn          net.Conn
+	RemoteAddr    string
+	LastActivity  time.Time
+	ErrorCount    int
+	LastError     error
+	LastErrorTime time.Time
+	IsDead        bool
+	CreatedAt     time.Time
+	BytesRead     int64
+	BytesWritten  int64
 }
 
 // DetectorConfig holds configuration for the detector
 type DetectorConfig struct {
-	CheckInterval   time.Duration // How often to check connections (default: 10s)
-	MaxIdleTime     time.Duration // Max idle time before marking suspicious (default: 60s)
-	MaxErrors       int           // Max errors before marking dead (default: 5)
+	CheckInterval time.Duration // How often to check connections (default: 10s)
+	MaxIdleTime   time.Duration // Max idle time before marking suspicious (default: 60s)
+	MaxErrors     int           // Max errors before marking dead (default: 5)
 }
 
 // DefaultDetectorConfig returns sensible defaults
@@ -270,12 +270,12 @@ func (d *DeadConnectionDetector) GetStats() map[string]interface{} {
 	d.mu.RUnlock()
 
 	return map[string]interface{}{
-		"total_connections":  totalConnections,
-		"dead_connections":   deadConnections,
-		"detected_count":     d.detectedCount,
-		"recovered_count":    d.recoveredCount,
-		"last_check":         d.lastCheck,
-		"check_interval":     d.checkInterval,
+		"total_connections": totalConnections,
+		"dead_connections":  deadConnections,
+		"detected_count":    d.detectedCount,
+		"recovered_count":   d.recoveredCount,
+		"last_check":        d.lastCheck,
+		"check_interval":    d.checkInterval,
 	}
 }
 

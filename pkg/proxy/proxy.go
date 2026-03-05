@@ -36,17 +36,17 @@ type ProxyInstance struct {
 	TargetAddr string
 
 	// Config
-	MaxReadSize        int
-	ConnectionTimeout  time.Duration
-	ReadTimeout        time.Duration
-	MaxRetries         int
-	MaxConns           int // Maximum concurrent connections (0 = unlimited)
+	MaxReadSize       int
+	ConnectionTimeout time.Duration
+	ReadTimeout       time.Duration
+	MaxRetries        int
+	MaxConns          int // Maximum concurrent connections (0 = unlimited)
 
-	listener   net.Listener
-	connPool   *pool.Pool
-	splitMu    sync.Mutex     // Only for split read operations
-	connSem    chan struct{}  // Semaphore for limiting concurrent connections
-	connSemMu  sync.Mutex     // Protects connSem initialization
+	listener  net.Listener
+	connPool  *pool.Pool
+	splitMu   sync.Mutex    // Only for split read operations
+	connSem   chan struct{} // Semaphore for limiting concurrent connections
+	connSemMu sync.Mutex    // Protects connSem initialization
 
 	log           *logger.Logger
 	deviceTracker *devices.Tracker
@@ -115,8 +115,8 @@ func (p *ProxyInstance) Start() error {
 
 	// Create connection pool for target with optimized settings
 	poolCfg := pool.Config{
-		InitialSize:    2, // Optimized: Better initial capacity
-		MaxSize:        20, // Optimized: Increased for higher concurrency
+		InitialSize:    2,                // Optimized: Better initial capacity
+		MaxSize:        20,               // Optimized: Increased for higher concurrency
 		MaxIdleTime:    10 * time.Minute, // Optimized: Longer idle time for reusability
 		AcquireTimeout: p.ConnectionTimeout,
 		Dialer: func(ctx context.Context) (net.Conn, error) {
