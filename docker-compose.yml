@@ -23,7 +23,7 @@ services:
       - modbus-logs:/var/log/modbus
 
     environment:
-      - WEB_PORT=:8080
+      - WEB_PORT=0.0.0.0:8080
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - TZ=${TZ:-UTC}
       # Enterprise Features
