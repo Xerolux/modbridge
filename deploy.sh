@@ -102,7 +102,10 @@ $SSH_CMD bash << REMOTE_SCRIPT
     npm ci --prefer-offline
     echo "Building Vue application..."
     npm run build
-    echo "✓ Frontend built successfully"
+    echo "Copying frontend to pkg/web/dist..."
+    rm -rf $REMOTE_PATH/pkg/web/dist
+    cp -r $REMOTE_PATH/frontend/dist $REMOTE_PATH/pkg/web/dist
+    echo "✓ Frontend built and copied successfully"
 REMOTE_SCRIPT
 
 # Step 5: Build Go binary
