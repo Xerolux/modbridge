@@ -143,7 +143,7 @@ func NewManager(path string) *Manager {
 			LogMaxAgeDays:       30,
 			TLSEnabled:          false,
 			SessionTimeout:      24,
-			CORSAllowedOrigins:  []string{"*"},
+			CORSAllowedOrigins:  []string{"http://localhost:3000", "http://localhost:8080"}, // Default local dev origins
 			CORSAllowedMethods:  []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 			CORSAllowedHeaders:  []string{"Content-Type", "Authorization"},
 			RateLimitEnabled:    true,

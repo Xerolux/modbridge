@@ -315,11 +315,19 @@ func (m *Manager) StopAll() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	var wg sync.WaitGroup
 	for _, p := range m.proxies {
 		if p.Stats.Status == "Running" {
-			p.Stop()
+			wg.Add(1)
+			go func(proxy *proxy.ProxyInstance) {
+				defer wg.Done()
+				proxy.Stop()
+			}(p)
 		}
 	}
+
+	// Wait for all proxies to stop
+	wg.Wait()
 
 	// Stop device tracker and flush pending database writes
 	m.deviceTracker.Stop()
