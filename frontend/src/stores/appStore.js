@@ -23,7 +23,12 @@ export const useAppStore = defineStore('app', () => {
     try {
       const res = await fetch('/api/proxies');
       if (!res.ok) throw new Error('Failed to fetch proxies');
-      proxies.value = await res.json();
+      const data = await res.json();
+      // Convert tags array to comma-separated string for editing
+      proxies.value = data.map(proxy => ({
+        ...proxy,
+        tags: Array.isArray(proxy.tags) ? proxy.tags.join(', ') : proxy.tags || ''
+      }));
     } catch (e) {
       error.value = e.message;
     }
