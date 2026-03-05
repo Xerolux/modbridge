@@ -161,7 +161,7 @@
                  <div v-if="proxyLogs.length === 0" class="text-gray-500">No logs available</div>
                  <div v-else class="space-y-1">
                      <div v-for="(log, index) in proxyLogs" :key="index" class="border-b border-gray-700 pb-1">
-                         <span class="text-gray-400">[{{ formatLogTime(log.time) }}]</span>
+                         <span class="text-gray-400">[{{ formatLogTime(log.timestamp) }}]</span>
                          <span :class="getLogLevelColor(log.level)" class="mx-2 font-bold">{{ log.level }}</span>
                          <span class="text-white">{{ log.message }}</span>
                      </div>
@@ -337,7 +337,7 @@
      try {
          const res = await axios.get('/api/logs');
          const allLogs = res.data;
-         proxyLogs.value = allLogs.filter(log => log.proxy_id === id || (log.component && log.component.includes(id)));
+         proxyLogs.value = allLogs.filter(log => log.proxy_id === id);
      } catch (e) {
          console.error("Failed to fetch logs", e);
          proxyLogs.value = [];

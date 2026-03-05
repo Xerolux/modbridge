@@ -48,6 +48,8 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Stop all existing proxies before re-initializing with new config
+	s.mgr.StopAll()
 	s.mgr.Initialize()
 	w.WriteHeader(http.StatusOK)
 }
@@ -55,6 +57,9 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSystemConfig(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		cfg := s.cfgMgr.Get()
+		// Sanitize sensitive fields before sending to client
+		cfg.AdminPassHash = ""
+		cfg.EmailPassword = ""
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(cfg)
 		return

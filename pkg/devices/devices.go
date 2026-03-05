@@ -65,30 +65,19 @@ func (t *Tracker) dbWriter() {
 		select {
 		case write, ok := <-t.dbWrites:
 			if !ok {
-				// Channel closed, exit
+				// Channel closed, drain complete, exit
 				return
 			}
-			if write.history {
-				// Connection history write
-				if err := t.db.AddConnectionHistory(write.ip, write.proxyID); err != nil {
-					log.Printf("[DeviceTracker] Failed to write connection history: %v", err)
-				}
-			} else if write.device != nil {
-				// Device write
-				if err := t.db.SaveDevice(write.device); err != nil {
-					log.Printf("[DeviceTracker] Failed to save device: %v", err)
-				}
-			}
+			t.processWrite(write)
 		case <-t.stopped:
-			// Drain remaining writes before exiting
+			// Signal received to stop. Drain remaining buffered writes.
 			for {
 				select {
-				case write := <-t.dbWrites:
-					if write.history {
-						_ = t.db.AddConnectionHistory(write.ip, write.proxyID)
-					} else if write.device != nil {
-						_ = t.db.SaveDevice(write.device)
+				case write, ok := <-t.dbWrites:
+					if !ok {
+						return
 					}
+					t.processWrite(write)
 				default:
 					return
 				}
@@ -97,14 +86,26 @@ func (t *Tracker) dbWriter() {
 	}
 }
 
+// processWrite handles a single database write operation.
+func (t *Tracker) processWrite(write dbWrite) {
+	if write.history {
+		if err := t.db.AddConnectionHistory(write.ip, write.proxyID); err != nil {
+			log.Printf("[DeviceTracker] Failed to write connection history: %v", err)
+		}
+	} else if write.device != nil {
+		if err := t.db.SaveDevice(write.device); err != nil {
+			log.Printf("[DeviceTracker] Failed to save device: %v", err)
+		}
+	}
+}
+
 // Stop gracefully stops the tracker and flushes pending writes.
 func (t *Tracker) Stop() {
 	t.stopOnce.Do(func() {
 		if t.db != nil {
+			// Signal the writer to start draining
 			close(t.stopped)
-			// Close the write channel to signal the writer to stop
-			close(t.dbWrites)
-			// Wait for writer to finish
+			// Wait for writer to finish draining
 			t.wg.Wait()
 		}
 	})
