@@ -45,17 +45,20 @@ install_go() {
 
     # Get latest Go version with channel selection
     echo ""
-    echo "Select Go release channel:"
-    echo "1) Release (Stable)"
-    echo "2) Beta"
-    echo "3) Alpha"
-    read -p "Choose [1-3] (default: 1): " channel_choice
-    channel_choice=${channel_choice:-1}
+    echo "╔═══════════════════════════════════════════════════════════╗"
+    echo "║            Which Go version do you want?                 ║"
+    echo "╠═══════════════════════════════════════════════════════════╣"
+    echo "║  release  →  Stable version (recommended)                ║"
+    echo "║  beta     →  Pre-release version (newer features)        ║"
+    echo "║  alpha    →  Development version (bleeding edge)         ║"
+    echo "╚═══════════════════════════════════════════════════════════╝"
+    read -p "Choose: release/beta/alpha (default: release): " channel_choice
+    channel_choice=${channel_choice:-release}
 
     case "$channel_choice" in
-        1) GO_CHANNEL="Release" ;;
-        2) GO_CHANNEL="Beta" ;;
-        3) GO_CHANNEL="Alpha" ;;
+        release|1) GO_CHANNEL="Release" ;;
+        beta|2) GO_CHANNEL="Beta" ;;
+        alpha|3) GO_CHANNEL="Alpha" ;;
         *) log "Invalid choice, using Release"; GO_CHANNEL="Release" ;;
     esac
 
@@ -154,17 +157,20 @@ select_modbridge_release() {
 
     # Parse releases and ask user which channel they prefer
     echo ""
-    echo "Available Modbridge versions:"
-    echo "1) Release (Stable) - Latest stable version"
-    echo "2) Beta - Pre-release versions"
-    echo "3) Alpha - Development versions"
-    read -p "Choose [1-3] (default: 1): " release_choice
-    release_choice=${release_choice:-1}
+    echo "╔═══════════════════════════════════════════════════════════╗"
+    echo "║          Which Modbridge version do you want?            ║"
+    echo "╠═══════════════════════════════════════════════════════════╣"
+    echo "║  release  →  Stable version (recommended)                ║"
+    echo "║  beta     →  Pre-release version (newer features)        ║"
+    echo "║  alpha    →  Development version (bleeding edge)         ║"
+    echo "╚═══════════════════════════════════════════════════════════╝"
+    read -p "Choose: release/beta/alpha (default: release): " release_choice
+    release_choice=${release_choice:-release}
 
     case "$release_choice" in
-        1) RELEASE_CHANNEL="release" ;;
-        2) RELEASE_CHANNEL="beta" ;;
-        3) RELEASE_CHANNEL="alpha" ;;
+        release|1) RELEASE_CHANNEL="release" ;;
+        beta|2) RELEASE_CHANNEL="beta" ;;
+        alpha|3) RELEASE_CHANNEL="alpha" ;;
         *) log "Invalid choice, using Release"; RELEASE_CHANNEL="release" ;;
     esac
 
