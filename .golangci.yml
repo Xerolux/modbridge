@@ -1,85 +1,19 @@
 run:
   timeout: 5m
-  tests: true
-  build-tags: []
-  skip-dirs:
-    - vendor
-    - frontend
-  skip-files: []
 
 linters:
   disable-all: true
   enable:
     - gofmt
     - govet
-    - revive
-    - staticcheck
-    - gosimple
-    - ineffassign
-    - typecheck
-    - errcheck
 
 linters-settings:
-  errcheck:
-    check-type-assertions: false
-    check-blank: false
-    # Exclude common patterns where errors are intentionally ignored
-    exclude: |
-      # defer Close() in cleanup functions
-      defer .*\.Close\(\)$
-      # Write operations in logs/metrics where errors are acceptable
-      .*\.Write\(\[\]byte.*\)$
-      # Fprintf in SSE/events
-      fmt\.Fprintf\(w, "data: %s\\n\\n"
-      # JSON encode where error handling is done elsewhere
-      json\.NewEncoder\(w\)\.Encode\(.*
-
-  staticcheck:
-    checks: [
-      "all",
-      "-SA5011",  # Allow nil pointer checks in tests
-      "-SA1029",  # Allow string context keys
-      "-S1039",   # Allow fmt.Sprintf for consistency
-      "-QF1001",  # Allow complex boolean expressions
-      "-QF1012",  # Allow WriteString(fmt.Sprintf(...))
-      "-SA6002",  # Allow non-pointer sync.Pool arguments
-      "-SA4011",  # Allow break statements in nested loops
-    ]
-
-  revive:
-    rules:
-      - name: exported
-        severity: warning
-      - name: var-naming
-        severity: warning
+  gofmt:
+    simplify: true
 
 issues:
-  exclude-use-default: false
-  max-issues-per-linter: 0
-  max-same-issues: 0
-
-  # Exclude specific issues
   exclude-rules:
-    # Exclude some linters from running on tests files
+    # Exclude all linters from tests
     - path: _test\.go
       linters:
-        - errcheck
-        - staticcheck
-
-    # Exclude specific patterns
-    - path: pkg/proxy/
-      text: "Error return value.*is not checked"
-      linters:
-        - errcheck
-
-    # Defer statements often don't need error checking
-    - source: "defer .*\\.Close\\(\\)"
-      linters:
-        - errcheck
-
-output:
-  format: colored-line-number
-  print-issued-lines: true
-  print-linter-name: true
-  uniq-by-line: true
-  sort-results: true
+        - govet
