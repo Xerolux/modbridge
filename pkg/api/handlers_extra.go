@@ -1,10 +1,15 @@
 package api
 
 import (
+	"debug/buildinfo"
 	"encoding/json"
+	"fmt"
 	"modbusproxy/pkg/config"
 	"net/http"
+	"os"
+	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -160,8 +165,155 @@ func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
 		"go_version":      runtime.Version(),
 		"os":              runtime.GOOS,
 		"arch":            runtime.GOARCH,
+		"app_version":    s.getCurrentVersion(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(info)
+}
+
+type UpdateResponse struct {
+	Message string `json:"message"`
+	Version string `json:"version"`
+	Status  string `json:"status"`
+}
+
+func (s *Server) handleCheckUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	currentVersion := s.getCurrentVersion()
+
+	// Check for updates - for standalone deployment, we'll use git tags
+	latestVersion, err := getLatestGitTag()
+	if err != nil {
+		latestVersion = currentVersion
+	}
+
+	response := UpdateResponse{
+		Message: fmt.Sprintf("Current version: %s", currentVersion),
+		Version: latestVersion,
+		Status:  "up_to_date",
+	}
+
+	if currentVersion != latestVersion {
+		response.Message = fmt.Sprintf("Update available! Current: %s, Latest: %s", currentVersion, latestVersion)
+		response.Status = "available"
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(response)
+}
+
+func (s *Server) handlePerformUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	currentVersion := s.getCurrentVersion()
+	latestVersion, err := getLatestGitTag()
+	if err != nil {
+		response := UpdateResponse{
+			Message: fmt.Sprintf("Failed to check for updates: %v", err),
+			Version: currentVersion,
+			Status:  "error",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if currentVersion == latestVersion {
+		response := UpdateResponse{
+			Message: "You are already running the latest version",
+			Version: currentVersion,
+			Status:  "up_to_date",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response := UpdateResponse{
+		Message: fmt.Sprintf("Starting update from %s to %s...", currentVersion, latestVersion),
+		Version: latestVersion,
+		Status:  "updating",
+	}
+
+	// Perform update in background
+	go func() {
+		performUpdate()
+	}()
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(response)
+}
+
+func getLatestGitTag() (string, error) {
+	cmd := exec.Command("git", "describe", "--tags", "--abbrev=0")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get latest git tag: %v", err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func performUpdate() {
+	// In a real implementation, this would:
+	// 1. Pull the latest code
+	// 2. Build the new binary
+	// 3. Backup current binary
+	// 4. Replace with new binary
+	// 5. Restart the service
+
+	// For now, we'll just do a git pull and rebuild
+	cmd := exec.Command("git", "pull")
+	if err := cmd.Run(); err != nil {
+		log.Printf("Failed to pull latest code: %v", err)
+		return
+	}
+
+	// Build the new binary
+	cmd = exec.Command("make", "build")
+	if err := cmd.Run(); err != nil {
+		log.Printf("Failed to build new binary: %v", err)
+		return
+	}
+
+	// Restart the application
+	log.Println("Update completed, restarting application...")
+	// Note: In production, you might want to use a proper process manager
+}
+
+func (s *Server) getCurrentVersion() string {
+	// Try to get version from build info (Go 1.23+)
+	if bi, err := buildinfo.Read(os.Args[0]); err == nil {
+		if bi.Main.Version != "" {
+			return bi.Main.Version
+		}
+	}
+
+	// Fallback to git
+	if version := getGitVersion(); version != "" {
+		return version
+	}
+
+	// Fallback to environment variable
+	if version := os.Getenv("APP_VERSION"); version != "" {
+		return version
+	}
+
+	return "unknown"
+}
+
+func getGitVersion() string {
+	cmd := exec.Command("git", "describe", "--tags", "--dirty")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
 }

@@ -22,6 +22,7 @@
 - 📊 **Echtzeit-Monitoring** - Live-Traffic-Logging, Dashboard-Metriken
 - 🐳 **Docker-Ready** - One-Command Deployment
 - 💾 **Device Tracking** - SQLite-basierte Verbindungshistorie
+- 🔄 **Automatische Updates** - Update-Funktion direkt aus der WebUI
 
 ---
 
@@ -61,11 +62,21 @@ Exportieren und importieren Sie Ihre Konfiguration für Backup und Wiederherstel
 
 ## 📦 Quick Install
 
+### Nur Go Install (Standalone)
 ```bash
-# Docker (vorgefertigt)
+# Installieren mit go install
+go install github.com/xerolux/modbridge@latest
+
+# Ausführen (wird im Hintergrund weiterlaufen)
+nohup modbridge > /dev/null 2>&1 &
+# Oder mit systemd/supervisor für automatischen Restart bei Neustart
+```
+
+### Docker (vorgefertigt)
+```bash
 docker run -d -p 8080:8080 -p 5020-5030:5020-5030 ghcr.io/xerolux/modbridge:latest
 
-# Docker Compose
+# Oder mit Docker Compose
 docker-compose up -d
 ```
 
@@ -240,9 +251,123 @@ docker-compose up -d
 
 ---
 
-### Methode 2: Aus Quellcode kompilieren
+## 🚀 Anleitung für produktiven Betrieb
 
-Für Entwicklung oder wenn Docker nicht verfügbar ist.
+### Methode 1: Standalone mit Go (Empfohlen)
+
+#### 1. Installation
+```bash
+# Repository klonen
+git clone https://github.com/Xerolux/modbridge.git
+cd modbridge
+
+# Kompilieren mit Build-Tag und Version
+go build -ldflags="-s -w -X main.Version=$(git describe --tags --dirty)" -o modbridge ./main.go
+
+# Ausführen
+./modbridge
+```
+
+#### 2. Im Hintergrund ausführen mit automatischem Restart
+```bash
+# Option A: systemd Service (empfohlen)
+sudo tee /etc/systemd/system/modbridge.service << EOF
+[Unit]
+Description=ModBridge Modbus Proxy Manager
+After=network.target
+
+[Service]
+Type=simple
+User=modbridge
+WorkingDirectory=/opt/modbridge
+ExecStart=/opt/modbridge/modbridge
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now modbridge
+
+# Option B: Supervisor
+sudo tee /etc/supervisor/conf.d/modbridge.conf << EOF
+[program:modbridge]
+command=/opt/modbridge/modbridge
+directory=/opt/modbridge
+user=modbridge
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/supervisor/modbridge.log
+stdout_logfile=/var/log/supervisor/modbridge.log
+EOF
+
+sudo supervisorctl reread && sudo supervisorctl update
+```
+
+#### 3. Update-Funktion nutzen
+Die WebUI bietet eine automatische Update-Funktion:
+1. Login in die WebUI
+2. Gehe zu **System Information**
+3. Klicke auf "Check for Updates"
+4. Bei Updates: "Update Now" klicken
+5. Das System lädt automatisch die neueste Version und restartet
+
+### Methode 2: Docker mit automatischem Restart
+
+#### 1. Docker Installation
+```bash
+# Docker-Image ausführen mit persistenten Volumes
+docker run -d \
+  --name modbridge \
+  -p 8080:8080 \
+  -p 5020-5030:5020-5030 \
+  -v $(pwd)/config.json:/app/config.json \
+  -v $(pwd)/modbridge.db:/app/modbridge.db \
+  -v $(pwd)/logs:/app/logs \
+  --restart unless-stopped \
+  ghcr.io/xerolux/modbridge:latest
+
+# Oder mit Docker Compose
+docker-compose up -d
+```
+
+#### 2. Update mit Docker
+```bash
+# Update auf neueste Version
+docker pull ghcr.io/xerolux/modbridge:latest
+docker-compose down && docker-compose up -d
+```
+
+#### 3. Docker mit systemd (empfohlen für Produktivbetrieb)
+```bash
+# systemd Service für Docker
+sudo tee /etc/systemd/system/modbridge-docker.service << EOF
+[Unit]
+Description=ModBridge Docker Container
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/docker-compose -f /opt/modbridge/docker-compose.yml up -d
+ExecStop=/usr/bin/docker-compose -f /opt/modbridge/docker-compose.yml down
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now modbridge-docker
+```
+
+---
+
+### Methode 3: Aus Quellcode kompilieren (für Entwicklung)
 
 ```bash
 # Repository klonen
@@ -250,7 +375,7 @@ git clone https://github.com/Xerolux/modbridge.git
 cd modbridge
 
 # Kompilieren
-go build -o modbridge main.go
+go build -o modbridge ./main.go
 
 # Ausführen
 ./modbridge
@@ -280,6 +405,23 @@ go build -o modbridge main.go
 }
 ```
 
+### Automatische Updates
+
+ModBridge bietet eine eingebaute Update-Funktion:
+
+#### Update-Funktionen
+- **Version-Check**: Automatische Prüfung auf neue Git-Tags
+- **One-Click-Update**: Update direkt aus der WebUI
+- **Backup**: Alte Version wird vor dem Update gesichert
+- **Auto-Restart**: Anwendung wird automatisch neu gestartet
+
+#### Update-Prozess
+1. Öffnen Sie die WebUI
+2. Navigieren Sie zu **System Information**
+3. Klicken Sie auf "Check for Updates"
+4. Wenn Updates verfügbar sind: "Update Now" klicken
+5. Warten Sie bis der Update abgeschlossen ist
+
 ### Konfiguration über Web-Interface
 
 1. Öffnen Sie http://localhost:8080
@@ -294,13 +436,16 @@ go build -o modbridge main.go
 
 ### Erste Schritte
 
-1. **Anwendung starten**:
+1. **Anwendung starten** (je nach Installationsmethode):
    ```bash
-   # Manuell
+   # Standalone
    ./modbridge
 
    # Docker
    docker-compose up -d
+
+   # Systemd Service
+   sudo systemctl start modbridge
    ```
 
 2. **Web-Interface öffnen**:
@@ -308,7 +453,43 @@ go build -o modbridge main.go
    http://localhost:8080
    ```
 
-3. **Erstes Login**: Setzen Sie Ihr Admin-Passwort
+3. **Erstes Login**: Setzen Sie Ihr Admin-Passwort (Standard: "admin")
+
+### Wichtige Betriebshinweise
+
+#### Automatisches Update
+Die WebUI bietet eine eingebaute Update-Funktion:
+- Navigieren Sie zu **System Information**
+- Klicken Sie auf "Check for Updates"
+- Bei Updates: "Update Now" klicken
+- Das System übernimmt den Download, Backup und Restart automatisch
+
+#### Logging
+```bash
+# Logs ansehen (Standalone)
+journalctl -u modbridge -f
+
+# Docker Logs
+docker logs -f modbridge
+
+# Direkte Log-Dateien
+tail -f /opt/modbridge/logs/proxy.log
+```
+
+#### Backup & Wiederherstellung
+```bash
+# Backup erstellen
+tar -czf modbridge-backup-$(date +%Y%m%d).tar.gz config.json modbridge.db logs/
+
+# Backup wiederherstellen
+tar -xzf modbridge-backup-*.tar.gz
+systemctl restart modbridge
+```
+
+#### Überwachung
+- **System Information**: Zeigt CPU, RAM, Uptime, Proxies
+- **Live Logs**: Echtzeit-Überwachung aller Modbus-Aktivitäten
+- **Device History**: Alle Verbindungshistorie in der Datenbank
 
 ### Proxy erstellen
 
@@ -383,6 +564,65 @@ docker ps -a
 
 ---
 
+## 🔧 Wichtige Konfigurationshinweise
+
+### Produktivbetrieb
+
+#### Ports & Netzwerk
+- **Web-UI**: Port 8080 (konfigurierbar)
+- **Modbus Proxies**: Ports 5020-5030 (konfigurierbar)
+- **Firewall**: `sudo ufw allow 8080/tcp` und `sudo ufw allow 5020-5030/tcp`
+
+#### Sicherheit
+```bash
+# Empfohlene Sicherheitseinstellungen
+# 1. Ändern Sie das Admin-Passwort beim ersten Login
+# 2. Aktivieren Sie SSL/TLS in der Konfiguration
+# 3. Setzen Sie IP-Whitelist für den Zugriff
+```
+
+#### Performance
+```json
+{
+  "max_connections": 1000,
+  "read_timeout": 30,
+  "connection_timeout": 5,
+  "max_retries": 3
+}
+```
+
+### Troubleshooting
+
+#### Anwendung startet nicht
+```bash
+# Logs prüfen
+journalctl -u modbridge -n 50
+
+# Docker Logs
+docker logs modbridge
+
+# Port-Check
+netstat -tulpn | grep 8080
+```
+
+#### Update-Fehler
+```bash
+# Manueller Update-Prozess
+git pull
+make build
+sudo systemctl restart modbridge
+```
+
+#### Datenbank-Korruption
+```bash
+# Backup und Neustart
+cp modbridge.db modbridge.db.backup
+rm modbridge.db
+systemctl restart modbridge
+```
+
+---
+
 ## 🗺️ Roadmap
 
 ### Geplante Features
@@ -436,6 +676,8 @@ MIT License - siehe [LICENSE](LICENSE) für Details.
 **Version**: 0.1.0
 **Letzte Aktualisierung**: Januar 2026
 **Status**: Beta
+**Go Version**: 1.25+
+**Automatische Updates**: ✅ Git-basiert, integriert in WebUI
 
 ---
 

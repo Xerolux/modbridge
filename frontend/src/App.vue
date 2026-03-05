@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted } from 'vue';
+import { onMounted, watch } from 'vue';
 import { useAppStore } from './stores/appStore';
 
 const store = useAppStore();
@@ -14,7 +14,6 @@ onMounted(() => {
 });
 
 // Watch for dark mode changes
-import { watch } from 'vue';
 watch(() => store.darkMode, (isDark) => {
   if (isDark) {
     document.documentElement.classList.add('dark');

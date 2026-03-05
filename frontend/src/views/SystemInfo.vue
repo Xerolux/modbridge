@@ -152,6 +152,45 @@
             </Card>
 
             <Card class="bg-gray-800 text-white">
+                <template #title>Software Update</template>
+                <template #content>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <p class="font-semibold">Current Version</p>
+                                <p class="text-gray-400">{{ systemInfo.app_version || 'Unknown' }}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-semibold">Latest Version</p>
+                                <p class="text-gray-400">{{ updateInfo.latest_version || 'Checking...' }}</p>
+                            </div>
+                        </div>
+
+                        <div v-if="updateInfo.status === 'checking'" class="flex justify-center">
+                            <i class="pi pi-spin pi-spinner text-2xl text-blue-500"></i>
+                        </div>
+
+                        <div v-else-if="updateInfo.status === 'up_to_date'" class="text-center">
+                            <span class="text-green-400 font-semibold">You are using the latest version</span>
+                        </div>
+
+                        <div v-else-if="updateInfo.status === 'available'" class="text-center">
+                            <span class="text-yellow-400 font-semibold">Update available</span>
+                        </div>
+
+                        <div class="flex flex-col gap-2">
+                            <Button @click="checkForUpdate" label="Check for Updates" icon="pi pi-search" class="w-full" :loading="updateInfo.loading" />
+                            <Button v-if="updateInfo.status === 'available'" @click="performUpdate" label="Update Now" icon="pi pi-download" severity="success" class="w-full" :loading="updateInfo.updating" />
+                        </div>
+
+                        <div v-if="updateInfo.message" class="text-sm p-3 bg-gray-700 rounded">
+                            {{ updateInfo.message }}
+                        </div>
+                    </div>
+                </template>
+            </Card>
+
+            <Card class="bg-gray-800 text-white">
                 <template #title>Proxy Control</template>
                 <template #content>
                     <div class="flex flex-col gap-2">
@@ -195,7 +234,17 @@
      running_proxies: 0,
      go_version: '',
      os: '',
-     arch: ''
+     arch: '',
+     app_version: ''
+ });
+
+ const updateInfo = ref({
+     status: 'checking',
+     current_version: '',
+     latest_version: '',
+     message: '',
+     loading: false,
+     updating: false
  });
 
  const config = ref({
@@ -222,6 +271,46 @@
      } catch (e) {
          console.error('Failed to fetch system info', e);
      }
+ };
+
+ const checkForUpdate = async () => {
+     updateInfo.value.loading = true;
+     try {
+         const res = await axios.get('/api/update/check');
+         updateInfo.value = res.data;
+         updateInfo.value.current_version = systemInfo.value.app_version || 'unknown';
+     } catch (e) {
+         toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to check for updates', life: 3000 });
+         console.error('Failed to check for updates', e);
+     } finally {
+         updateInfo.value.loading = false;
+     }
+ };
+
+ const performUpdate = () => {
+     confirm.require({
+         message: 'Are you sure you want to update the software? The system will restart during the update process.',
+         header: 'Confirm Update',
+         icon: 'pi pi-exclamation-triangle',
+         accept: async () => {
+             updateInfo.value.updating = true;
+             try {
+                 const res = await axios.post('/api/update/perform');
+                 updateInfo.value = res.data;
+                 toast.add({ severity: 'info', summary: 'Updating', detail: res.data.message, life: 5000 });
+
+                 // Auto-refresh update status after 5 seconds
+                 setTimeout(() => {
+                     checkForUpdate();
+                 }, 5000);
+             } catch (e) {
+                 toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to start update', life: 3000 });
+                 console.error('Failed to perform update', e);
+             } finally {
+                 updateInfo.value.updating = false;
+             }
+         }
+     });
  };
 
  const refreshInfo = () => {
@@ -301,6 +390,7 @@ const restartAllProxies = async () => {
      fetchInfo();
      loading.value = false;
      refreshInterval = setInterval(fetchInfo, 5000);
+     checkForUpdate();
  });
 
  onUnmounted(() => {

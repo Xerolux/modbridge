@@ -119,6 +119,10 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/config/system", csrfMW(s.handleSystemConfig))
 	mux.HandleFunc("/api/system/restart", csrfMW(s.handleSystemRestart))
 	mux.HandleFunc("/api/system/info", authMW(s.handleSystemInfo))
+
+	// Update routes
+	mux.HandleFunc("/api/update/check", authMW(s.handleCheckUpdate))
+	mux.HandleFunc("/api/update/perform", csrfMW(s.handlePerformUpdate))
 }
 
 // handleHealth is a health check endpoint.

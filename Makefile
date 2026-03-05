@@ -14,7 +14,7 @@ help: ## Show this help message
 
 build: build-frontend ## Build the application
 	@echo "Building $(BINARY_NAME)..."
-	go build $(LDFLAGS) -o $(BINARY_NAME) ./main.go
+	go build $(LDFLAGS) -o $(BINARY_NAME) -ldflags "-X main.Version=$(VERSION)" ./main.go
 
 build-frontend: ## Build the frontend
 	@echo "Building frontend..."

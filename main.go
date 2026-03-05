@@ -19,6 +19,9 @@ import (
 	"time"
 )
 
+// Version is set at build time
+var Version string = "unknown"
+
 func main() {
 	// 1. Database
 	db, err := database.NewDB("modbridge.db")
