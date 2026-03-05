@@ -3,9 +3,9 @@
 # modbridge.sh
 # Automates installation, updates, and service management for Modbridge.
 # Features:
-# - Automatic Go installation with configurable release channels (Alpha, Beta, Release)
-# - No source code building required - uses precompiled binaries
-# - Automatic service startup and management
+# - Downloads precompiled binaries from GitHub Releases (no build required)
+# - Automatic Go installation as fallback for building from source
+# - Automatic service startup and management via systemd
 
 set -e
 
@@ -14,76 +14,79 @@ SERVICE_NAME="modbridge.service"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}"
 LOG_FILE="/var/log/modbridge-manager.log"
 REPO_URL="https://github.com/Xerolux/modbridge.git"
-BIN_TARGET="/usr/local/bin/modbridge"
 RELEASES_API="https://api.github.com/repos/Xerolux/modbridge/releases"
 
-# Setup logging
+# Global variable set by select_modbridge_release()
+MODBRIDGE_VERSION=""
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ──────────────────────────────────────────────────────────────────────────────
+
 log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
 
 check_root() {
     if [ "$EUID" -ne 0 ]; then
-        echo "Please run this command as root (e.g., using sudo)."
+        echo "Bitte als root ausführen (z.B. mit sudo)."
         exit 1
     fi
 }
 
-install_go() {
-    log "Go installation required. Fetching latest Go versions..."
+# ──────────────────────────────────────────────────────────────────────────────
+# Go installation (only needed when building from source)
+# ──────────────────────────────────────────────────────────────────────────────
 
-    # Determine system architecture
+install_go() {
+    log "Go wird installiert. Verfügbare Versionen werden abgerufen..."
+
     ARCH=$(uname -m)
     case "$ARCH" in
-        x86_64) GOARCH="amd64" ;;
+        x86_64)  GOARCH="amd64" ;;
         aarch64) GOARCH="arm64" ;;
-        armv7l) GOARCH="armv6l" ;;
-        *) log "Error: Unsupported architecture: $ARCH"; exit 1 ;;
+        armv7l)  GOARCH="armv6l" ;;
+        *) log "Fehler: Nicht unterstützte Architektur: $ARCH"; exit 1 ;;
     esac
 
     OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 
-    # Get latest Go version with channel selection
     echo ""
-    echo "╔═══════════════════════════════════════════════════════════╗"
-    echo "║            Which Go version do you want?                 ║"
-    echo "╠═══════════════════════════════════════════════════════════╣"
-    echo "║  release  →  Stable version (recommended)                ║"
-    echo "║  beta     →  Pre-release version (newer features)        ║"
-    echo "║  alpha    →  Development version (bleeding edge)         ║"
-    echo "╚═══════════════════════════════════════════════════════════╝"
-    read -p "Choose: release/beta/alpha (default: release): " channel_choice
-    channel_choice=${channel_choice:-release}
+    echo "╔═══════════════════════════════════════════════════════════════╗"
+    echo "║              Welche Go-Version möchtest du?                  ║"
+    echo "╠═══════════════════════════════════════════════════════════════╣"
+    echo "║  [1] Release  →  Stabile Version (empfohlen)                 ║"
+    echo "║  [2] Beta     →  Vorabversion (neuere Features)              ║"
+    echo "║  [3] Alpha    →  Entwicklungsversion (bleeding edge)         ║"
+    echo "╚═══════════════════════════════════════════════════════════════╝"
+    read -rp "Wahl [1/2/3] (Standard: 1 - Release): " channel_choice
+    channel_choice=${channel_choice:-1}
 
     case "$channel_choice" in
-        release|1) GO_CHANNEL="Release" ;;
-        beta|2) GO_CHANNEL="Beta" ;;
-        alpha|3) GO_CHANNEL="Alpha" ;;
-        *) log "Invalid choice, using Release"; GO_CHANNEL="Release" ;;
+        1|release|Release) GO_CHANNEL="Release" ;;
+        2|beta|Beta)       GO_CHANNEL="Beta" ;;
+        3|alpha|Alpha)     GO_CHANNEL="Alpha" ;;
+        *) log "Ungültige Eingabe, verwende Release"; GO_CHANNEL="Release" ;;
     esac
 
-    log "Fetching latest $GO_CHANNEL Go version..."
+    log "Neueste $GO_CHANNEL Go-Version wird ermittelt..."
 
-    # Fetch Go versions from official API
     GO_VERSIONS=$(curl -sSL "https://go.dev/dl/?mode=json" | grep -o '"version":"go[^"]*"' | cut -d'"' -f4 | sort -V | tac)
 
     LATEST_GO=""
     for version in $GO_VERSIONS; do
         if [[ "$GO_CHANNEL" == "Release" ]] && [[ ! "$version" =~ (alpha|beta|rc) ]]; then
-            LATEST_GO="$version"
-            break
+            LATEST_GO="$version"; break
         elif [[ "$GO_CHANNEL" == "Beta" ]] && [[ "$version" =~ beta ]]; then
-            LATEST_GO="$version"
-            break
+            LATEST_GO="$version"; break
         elif [[ "$GO_CHANNEL" == "Alpha" ]] && [[ "$version" =~ alpha ]]; then
-            LATEST_GO="$version"
-            break
+            LATEST_GO="$version"; break
         fi
     done
 
     if [ -z "$LATEST_GO" ]; then
         LATEST_GO=$(echo "$GO_VERSIONS" | head -n 1)
-        log "Warning: Could not find $GO_CHANNEL version, using latest: $LATEST_GO"
+        log "Warnung: Kein $GO_CHANNEL-Release gefunden, verwende: $LATEST_GO"
     fi
 
     DOWNLOAD_URL="https://go.dev/dl/${LATEST_GO}.${OS}-${GOARCH}.tar.gz"
@@ -91,242 +94,268 @@ install_go() {
     TAR_FILE="${TEMP_DIR}/${LATEST_GO}.${OS}-${GOARCH}.tar.gz"
 
     mkdir -p "$TEMP_DIR"
+    log "Go $LATEST_GO ($GO_CHANNEL) wird heruntergeladen..."
 
-    log "Downloading Go $LATEST_GO ($GO_CHANNEL)..."
-    log "URL: $DOWNLOAD_URL"
-
-    if ! curl -sSL "$DOWNLOAD_URL" -o "$TAR_FILE"; then
-        log "Error: Failed to download Go"
+    if ! curl -fL --progress-bar "$DOWNLOAD_URL" -o "$TAR_FILE"; then
+        log "Fehler: Go-Download fehlgeschlagen."
         rm -rf "$TEMP_DIR"
         exit 1
     fi
 
-    log "Removing old Go installation if exists..."
+    log "Alte Go-Installation wird entfernt (falls vorhanden)..."
     rm -rf /usr/local/go
 
-    log "Installing Go $LATEST_GO..."
+    log "Go $LATEST_GO wird installiert..."
     tar -C /usr/local -xzf "$TAR_FILE"
-
-    # Clean up
     rm -rf "$TEMP_DIR"
 
-    # Ensure PATH is set up
     if [ ! -f "/etc/profile.d/go.sh" ]; then
         echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
         chmod +x /etc/profile.d/go.sh
     fi
 
-    log "Go installation complete."
+    log "Go-Installation abgeschlossen."
     /usr/local/go/bin/go version | tee -a "$LOG_FILE"
 }
 
 check_go() {
-    if ! command -v go &> /dev/null && ! [ -x "/usr/local/go/bin/go" ]; then
-        log "Go is not installed."
+    if ! command -v go &>/dev/null && ! [ -x "/usr/local/go/bin/go" ]; then
+        log "Go ist nicht installiert."
         install_go
-        # Update PATH for current shell
         export PATH=$PATH:/usr/local/go/bin
     else
-        log "Go found: $(go version)"
+        log "Go gefunden: $(go version 2>/dev/null || /usr/local/go/bin/go version)"
     fi
 }
 
-check_dependencies() {
-    log "Checking dependencies..."
-    if ! command -v git &> /dev/null; then
-        log "Error: git is not installed. Please install git."
+check_base_dependencies() {
+    log "Abhängigkeiten werden geprüft..."
+    local missing=()
+    command -v git  &>/dev/null || missing+=("git")
+    command -v curl &>/dev/null || missing+=("curl")
+    command -v file &>/dev/null || missing+=("file")
+
+    if [ ${#missing[@]} -gt 0 ]; then
+        log "Fehler: Folgende Programme fehlen: ${missing[*]}"
+        log "Installation z.B. mit: apt install ${missing[*]}"
         exit 1
     fi
-    if ! command -v curl &> /dev/null; then
-        log "Error: curl is not installed. Please install curl."
-        exit 1
-    fi
-    check_go
 }
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Release selection
+# Sets global MODBRIDGE_VERSION – does NOT use stdout for the result so that
+# the function can be called normally (not via $(...) substitution).
+# ──────────────────────────────────────────────────────────────────────────────
 
 select_modbridge_release() {
-    log "Fetching available Modbridge releases..."
+    MODBRIDGE_VERSION=""
 
-    # Get all releases from GitHub
+    log "Verfügbare Modbridge-Releases werden von GitHub abgerufen..."
+    local ALL_RELEASES
     ALL_RELEASES=$(curl -sSL "$RELEASES_API?per_page=20" 2>/dev/null)
 
     if [ -z "$ALL_RELEASES" ]; then
-        log "⚠ Failed to fetch releases from GitHub."
+        log "⚠ GitHub-Releases konnten nicht abgerufen werden."
         return 1
     fi
 
-    # Parse releases and ask user which channel they prefer
-    echo ""
-    echo "╔═══════════════════════════════════════════════════════════╗"
-    echo "║          Which Modbridge version do you want?            ║"
-    echo "╠═══════════════════════════════════════════════════════════╣"
-    echo "║  release  →  Stable version (recommended)                ║"
-    echo "║  beta     →  Pre-release version (newer features)        ║"
-    echo "║  alpha    →  Development version (bleeding edge)         ║"
-    echo "╚═══════════════════════════════════════════════════════════╝"
-    read -p "Choose: release/beta/alpha (default: release): " release_choice
-    release_choice=${release_choice:-release}
+    # Extract latest tag for each channel
+    # JSON lines look like:  "tag_name": "v0.0.3-beta",
+    local LATEST_RELEASE LATEST_BETA LATEST_ALPHA
+    LATEST_RELEASE=$(echo "$ALL_RELEASES" | grep '"tag_name"' | grep -v 'beta\|alpha\|rc' \
+        | head -n 1 | grep -o '"v[^"]*"' | tr -d '"')
+    LATEST_BETA=$(echo "$ALL_RELEASES" | grep '"tag_name"' | grep 'beta' \
+        | head -n 1 | grep -o '"v[^"]*"' | tr -d '"')
+    LATEST_ALPHA=$(echo "$ALL_RELEASES" | grep '"tag_name"' | grep 'alpha' \
+        | head -n 1 | grep -o '"v[^"]*"' | tr -d '"')
 
+    # Build display labels
+    local RELEASE_LABEL BETA_LABEL ALPHA_LABEL
+    RELEASE_LABEL="${LATEST_RELEASE:-nicht verfügbar}"
+    BETA_LABEL="${LATEST_BETA:-nicht verfügbar}"
+    ALPHA_LABEL="${LATEST_ALPHA:-nicht verfügbar}"
+
+    echo ""
+    echo "╔═══════════════════════════════════════════════════════════════╗"
+    echo "║         Welche Modbridge-Version möchtest du?                ║"
+    echo "╠═══════════════════════════════════════════════════════════════╣"
+    printf "║  [1] Release  (Stabil)      →  %-30s ║\n" "$RELEASE_LABEL"
+    printf "║  [2] Beta     (Vorabversion) →  %-30s ║\n" "$BETA_LABEL"
+    printf "║  [3] Alpha    (Entwicklung)  →  %-30s ║\n" "$ALPHA_LABEL"
+    echo "╚═══════════════════════════════════════════════════════════════╝"
+    read -rp "Wahl [1/2/3] (Standard: 1 - Release): " release_choice
+    release_choice=${release_choice:-1}
+
+    local SELECTED_VERSION=""
     case "$release_choice" in
-        release|1) RELEASE_CHANNEL="release" ;;
-        beta|2) RELEASE_CHANNEL="beta" ;;
-        alpha|3) RELEASE_CHANNEL="alpha" ;;
-        *) log "Invalid choice, using Release"; RELEASE_CHANNEL="release" ;;
+        1|release|Release) SELECTED_VERSION="$LATEST_RELEASE" ;;
+        2|beta|Beta)       SELECTED_VERSION="$LATEST_BETA" ;;
+        3|alpha|Alpha)     SELECTED_VERSION="$LATEST_ALPHA" ;;
+        *) log "Ungültige Eingabe, verwende Release."; SELECTED_VERSION="$LATEST_RELEASE" ;;
     esac
 
-    # Find the latest release for the selected channel
-    # Parse releases by extracting tag_name values
-
-    if [ "$RELEASE_CHANNEL" = "release" ]; then
-        # Get latest non-prerelease (stable) version - no -beta, no -alpha
-        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep '"tag_name"' | grep -v 'beta\|alpha' | head -n 1 | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*"' | cut -d'"' -f1)
-    elif [ "$RELEASE_CHANNEL" = "beta" ]; then
-        # Get latest beta version - must contain 'beta'
-        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep '"tag_name"' | grep 'beta' | head -n 1 | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*-beta[^"]*"' | cut -d'"' -f1)
-    else
-        # Get latest alpha version - must contain 'alpha'
-        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep '"tag_name"' | grep 'alpha' | head -n 1 | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*-alpha[^"]*"' | cut -d'"' -f1)
+    # Fallback: if chosen channel has no version, use the absolute latest
+    if [ -z "$SELECTED_VERSION" ]; then
+        log "⚠ Für diesen Kanal ist keine Version verfügbar. Neueste verfügbare Version wird verwendet."
+        SELECTED_VERSION=$(echo "$ALL_RELEASES" | grep '"tag_name"' \
+            | head -n 1 | grep -o '"v[^"]*"' | tr -d '"')
     fi
 
-    if [ -z "$SELECTED_RELEASE" ]; then
-        log "⚠ No $RELEASE_CHANNEL version found. Using latest available."
-        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep '"tag_name"' | head -n 1 | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*[^"]*"' | cut -d'"' -f1)
+    if [ -z "$SELECTED_VERSION" ]; then
+        log "⚠ Keine Releases auf GitHub gefunden."
+        return 1
     fi
 
-    log "Selected version: $SELECTED_RELEASE ($RELEASE_CHANNEL)"
-    echo "$SELECTED_RELEASE"
+    log "Gewählte Version: $SELECTED_VERSION"
+    MODBRIDGE_VERSION="$SELECTED_VERSION"
+    return 0
 }
 
-download_modbridge_binary() {
-    log "Attempting to download Modbridge precompiled binary..."
+# ──────────────────────────────────────────────────────────────────────────────
+# Binary download (primary installation method – no Go required)
+# ──────────────────────────────────────────────────────────────────────────────
 
-    # Determine architecture
+download_modbridge_binary() {
+    log "Precompiled Modbridge-Binary wird heruntergeladen..."
+
+    local ARCH GOARCH
     ARCH=$(uname -m)
     case "$ARCH" in
-        x86_64) GOARCH="amd64" ;;
+        x86_64)  GOARCH="amd64" ;;
         aarch64) GOARCH="arm64" ;;
-        *) log "⚠ Unsupported architecture for binary: $ARCH. Will build from source."; return 1 ;;
+        *) log "⚠ Keine vorkompilierte Binary für Architektur '$ARCH' verfügbar. Quellcode-Build wird gestartet."; return 1 ;;
     esac
+    log "Systemarchitektur: linux-${GOARCH}"
 
-    log "System architecture detected: linux-${GOARCH}"
-
-    # Let user select release channel
-    RELEASE_TAG=$(select_modbridge_release)
-    if [ -z "$RELEASE_TAG" ]; then
-        log "⚠ Could not determine release. Will build from source."
+    # Let user choose the release (result in $MODBRIDGE_VERSION)
+    if ! select_modbridge_release; then
+        log "⚠ Release-Auswahl fehlgeschlagen."
         return 1
     fi
 
-    # Get the release JSON for the selected tag
-    log "Fetching release details for $RELEASE_TAG..."
+    local RELEASE_TAG="$MODBRIDGE_VERSION"
+
+    log "Release-Details für $RELEASE_TAG werden abgerufen..."
+    local RELEASE_JSON
     RELEASE_JSON=$(curl -sSL "$RELEASES_API/tags/$RELEASE_TAG" 2>/dev/null)
 
     if [ -z "$RELEASE_JSON" ]; then
-        log "⚠ Failed to fetch release details. Will build from source."
+        log "⚠ Release-Details für $RELEASE_TAG konnten nicht abgerufen werden."
         return 1
     fi
 
-    # Check if release has any assets
+    local ASSET_COUNT
     ASSET_COUNT=$(echo "$RELEASE_JSON" | grep -o '"browser_download_url"' | wc -l)
     if [ "$ASSET_COUNT" -eq 0 ]; then
-        log "⚠ No release assets found for $RELEASE_TAG. Will build from source."
+        log "⚠ $RELEASE_TAG enthält keine Release-Assets (keine vorkompilierten Binaries)."
         return 1
     fi
 
-    # Find the appropriate binary for this system (linux-amd64, linux-arm64)
-    BINARY_NAME="modbridge-linux-${GOARCH}"
-    DOWNLOAD_URL=$(echo "$RELEASE_JSON" | grep -o "\"browser_download_url\": \"[^\"]*${BINARY_NAME}[^\"]*\"" | head -n 1 | cut -d'"' -f4)
+    local BINARY_NAME="modbridge-linux-${GOARCH}"
+    local DOWNLOAD_URL
+    DOWNLOAD_URL=$(echo "$RELEASE_JSON" \
+        | grep -o "\"browser_download_url\": \"[^\"]*${BINARY_NAME}[^\"]*\"" \
+        | head -n 1 | cut -d'"' -f4)
 
     if [ -z "$DOWNLOAD_URL" ]; then
-        log "⚠ No precompiled binary found for ${BINARY_NAME} in $RELEASE_TAG. Will build from source."
+        log "⚠ Kein Binary '${BINARY_NAME}' in Release $RELEASE_TAG gefunden."
+        log "  Vorhandene Assets: $(echo "$RELEASE_JSON" | grep -o '"name": "[^"]*"' | grep -v 'tag_name\|target' | cut -d'"' -f4 | tr '\n' ' ')"
         return 1
     fi
 
-    TEMP_BIN="/tmp/modbridge_temp_$$"
+    local TEMP_BIN="/tmp/modbridge_temp_$$"
+    log "✓ Lade $RELEASE_TAG binary herunter..."
+    log "  URL: $DOWNLOAD_URL"
 
-    log "✓ Downloading $RELEASE_TAG binary from GitHub..."
-    if ! curl -sSL -L "$DOWNLOAD_URL" -o "$TEMP_BIN"; then
-        log "⚠ Failed to download binary. Will build from source."
+    if ! curl -fL --progress-bar "$DOWNLOAD_URL" -o "$TEMP_BIN"; then
+        log "⚠ Download fehlgeschlagen."
         rm -f "$TEMP_BIN"
         return 1
     fi
 
     chmod +x "$TEMP_BIN"
 
-    # Test if binary works
-    if ! "$TEMP_BIN" -h 2>/dev/null | grep -q "modbridge\|usage\|help" 2>/dev/null && \
-       ! "$TEMP_BIN" --help 2>/dev/null | grep -q "modbridge\|usage\|help" 2>/dev/null; then
-        log "⚠ Binary verification failed. Will build from source instead."
+    # Verify it is a valid ELF executable
+    if ! file "$TEMP_BIN" 2>/dev/null | grep -qi "ELF"; then
+        log "⚠ Heruntergeladene Datei ist kein gültiges ELF-Binary."
         rm -f "$TEMP_BIN"
         return 1
     fi
 
     mkdir -p "$INSTALL_DIR"
-    cp "$TEMP_BIN" "$INSTALL_DIR/modbridge"
-    rm -f "$TEMP_BIN"
-
-    log "✓ Modbridge $RELEASE_TAG binary downloaded and verified successfully."
+    mv "$TEMP_BIN" "$INSTALL_DIR/modbridge"
+    log "✓ Modbridge $RELEASE_TAG erfolgreich heruntergeladen und installiert."
     return 0
 }
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Source build (fallback)
+# ──────────────────────────────────────────────────────────────────────────────
+
 build_modbridge_from_source() {
-    log "📦 Building Modbridge from source (this may take a few minutes)..."
+    log "Quellcode-Build wird gestartet (dies kann einige Minuten dauern)..."
+
+    check_go   # Install Go only when actually needed
 
     if [ ! -d "$INSTALL_DIR" ]; then
-        log "Cloning repository..."
+        log "Repository wird geklont..."
         git clone "$REPO_URL" "$INSTALL_DIR"
     else
-        log "Repository already exists. Updating..."
+        log "Repository existiert bereits. Wird aktualisiert..."
         cd "$INSTALL_DIR"
         git pull
     fi
 
     cd "$INSTALL_DIR"
 
-    log "📄 Building frontend..."
+    log "Frontend wird gebaut..."
     if [ -f "build.sh" ]; then
         chmod +x build.sh
         ./build.sh
     else
         cd frontend
-        # Increase Node.js memory limit for build
         export NODE_OPTIONS="--max-old-space-size=2048"
-        log "  Installing npm dependencies (may take a minute)..."
+        log "  npm-Abhängigkeiten werden installiert..."
         npm install >/dev/null 2>&1 || npm install
-        log "  Building frontend with increased memory..."
+        log "  Frontend wird kompiliert..."
         npm run build
         cd ..
         rm -rf pkg/web/dist/*
         cp -r frontend/dist/* pkg/web/dist/
     fi
 
-    log "⬇ Downloading Go dependencies..."
+    log "Go-Abhängigkeiten werden heruntergeladen..."
     go mod download
     go mod verify
 
-    log "🔨 Compiling Go binary..."
+    log "Go-Binary wird kompiliert..."
     CGO_ENABLED=1 go build -ldflags="-s -w" -o modbridge ./main.go
 
-    log "✓ Build completed successfully."
+    log "✓ Build erfolgreich abgeschlossen."
 }
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Install / Update / Service commands
+# ──────────────────────────────────────────────────────────────────────────────
 
 install_modbridge() {
     check_root
-    check_dependencies
+    check_base_dependencies
 
     echo ""
-    log "🚀 Starting Modbridge installation..."
-    log "Installation directory: $INSTALL_DIR"
+    log "🚀 Modbridge-Installation wird gestartet..."
+    log "   Installationsverzeichnis: $INSTALL_DIR"
 
     mkdir -p "$INSTALL_DIR"
 
-    # Try to download precompiled binary first
+    # Prefer binary download; fall back to source build
     if ! download_modbridge_binary; then
-        log "⚙ Binary download not available, will build from source..."
+        log "⚙ Kein vorkompiliertes Binary verfügbar – wird aus dem Quellcode gebaut..."
         build_modbridge_from_source
     fi
 
-    log "⚙ Configuring systemd service..."
+    log "⚙ systemd-Service wird konfiguriert..."
     cat > "$SERVICE_FILE" << SYSTEMD_EOF
 [Unit]
 Description=ModBridge Service
@@ -347,58 +376,60 @@ SYSTEMD_EOF
     systemctl daemon-reload
     systemctl enable "$SERVICE_NAME"
 
-    log "✅ Modbridge installation complete!"
-    log "✓ Autostart enabled (systemd)"
-    log "⏳ Starting Modbridge service..."
+    log "✅ Modbridge-Installation abgeschlossen!"
+    log "✓ Autostart aktiviert (systemd)"
+    log "⏳ Modbridge-Service wird gestartet..."
     systemctl start "$SERVICE_NAME"
-    log "✓ Modbridge service started successfully."
+    log "✓ Modbridge-Service erfolgreich gestartet."
     echo ""
-    log "You can check status with: modbridge status"
+    log "Status prüfen mit: sudo modbridge status"
 }
 
 update_modbridge() {
     check_root
-    check_dependencies
+    check_base_dependencies
 
     if [ ! -d "$INSTALL_DIR" ]; then
-        log "❌ Modbridge is not installed at $INSTALL_DIR. Please run 'modbridge install' first."
+        log "❌ Modbridge ist nicht unter $INSTALL_DIR installiert. Bitte zuerst 'modbridge install' ausführen."
         exit 1
     fi
 
     echo ""
-    log "🔄 Updating Modbridge..."
+    log "🔄 Modbridge wird aktualisiert..."
 
-    # Try to download new binary first
     if ! download_modbridge_binary; then
-        log "⚙ Building from source..."
+        log "⚙ Kein Binary verfügbar – wird aus dem Quellcode gebaut..."
         build_modbridge_from_source
     fi
 
-    log "⏳ Restarting Modbridge service..."
+    log "⏳ Modbridge-Service wird neu gestartet..."
     systemctl restart "$SERVICE_NAME"
-    log "✅ Update complete. Service restarted."
+    log "✅ Update abgeschlossen. Service wurde neu gestartet."
     echo ""
 }
 
 start_service() {
     check_root
-    log "Starting Modbridge service..."
+    log "Modbridge-Service wird gestartet..."
     systemctl start "$SERVICE_NAME"
-    log "Service started."
+    log "Service gestartet."
 }
 
 stop_service() {
     check_root
-    log "Stopping Modbridge service..."
+    log "Modbridge-Service wird gestoppt..."
     systemctl stop "$SERVICE_NAME"
-    log "Service stopped."
+    log "Service gestoppt."
 }
 
 status_service() {
     systemctl status "$SERVICE_NAME" || true
 }
 
+# ──────────────────────────────────────────────────────────────────────────────
 # Command routing
+# ──────────────────────────────────────────────────────────────────────────────
+
 case "$1" in
     install)
         install_modbridge
@@ -421,35 +452,35 @@ case "$1" in
         ;;
     *)
         echo "╔════════════════════════════════════════════════════════════════╗"
-        echo "║           Modbridge Manager with Auto Go Install              ║"
+        echo "║                   Modbridge Manager                          ║"
         echo "╚════════════════════════════════════════════════════════════════╝"
         echo ""
-        echo "Usage: modbridge {install|update|start|stop|restart|status}"
+        echo "Verwendung: sudo modbridge {install|update|start|stop|restart|status}"
         echo ""
-        echo "Commands:"
-        echo "  install   - Installs Modbridge with automatic Go setup"
-        echo "            (downloads binary if available, builds from source otherwise)"
-        echo "            (enables autostart via systemd)"
+        echo "Befehle:"
+        echo "  install   - Modbridge installieren"
+        echo "            (lädt vorkompiliertes Binary herunter oder baut aus Quellcode)"
+        echo "            (aktiviert Autostart via systemd)"
         echo ""
-        echo "  update    - Updates Modbridge to latest version"
-        echo "            (downloads new binary or rebuilds from source)"
+        echo "  update    - Modbridge auf die neueste Version aktualisieren"
+        echo "            (lädt neues Binary herunter oder baut aus Quellcode)"
         echo ""
-        echo "  start     - Starts the Modbridge service"
-        echo "  stop      - Stops the Modbridge service"
-        echo "  restart   - Restarts the Modbridge service"
-        echo "  status    - Shows the status of the Modbridge service"
+        echo "  start     - Modbridge-Service starten"
+        echo "  stop      - Modbridge-Service stoppen"
+        echo "  restart   - Modbridge-Service neu starten"
+        echo "  status    - Status des Modbridge-Service anzeigen"
         echo ""
         echo "Features:"
-        echo "  ✓ Automatic Go installation (configurable: Release/Beta/Alpha)"
-        echo "  ✓ Downloads precompiled binaries when available"
-        echo "  ✓ Builds from source as fallback"
-        echo "  ✓ Autostart enabled via systemd"
-        echo "  ✓ Zero manual configuration needed"
+        echo "  ✓ Lädt vorkompilierte Binaries von GitHub Releases herunter"
+        echo "  ✓ Kein Build erforderlich wenn Binary verfügbar ist"
+        echo "  ✓ Zeigt verfügbare Versionsnummern im Auswahlmenü an"
+        echo "  ✓ Fallback: automatischer Quellcode-Build (inkl. Go-Installation)"
+        echo "  ✓ Autostart via systemd"
         echo ""
-        echo "Examples:"
-        echo "  sudo modbridge install    # Install with auto Go setup"
-        echo "  sudo modbridge update     # Update to latest version"
-        echo "  modbridge status          # Check service status"
+        echo "Beispiele:"
+        echo "  sudo bash modbridge.sh install    # Installieren"
+        echo "  sudo bash modbridge.sh update     # Aktualisieren"
+        echo "  sudo bash modbridge.sh status     # Status prüfen"
         exit 1
         ;;
 esac
