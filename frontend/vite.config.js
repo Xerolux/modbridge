@@ -16,8 +16,8 @@ export default defineConfig({
         assetFileNames: 'assets/[name]-[hash][extname]',
         // Strip leading underscores from sanitized filenames
         sanitizeFileName(name) {
-          // Default Rollup sanitization replaces \0 with '_', we strip leading underscores
-          const sanitized = name.replace(/\0/g, '_')
+          // Replace null bytes and colons (colons are invalid on NTFS and rejected by upload-artifact)
+          const sanitized = name.replace(/\0/g, '_').replace(/:/g, '_')
           return sanitized.replace(/^_+/, '')
         }
       }
