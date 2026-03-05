@@ -158,6 +158,10 @@ func (l *Logger) Error(proxyID, msg string) {
 	l.Log(ERROR, proxyID, msg)
 }
 
+func (l *Logger) Debug(proxyID, msg string) {
+	l.Log(DEBUG, proxyID, msg)
+}
+
 // Close closes the logger file.
 func (l *Logger) Close() error {
 	l.mu.Lock()

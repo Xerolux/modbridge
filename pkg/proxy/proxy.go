@@ -253,6 +253,9 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 			return
 		}
 
+		// Debug: Log incoming Modbus request
+		p.log.Debug(p.ID, fmt.Sprintf("Received Modbus request: %X (%d bytes)", reqFrame, len(reqFrame)))
+
 		// Check circuit breaker BEFORE forwarding
 		if !p.circuitBreaker.AllowRequest() {
 			p.log.Error(p.ID, "Circuit breaker is OPEN, rejecting request")
@@ -292,6 +295,9 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 		p.circuitBreaker.RecordSuccess()
 		bytesWritten = len(respFrame)
 		p.enhancedStats.RecordRequestComplete(reqID, bytesRead, bytesWritten, nil)
+
+		// Debug: Log Modbus response
+		p.log.Debug(p.ID, fmt.Sprintf("Sending Modbus response: %X (%d bytes)", respFrame, len(respFrame)))
 
 		if _, err := clientConn.Write(respFrame); err != nil {
 			p.log.Error(p.ID, fmt.Sprintf("Write response error: %v", err))
