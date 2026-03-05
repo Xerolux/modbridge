@@ -45,17 +45,20 @@ install_go() {
 
     # Get latest Go version with channel selection
     echo ""
-    echo "Select Go release channel:"
-    echo "1) Release (Stable)"
-    echo "2) Beta"
-    echo "3) Alpha"
-    read -p "Choose [1-3] (default: 1): " channel_choice
-    channel_choice=${channel_choice:-1}
+    echo "╔═══════════════════════════════════════════════════════════╗"
+    echo "║            Which Go version do you want?                 ║"
+    echo "╠═══════════════════════════════════════════════════════════╣"
+    echo "║  release  →  Stable version (recommended)                ║"
+    echo "║  beta     →  Pre-release version (newer features)        ║"
+    echo "║  alpha    →  Development version (bleeding edge)         ║"
+    echo "╚═══════════════════════════════════════════════════════════╝"
+    read -p "Choose: release/beta/alpha (default: release): " channel_choice
+    channel_choice=${channel_choice:-release}
 
     case "$channel_choice" in
-        1) GO_CHANNEL="Release" ;;
-        2) GO_CHANNEL="Beta" ;;
-        3) GO_CHANNEL="Alpha" ;;
+        release|1) GO_CHANNEL="Release" ;;
+        beta|2) GO_CHANNEL="Beta" ;;
+        alpha|3) GO_CHANNEL="Alpha" ;;
         *) log "Invalid choice, using Release"; GO_CHANNEL="Release" ;;
     esac
 
@@ -154,35 +157,40 @@ select_modbridge_release() {
 
     # Parse releases and ask user which channel they prefer
     echo ""
-    echo "Available Modbridge versions:"
-    echo "1) Release (Stable) - Latest stable version"
-    echo "2) Beta - Pre-release versions"
-    echo "3) Alpha - Development versions"
-    read -p "Choose [1-3] (default: 1): " release_choice
-    release_choice=${release_choice:-1}
+    echo "╔═══════════════════════════════════════════════════════════╗"
+    echo "║          Which Modbridge version do you want?            ║"
+    echo "╠═══════════════════════════════════════════════════════════╣"
+    echo "║  release  →  Stable version (recommended)                ║"
+    echo "║  beta     →  Pre-release version (newer features)        ║"
+    echo "║  alpha    →  Development version (bleeding edge)         ║"
+    echo "╚═══════════════════════════════════════════════════════════╝"
+    read -p "Choose: release/beta/alpha (default: release): " release_choice
+    release_choice=${release_choice:-release}
 
     case "$release_choice" in
-        1) RELEASE_CHANNEL="release" ;;
-        2) RELEASE_CHANNEL="beta" ;;
-        3) RELEASE_CHANNEL="alpha" ;;
+        release|1) RELEASE_CHANNEL="release" ;;
+        beta|2) RELEASE_CHANNEL="beta" ;;
+        alpha|3) RELEASE_CHANNEL="alpha" ;;
         *) log "Invalid choice, using Release"; RELEASE_CHANNEL="release" ;;
     esac
 
     # Find the latest release for the selected channel
+    # Parse releases by extracting tag_name values
+
     if [ "$RELEASE_CHANNEL" = "release" ]; then
-        # Get latest non-prerelease version
-        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep -o '"tag_name":"[^"]*","target_commitish"[^}]*"prerelease":false' | head -n 1 | grep -o '"tag_name":"[^"]*"' | head -n 1 | cut -d'"' -f4)
+        # Get latest non-prerelease (stable) version - no -beta, no -alpha
+        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep '"tag_name"' | grep -v 'beta\|alpha' | head -n 1 | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*"' | cut -d'"' -f1)
     elif [ "$RELEASE_CHANNEL" = "beta" ]; then
-        # Get latest beta version
-        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep -o '"tag_name":"[^"]*beta[^"]*"' | head -n 1 | cut -d'"' -f4)
+        # Get latest beta version - must contain 'beta'
+        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep '"tag_name"' | grep 'beta' | head -n 1 | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*-beta[^"]*"' | cut -d'"' -f1)
     else
-        # Get latest alpha version
-        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep -o '"tag_name":"[^"]*alpha[^"]*"' | head -n 1 | cut -d'"' -f4)
+        # Get latest alpha version - must contain 'alpha'
+        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep '"tag_name"' | grep 'alpha' | head -n 1 | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*-alpha[^"]*"' | cut -d'"' -f1)
     fi
 
     if [ -z "$SELECTED_RELEASE" ]; then
         log "⚠ No $RELEASE_CHANNEL version found. Using latest available."
-        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep -o '"tag_name":"[^"]*"' | head -n 1 | cut -d'"' -f4)
+        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep '"tag_name"' | head -n 1 | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*[^"]*"' | cut -d'"' -f1)
     fi
 
     log "Selected version: $SELECTED_RELEASE ($RELEASE_CHANNEL)"
