@@ -14,11 +14,12 @@ export default defineConfig({
         // Prevent underscore-prefixed filenames that break Go's go:embed
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash][extname]',
-        // Strip leading underscores from sanitized filenames
+        // Sanitize filenames: replace characters invalid on NTFS / in GitHub Actions artifacts
         sanitizeFileName(name) {
-          // Default Rollup sanitization replaces \0 with '_', we strip leading underscores
-          const sanitized = name.replace(/\0/g, '_')
-          return sanitized.replace(/^_+/, '')
+          // Replace \0 and NTFS-invalid characters (:, ", <, >, |, *, ?) with hyphens
+          const sanitized = name.replace(/[\0:"<>|*?]/g, '-')
+          // Strip leading underscores/hyphens
+          return sanitized.replace(/^[-_]+/, '')
         }
       }
     }

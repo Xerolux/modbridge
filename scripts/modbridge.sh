@@ -397,13 +397,32 @@ update_modbridge() {
     echo ""
     log "🔄 Modbridge wird aktualisiert..."
 
+    # 1. Stop running service
+    log "⏹ Modbridge-Service wird gestoppt..."
+    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+
+    # 2. Remove old binary
+    if [ -f "$INSTALL_DIR/modbridge" ]; then
+        log "🗑 Alte Binary wird entfernt..."
+        rm -f "$INSTALL_DIR/modbridge"
+    fi
+
+    # 3. Download / build new binary
     if ! download_modbridge_binary; then
         log "⚙ Kein Binary verfügbar – wird aus dem Quellcode gebaut..."
         build_modbridge_from_source
     fi
 
-    log "⏳ Modbridge-Service wird neu gestartet..."
-    systemctl restart "$SERVICE_NAME"
+    # 4. Verify new binary exists
+    if [ ! -f "$INSTALL_DIR/modbridge" ]; then
+        log "❌ Neue Binary wurde nicht erstellt. Update fehlgeschlagen."
+        exit 1
+    fi
+
+    # 5. Reload systemd and start service
+    systemctl daemon-reload
+    log "▶ Modbridge-Service wird gestartet..."
+    systemctl start "$SERVICE_NAME"
     log "✅ Update abgeschlossen. Service wurde neu gestartet."
     echo ""
 }
