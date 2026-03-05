@@ -175,20 +175,22 @@ select_modbridge_release() {
     esac
 
     # Find the latest release for the selected channel
+    # Parse releases by extracting tag_name values
+
     if [ "$RELEASE_CHANNEL" = "release" ]; then
-        # Get latest non-prerelease version
-        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep -o '"tag_name":"[^"]*","target_commitish"[^}]*"prerelease":false' | head -n 1 | grep -o '"tag_name":"[^"]*"' | head -n 1 | cut -d'"' -f4)
+        # Get latest non-prerelease (stable) version - no -beta, no -alpha
+        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep '"tag_name"' | grep -v 'beta\|alpha' | head -n 1 | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*"' | cut -d'"' -f1)
     elif [ "$RELEASE_CHANNEL" = "beta" ]; then
-        # Get latest beta version
-        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep -o '"tag_name":"[^"]*beta[^"]*"' | head -n 1 | cut -d'"' -f4)
+        # Get latest beta version - must contain 'beta'
+        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep '"tag_name"' | grep 'beta' | head -n 1 | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*-beta[^"]*"' | cut -d'"' -f1)
     else
-        # Get latest alpha version
-        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep -o '"tag_name":"[^"]*alpha[^"]*"' | head -n 1 | cut -d'"' -f4)
+        # Get latest alpha version - must contain 'alpha'
+        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep '"tag_name"' | grep 'alpha' | head -n 1 | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*-alpha[^"]*"' | cut -d'"' -f1)
     fi
 
     if [ -z "$SELECTED_RELEASE" ]; then
         log "⚠ No $RELEASE_CHANNEL version found. Using latest available."
-        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep -o '"tag_name":"[^"]*"' | head -n 1 | cut -d'"' -f4)
+        SELECTED_RELEASE=$(echo "$ALL_RELEASES" | grep '"tag_name"' | head -n 1 | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*[^"]*"' | cut -d'"' -f1)
     fi
 
     log "Selected version: $SELECTED_RELEASE ($RELEASE_CHANNEL)"
