@@ -53,7 +53,6 @@ services:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
 

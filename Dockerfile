@@ -45,8 +45,7 @@ RUN CGO_ENABLED=1 GOFLAGS=-trimpath \
     -o modbridge ./main.go
 
 # Verify the binary
-RUN ./modbridge --version || true && \
-    chmod +x modbridge && \
+RUN chmod +x modbridge && \
     ldd modbridge || true
 
 # Final stage - use alpine for health checks and minimal size
