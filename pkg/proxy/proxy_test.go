@@ -1,8 +1,8 @@
 package proxy
 
 import (
-	"modbusproxy/pkg/logger"
-	"modbusproxy/pkg/modbus"
+	"modbridge/pkg/logger"
+	"modbridge/pkg/modbus"
 	"net"
 	"testing"
 )

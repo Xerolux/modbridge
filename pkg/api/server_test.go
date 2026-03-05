@@ -7,10 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"modbusproxy/pkg/config"
-	"modbusproxy/pkg/logger"
-	"modbusproxy/pkg/manager"
-	"modbusproxy/pkg/middleware"
+	"modbridge/pkg/config"
+	"modbridge/pkg/logger"
+	"modbridge/pkg/manager"
+	"modbridge/pkg/middleware"
 )
 
 func TestHandleHealth(t *testing.T) {

@@ -2,7 +2,7 @@ package api
 
 import (
 	"encoding/json"
-	"modbusproxy/pkg/config"
+	"modbridge/pkg/config"
 	"net/http"
 	"runtime"
 	"time"

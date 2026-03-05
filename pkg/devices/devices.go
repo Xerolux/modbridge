@@ -2,7 +2,7 @@ package devices
 
 import (
 	"log"
-	"modbusproxy/pkg/database"
+	"modbridge/pkg/database"
 	"net"
 	"sync"
 	"time"

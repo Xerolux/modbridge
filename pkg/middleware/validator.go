@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"errors"
-	"modbusproxy/pkg/config"
+	"modbridge/pkg/config"
 	"net"
 	"strconv"
 	"strings"

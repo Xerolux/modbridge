@@ -34,12 +34,11 @@ RUN go mod download && go mod verify
 # Copy source code (but exclude frontend/dist which will be built separately)
 COPY . .
 
-# Copy frontend build and fix underscore files for go:embed compatibility
-COPY --from=frontend-builder /frontend/dist ./frontend/dist
-RUN cd /frontend && ./build.sh
-
-# Copy fixed frontend build to pkg/web/dist before building
+# Copy frontend build to pkg/web/dist
 COPY --from=frontend-builder /frontend/dist ./pkg/web/dist
+
+# Fix underscore files for go:embed compatibility
+RUN cd /build && bash ./build.sh
 
 # Build the application with optimizations
 # CGO is required for sqlite3

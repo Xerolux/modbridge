@@ -27,7 +27,8 @@
   "tls_key_file": "",
   "session_timeout": 24,
   "cors_allowed_origins": [
-    "*"
+    "http://localhost:3000",
+    "http://localhost:8080"
   ],
   "cors_allowed_methods": [
     "GET",

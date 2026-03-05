@@ -3,8 +3,8 @@ package manager
 import (
 	"testing"
 
-	"modbusproxy/pkg/config"
-	"modbusproxy/pkg/logger"
+	"modbridge/pkg/config"
+	"modbridge/pkg/logger"
 )
 
 func TestNewManager(t *testing.T) {
