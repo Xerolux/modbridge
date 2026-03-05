@@ -13,8 +13,9 @@ export const useAppStore = defineStore('app', () => {
   const error = ref(null);
   const darkMode = ref(localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches));
 
-  const toggleDarkMode = () => {
-    darkMode.value = !darkMode.value;
+  const toggleDarkMode = (value) => {
+    // If value is provided, use it; otherwise toggle
+    darkMode.value = value !== undefined ? value : !darkMode.value;
     localStorage.setItem('theme', darkMode.value ? 'dark' : 'light');
   };
 

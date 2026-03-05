@@ -5,15 +5,15 @@
   "proxies": [
     {
       "id": "21e71152-3866-43ac-891d-c5ec85fa1e98",
-      "name": "Test-Proxy",
+      "name": "SolarEdge Proxy",
       "listen_addr": ":5020",
-      "target_addr": "127.0.0.1:502",
-      "enabled": false,
+      "target_addr": "192.168.178.198:1502",
+      "enabled": true,
       "paused": false,
-      "connection_timeout": 0,
-      "read_timeout": 0,
-      "max_retries": 0,
-      "description": "",
+      "connection_timeout": 30,
+      "read_timeout": 30,
+      "max_retries": 3,
+      "description": "Verbindet sich mit SolarEdge Anlage und verteilt Daten an mehrere Clients",
       "max_read_size": 0,
       "tags": null
     }
