@@ -397,14 +397,82 @@ update_modbridge() {
     echo ""
     log "🔄 Modbridge wird aktualisiert..."
 
+    # 1. Service stoppen (falls er läuft)
+    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+        log "⏹ Modbridge-Service wird gestoppt..."
+        systemctl stop "$SERVICE_NAME"
+        log "✓ Service gestoppt."
+    else
+        log "ℹ Service ist nicht aktiv, kein Stopp nötig."
+    fi
+
+    # 2. Altes Binary sichern (falls vorhanden)
+    if [ -f "$INSTALL_DIR/modbridge" ]; then
+        local BACKUP_NAME="modbridge.backup.$(date +%Y%m%d_%H%M%S)"
+        cp "$INSTALL_DIR/modbridge" "$INSTALL_DIR/$BACKUP_NAME"
+        log "✓ Altes Binary gesichert als: $BACKUP_NAME"
+    fi
+
+    # 3. Altes Binary löschen
+    if [ -f "$INSTALL_DIR/modbridge" ]; then
+        rm -f "$INSTALL_DIR/modbridge"
+        log "✓ Altes Binary gelöscht."
+    fi
+
+    # 4. Neues Binary herunterladen oder bauen
     if ! download_modbridge_binary; then
         log "⚙ Kein Binary verfügbar – wird aus dem Quellcode gebaut..."
         build_modbridge_from_source
     fi
 
-    log "⏳ Modbridge-Service wird neu gestartet..."
-    systemctl restart "$SERVICE_NAME"
-    log "✅ Update abgeschlossen. Service wurde neu gestartet."
+    # 5. Prüfen ob neues Binary vorhanden ist
+    if [ ! -f "$INSTALL_DIR/modbridge" ]; then
+        log "❌ Update fehlgeschlagen: Kein neues Binary vorhanden."
+        # Rollback: Backup wiederherstellen falls vorhanden
+        local LATEST_BACKUP
+        LATEST_BACKUP=$(ls -t "$INSTALL_DIR"/modbridge.backup.* 2>/dev/null | head -n 1)
+        if [ -n "$LATEST_BACKUP" ]; then
+            cp "$LATEST_BACKUP" "$INSTALL_DIR/modbridge"
+            chmod +x "$INSTALL_DIR/modbridge"
+            log "⚠ Rollback: Altes Binary aus Backup wiederhergestellt."
+        fi
+        # Service trotzdem starten versuchen
+        systemctl start "$SERVICE_NAME" 2>/dev/null || true
+        exit 1
+    fi
+
+    # 6. Service wieder starten
+    log "▶ Modbridge-Service wird gestartet..."
+    systemctl start "$SERVICE_NAME"
+
+    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+        log "✅ Update abgeschlossen. Service läuft."
+    else
+        log "⚠ Service konnte nicht gestartet werden. Logs prüfen mit: journalctl -u $SERVICE_NAME -n 50"
+        # Rollback bei fehlgeschlagenem Start
+        local LATEST_BACKUP
+        LATEST_BACKUP=$(ls -t "$INSTALL_DIR"/modbridge.backup.* 2>/dev/null | head -n 1)
+        if [ -n "$LATEST_BACKUP" ]; then
+            log "⚠ Rollback wird versucht..."
+            cp "$LATEST_BACKUP" "$INSTALL_DIR/modbridge"
+            chmod +x "$INSTALL_DIR/modbridge"
+            systemctl start "$SERVICE_NAME" 2>/dev/null || true
+            if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+                log "✓ Rollback erfolgreich, alter Service läuft wieder."
+            else
+                log "❌ Rollback fehlgeschlagen. Manuelle Intervention erforderlich."
+            fi
+        fi
+    fi
+
+    # 7. Alte Backups aufräumen (nur die letzten 3 behalten)
+    local BACKUP_COUNT
+    BACKUP_COUNT=$(ls "$INSTALL_DIR"/modbridge.backup.* 2>/dev/null | wc -l)
+    if [ "$BACKUP_COUNT" -gt 3 ]; then
+        ls -t "$INSTALL_DIR"/modbridge.backup.* | tail -n +4 | xargs rm -f
+        log "✓ Alte Backups aufgeräumt (3 behalten)."
+    fi
+
     echo ""
 }
 
@@ -422,8 +490,55 @@ stop_service() {
     log "Service gestoppt."
 }
 
+restart_service() {
+    check_root
+    log "Modbridge-Service wird neu gestartet..."
+    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+        systemctl stop "$SERVICE_NAME"
+        log "✓ Service gestoppt."
+    fi
+    systemctl start "$SERVICE_NAME"
+    log "✓ Service gestartet."
+}
+
 status_service() {
     systemctl status "$SERVICE_NAME" || true
+}
+
+logs_service() {
+    journalctl -u "$SERVICE_NAME" -n "${2:-50}" --no-pager
+}
+
+uninstall_modbridge() {
+    check_root
+    echo ""
+    log "🗑 Modbridge wird deinstalliert..."
+
+    # Service stoppen und deaktivieren
+    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+        systemctl stop "$SERVICE_NAME"
+        log "✓ Service gestoppt."
+    fi
+    if systemctl is-enabled --quiet "$SERVICE_NAME" 2>/dev/null; then
+        systemctl disable "$SERVICE_NAME"
+        log "✓ Autostart deaktiviert."
+    fi
+
+    # Service-Datei entfernen
+    if [ -f "$SERVICE_FILE" ]; then
+        rm -f "$SERVICE_FILE"
+        systemctl daemon-reload
+        log "✓ Service-Datei entfernt."
+    fi
+
+    # Installationsverzeichnis entfernen
+    if [ -d "$INSTALL_DIR" ]; then
+        rm -rf "$INSTALL_DIR"
+        log "✓ Installationsverzeichnis $INSTALL_DIR entfernt."
+    fi
+
+    log "✅ Modbridge wurde vollständig deinstalliert."
+    echo ""
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -437,6 +552,9 @@ case "$1" in
     update)
         update_modbridge
         ;;
+    uninstall)
+        uninstall_modbridge
+        ;;
     start)
         start_service
         ;;
@@ -444,31 +562,38 @@ case "$1" in
         stop_service
         ;;
     restart)
-        stop_service
-        start_service
+        restart_service
         ;;
     status)
         status_service
+        ;;
+    logs)
+        logs_service "$@"
         ;;
     *)
         echo "╔════════════════════════════════════════════════════════════════╗"
         echo "║                   Modbridge Manager                          ║"
         echo "╚════════════════════════════════════════════════════════════════╝"
         echo ""
-        echo "Verwendung: sudo modbridge {install|update|start|stop|restart|status}"
+        echo "Verwendung: sudo modbridge {install|update|uninstall|start|stop|restart|status|logs}"
         echo ""
         echo "Befehle:"
         echo "  install   - Modbridge installieren"
-        echo "            (lädt vorkompiliertes Binary herunter oder baut aus Quellcode)"
-        echo "            (aktiviert Autostart via systemd)"
+        echo "              (lädt vorkompiliertes Binary herunter oder baut aus Quellcode)"
+        echo "              (aktiviert Autostart via systemd)"
         echo ""
         echo "  update    - Modbridge auf die neueste Version aktualisieren"
-        echo "            (lädt neues Binary herunter oder baut aus Quellcode)"
+        echo "              (stoppt Service → sichert altes Binary → installiert neues → startet Service)"
+        echo "              (automatischer Rollback bei Fehlern)"
+        echo ""
+        echo "  uninstall - Modbridge vollständig deinstallieren"
+        echo "              (stoppt Service, entfernt Dateien und systemd-Konfiguration)"
         echo ""
         echo "  start     - Modbridge-Service starten"
         echo "  stop      - Modbridge-Service stoppen"
         echo "  restart   - Modbridge-Service neu starten"
         echo "  status    - Status des Modbridge-Service anzeigen"
+        echo "  logs      - Letzte Log-Einträge anzeigen (Standard: 50 Zeilen)"
         echo ""
         echo "Features:"
         echo "  ✓ Lädt vorkompilierte Binaries von GitHub Releases herunter"
@@ -476,11 +601,15 @@ case "$1" in
         echo "  ✓ Zeigt verfügbare Versionsnummern im Auswahlmenü an"
         echo "  ✓ Fallback: automatischer Quellcode-Build (inkl. Go-Installation)"
         echo "  ✓ Autostart via systemd"
+        echo "  ✓ Automatischer Rollback bei fehlgeschlagenem Update"
+        echo "  ✓ Backup-Verwaltung (behält die letzten 3 Backups)"
         echo ""
         echo "Beispiele:"
         echo "  sudo bash modbridge.sh install    # Installieren"
         echo "  sudo bash modbridge.sh update     # Aktualisieren"
+        echo "  sudo bash modbridge.sh uninstall  # Deinstallieren"
         echo "  sudo bash modbridge.sh status     # Status prüfen"
+        echo "  sudo bash modbridge.sh logs       # Logs anzeigen"
         exit 1
         ;;
 esac
