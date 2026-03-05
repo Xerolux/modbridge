@@ -2,7 +2,7 @@
  import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
  import { useEventSource } from '../utils/eventSource';
  import Checkbox from 'primevue/checkbox';
- import axios from 'axios';
+ import axios from '../axios.js';
 
  const logs = ref([]);
  const isConnected = ref(false);
