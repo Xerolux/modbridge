@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"modbusproxy/pkg/auth"
 	"modbusproxy/pkg/config"
 	"modbusproxy/pkg/logger"
@@ -14,6 +15,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -341,6 +343,8 @@ func (s *Server) handleProxiesStream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
+	s.log.Info("API", fmt.Sprintf("handleProxies called: %s %s", r.Method, r.URL.Path))
+
 	if r.Method == http.MethodGet {
 		_ = json.NewEncoder(w).Encode(s.mgr.GetProxies())
 		return
@@ -376,10 +380,93 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPut {
-		var req config.ProxyConfig
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// Read raw JSON to handle flexible tags field
+		var rawMap map[string]interface{}
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			s.log.Error("API", fmt.Sprintf("Failed to read body: %v", err))
+			http.Error(w, "Failed to read body", http.StatusBadRequest)
+			return
+		}
+
+		s.log.Info("API", fmt.Sprintf("PUT /api/proxies body: %s", string(bodyBytes)))
+
+		if err := json.Unmarshal(bodyBytes, &rawMap); err != nil {
+			s.log.Error("API", fmt.Sprintf("Failed to unmarshal to map: %v", err))
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
+		}
+
+		// Build ProxyConfig manually from rawMap to handle tags flexibly
+		req := config.ProxyConfig{}
+
+		// Parse required fields
+		if v, ok := rawMap["id"].(string); ok {
+			req.ID = v
+		}
+		if v, ok := rawMap["name"].(string); ok {
+			req.Name = v
+		}
+		if v, ok := rawMap["listen_addr"].(string); ok {
+			req.ListenAddr = v
+		}
+		if v, ok := rawMap["target_addr"].(string); ok {
+			req.TargetAddr = v
+		}
+		if v, ok := rawMap["enabled"].(bool); ok {
+			req.Enabled = v
+		}
+		if v, ok := rawMap["paused"].(bool); ok {
+			req.Paused = v
+		}
+		if v, ok := rawMap["description"].(string); ok {
+			req.Description = v
+		}
+
+		// Parse numeric fields
+		if v, ok := rawMap["connection_timeout"].(float64); ok {
+			req.ConnectionTimeout = int(v)
+		}
+		if v, ok := rawMap["read_timeout"].(float64); ok {
+			req.ReadTimeout = int(v)
+		}
+		if v, ok := rawMap["max_retries"].(float64); ok {
+			req.MaxRetries = int(v)
+		}
+		if v, ok := rawMap["max_read_size"].(float64); ok {
+			req.MaxReadSize = int(v)
+		}
+
+		// Handle tags field flexibly (string or array)
+		if tagsVal, ok := rawMap["tags"]; ok {
+			switch v := tagsVal.(type) {
+			case string:
+				if v == "" {
+					req.Tags = config.FlexibleTags{}
+				} else {
+					tags := strings.Split(v, ",")
+					result := make([]string, 0, len(tags))
+					for _, tag := range tags {
+						trimmed := strings.TrimSpace(tag)
+						if trimmed != "" {
+							result = append(result, trimmed)
+						}
+					}
+					req.Tags = config.FlexibleTags(result)
+				}
+			case []interface{}:
+				result := make([]string, 0, len(v))
+				for _, item := range v {
+					if str, ok := item.(string); ok {
+						result = append(result, str)
+					}
+				}
+				req.Tags = config.FlexibleTags(result)
+			default:
+				req.Tags = config.FlexibleTags{}
+			}
+		} else {
+			req.Tags = config.FlexibleTags{}
 		}
 
 		if err := s.validator.ValidateProxyConfig(req); err != nil {

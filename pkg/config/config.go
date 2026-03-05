@@ -2,9 +2,56 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"strings"
 	"sync"
 )
+
+// FlexibleTags is a custom type that can unmarshal both string and array for tags
+type FlexibleTags []string
+
+// UnmarshalJSON implements custom JSON unmarshaling for FlexibleTags
+func (ft *FlexibleTags) UnmarshalJSON(data []byte) error {
+	// Handle null
+	if string(data) == "null" {
+		*ft = FlexibleTags{}
+		return nil
+	}
+
+	// Try to unmarshal as string first
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		// Split comma-separated string into array
+		if str == "" {
+			*ft = FlexibleTags{}
+		} else {
+			tags := strings.Split(str, ",")
+			result := make([]string, 0, len(tags))
+			for _, tag := range tags {
+				trimmed := strings.TrimSpace(tag)
+				if trimmed != "" {
+					result = append(result, trimmed)
+				}
+			}
+			*ft = FlexibleTags(result)
+		}
+		return nil
+	}
+
+	// Try to unmarshal as array
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err != nil {
+		return err
+	}
+	*ft = FlexibleTags(arr)
+	return nil
+}
+
+// MarshalJSON marshals FlexibleTags as JSON array
+func (ft FlexibleTags) MarshalJSON() ([]byte, error) {
+	return json.Marshal([]string(ft))
+}
 
 // ProxyConfig defines the configuration for a single proxy instance.
 type ProxyConfig struct {
@@ -19,7 +66,7 @@ type ProxyConfig struct {
 	MaxRetries        int      `json:"max_retries"`        // New: Max retry attempts (default: 3)
 	Description       string   `json:"description"`        // New: User description
 	MaxReadSize       int      `json:"max_read_size"`
-	Tags              []string `json:"tags"`
+	Tags              FlexibleTags `json:"tags"`
 }
 
 // Config holds the global configuration.
@@ -174,7 +221,7 @@ func (m *Manager) deepCopyConfig(c Config) Config {
 			// Then copy the Tags slice if present
 			result.Proxies[i] = c.Proxies[i]
 			if c.Proxies[i].Tags != nil {
-				result.Proxies[i].Tags = make([]string, len(c.Proxies[i].Tags))
+				result.Proxies[i].Tags = make(FlexibleTags, len(c.Proxies[i].Tags))
 				copy(result.Proxies[i].Tags, c.Proxies[i].Tags)
 			}
 		}
@@ -225,5 +272,12 @@ func (m *Manager) Update(fn func(*Config) error) error {
 
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
-	return enc.Encode(m.cfg)
+
+	// Debug logging
+	if err := enc.Encode(m.cfg); err != nil {
+		fmt.Printf("ERROR encoding config: %v\n", err)
+		return err
+	}
+	fmt.Printf("Config saved successfully\n")
+	return nil
 }

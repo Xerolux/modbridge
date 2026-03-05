@@ -5,20 +5,22 @@
   "proxies": [
     {
       "id": "21e71152-3866-43ac-891d-c5ec85fa1e98",
-      "name": "SolarEdge Proxy",
-      "listen_addr": ":5020",
+      "name": "Port 8081 Test",
+      "listen_addr": ":502",
       "target_addr": "192.168.178.198:1502",
       "enabled": true,
       "paused": false,
-      "connection_timeout": 30,
+      "connection_timeout": 10,
       "read_timeout": 30,
       "max_retries": 3,
-      "description": "Verbindet sich mit SolarEdge Anlage und verteilt Daten an mehrere Clients",
+      "description": "Test on 8081",
       "max_read_size": 0,
-      "tags": null
+      "tags": [
+        "test"
+      ]
     }
   ],
-  "log_level": "INFO",
+  "log_level": "DEBUG",
   "log_max_size": 100,
   "log_max_files": 10,
   "log_max_age_days": 30,
