@@ -68,7 +68,16 @@
             />
           </template>
         </Column>
-        <Column field="mac" header="MAC-Adresse" sortable></Column>
+        <Column field="mac" header="MAC-Adresse" sortable>
+          <template #body="{ data }">
+            <span
+              :title="data.mac === 'unknown' ? 'N/A (TCP Remote - MAC nur im lokalen Netzwerk direkt ermittelbar)' : data.mac"
+              class="cursor-help"
+            >
+              {{ data.mac === 'unknown' ? 'N/A' : data.mac }}
+            </span>
+          </template>
+        </Column>
         <Column field="firstSeen" header="Erstmals gesehen" sortable>
           <template #body="{ data }">
             {{ formatDate(data.firstSeen) }}
@@ -86,12 +95,14 @@
                 icon="pi pi-eye"
                 size="small"
                 text
+                title="Details anzeigen"
                 @click="showDeviceDetails(data)"
               />
               <Button
                 icon="pi pi-history"
                 size="small"
                 text
+                title="Verlauf anzeigen"
                 @click="showConnectionHistory(data.ip)"
               />
             </div>
