@@ -205,7 +205,63 @@ jobs:
           retention-days: 7
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # 5. Build & Push Docker Image (Linux amd64 + arm64)
+  # 5. Build Headless Binaries (Linux amd64 + arm64 + arm)
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-headless-binaries:
+    name: Build Headless Binary (${{ matrix.suffix }})
+    runs-on: ubuntu-latest
+    needs: [prepare, test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64-headless
+            packages: ''
+            cc: ''
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64-headless
+            packages: gcc-aarch64-linux-gnu
+            cc: aarch64-linux-gnu-gcc
+          - goos: linux
+            goarch: arm
+            goarm: '6'
+            suffix: linux-arm-headless
+            packages: gcc-arm-linux-gnueabihf
+            cc: arm-linux-gnueabihf-gcc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Install cross-compiler
+        if: matrix.packages != ''
+        run: sudo apt-get update && sudo apt-get install -y ${{ matrix.packages }}
+      - name: Build headless binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: 1
+          CC: ${{ matrix.cc }}
+        run: |
+          go build \
+            -tags headless \
+            -ldflags="-s -w -X main.Version=${{ needs.prepare.outputs.tag }}" \
+            -trimpath \
+            -o "modbridge-${{ matrix.suffix }}" \
+            .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: modbridge-${{ matrix.suffix }}
+          path: modbridge-${{ matrix.suffix }}
+          retention-days: 7
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # 6. Build & Push Docker Image (Linux amd64 + arm64)
   # AUSKOMMENTIERT: Docker build wurde in separaten Workflow ausgelagert (docker.yml)
   # Kann manuell über GitHub Actions ausgelöst werden
   # ─────────────────────────────────────────────────────────────────────────────
@@ -239,7 +295,7 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [prepare, build-binaries]
+    needs: [prepare, build-binaries, build-headless-binaries]
     steps:
       - uses: actions/checkout@v4
       - name: Download all artifacts
@@ -272,11 +328,20 @@ jobs:
             Docker Images werden separat über den "Docker Build & Push" Workflow erstellt.
             Bitte führe diesen Workflow manuell aus nach dem Release.
 
-            ### Binaries
+            ### Binaries (mit WebUI)
             | Plattform | Datei |
             |-----------|-------|
             | Linux x64 | `modbridge-linux-amd64` |
             | Linux ARM64 | `modbridge-linux-arm64` |
+
+            ### Headless Binaries (ohne WebUI)
+            Kleinere Binaries ohne eingebettetes Frontend – ideal für Server und Embedded-Systeme.
+
+            | Plattform | Datei |
+            |-----------|-------|
+            | Linux x64 | `modbridge-linux-amd64-headless` |
+            | Linux ARM64 | `modbridge-linux-arm64-headless` |
+            | Linux ARMv6 (32-bit) | `modbridge-linux-arm-headless` |
 
             SHA256-Prüfsummen: siehe `checksums.txt`
         env:
