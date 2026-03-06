@@ -1,156 +1,129 @@
 #!/bin/bash
 
-# modbridge.sh
-# Automates installation, updates, and service management for Modbridge.
+# ═══════════════════════════════════════════════════════════════════════════════
+# ModBridge Installation Script
 # Features:
-# - Downloads precompiled binaries from GitHub Releases (no build required)
-# - Automatic Go installation as fallback for building from source
-# - Automatic service startup and management via systemd
+# - Interactive graphical menu (whiptail/dialog)
+# - Auto-detect system architecture
+# - Choose between WebUI and Headless versions
+# - Download correct binary from GitHub Releases
+# - Automatic service management
+# ═══════════════════════════════════════════════════════════════════════════════
 
 set -e
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
 INSTALL_DIR="/opt/modbridge"
 SERVICE_NAME="modbridge.service"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}"
-LOG_FILE="/var/log/modbridge-manager.log"
-REPO_URL="https://github.com/Xerolux/modbridge.git"
+LOG_FILE="/var/log/modbridge-install.log"
+REPO_URL="https://github.com/Xerolux/modbridge"
 RELEASES_API="https://api.github.com/repos/Xerolux/modbridge/releases"
 
-# Global variable set by select_modbridge_release()
-MODBRIDGE_VERSION=""
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Helpers
-# ──────────────────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# Helper Functions
+# ═══════════════════════════════════════════════════════════════════════════════
 
 log() {
-    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+    echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+log_info() {
+    echo -e "${CYAN}[INFO]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+print_header() {
+    echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║${NC} ${BOLD}                  ModBridge Installer                      ${NC} ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}                    Version 2.0 - Enhanced                       ${NC} ${CYAN}║${NC}"
+    echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
 }
 
 check_root() {
     if [ "$EUID" -ne 0 ]; then
-        echo "Bitte als root ausführen (z.B. mit sudo)."
+        log_error "Bitte als root ausführen (z.B. mit sudo)"
         exit 1
     fi
 }
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Go installation (only needed when building from source)
-# ──────────────────────────────────────────────────────────────────────────────
-
-install_go() {
-    log "Go wird installiert. Verfügbare Versionen werden abgerufen..."
-
-    ARCH=$(uname -m)
-    case "$ARCH" in
-        x86_64)  GOARCH="amd64" ;;
-        aarch64) GOARCH="arm64" ;;
-        armv7l)  GOARCH="armv6l" ;;
-        *) log "Fehler: Nicht unterstützte Architektur: $ARCH"; exit 1 ;;
-    esac
-
-    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-
-    echo ""
-    echo "╔═══════════════════════════════════════════════════════════════╗"
-    echo "║              Welche Go-Version möchtest du?                  ║"
-    echo "╠═══════════════════════════════════════════════════════════════╣"
-    echo "║  [1] Release  →  Stabile Version (empfohlen)                 ║"
-    echo "║  [2] Beta     →  Vorabversion (neuere Features)              ║"
-    echo "║  [3] Alpha    →  Entwicklungsversion (bleeding edge)         ║"
-    echo "╚═══════════════════════════════════════════════════════════════╝"
-    read -rp "Wahl [1/2/3] (Standard: 1 - Release): " channel_choice
-    channel_choice=${channel_choice:-1}
-
-    case "$channel_choice" in
-        1|release|Release) GO_CHANNEL="Release" ;;
-        2|beta|Beta)       GO_CHANNEL="Beta" ;;
-        3|alpha|Alpha)     GO_CHANNEL="Alpha" ;;
-        *) log "Ungültige Eingabe, verwende Release"; GO_CHANNEL="Release" ;;
-    esac
-
-    log "Neueste $GO_CHANNEL Go-Version wird ermittelt..."
-
-    GO_VERSIONS=$(curl -sSL "https://go.dev/dl/?mode=json" | grep -o '"version":"go[^"]*"' | cut -d'"' -f4 | sort -V | tac)
-
-    LATEST_GO=""
-    for version in $GO_VERSIONS; do
-        if [[ "$GO_CHANNEL" == "Release" ]] && [[ ! "$version" =~ (alpha|beta|rc) ]]; then
-            LATEST_GO="$version"; break
-        elif [[ "$GO_CHANNEL" == "Beta" ]] && [[ "$version" =~ beta ]]; then
-            LATEST_GO="$version"; break
-        elif [[ "$GO_CHANNEL" == "Alpha" ]] && [[ "$version" =~ alpha ]]; then
-            LATEST_GO="$version"; break
-        fi
-    done
-
-    if [ -z "$LATEST_GO" ]; then
-        LATEST_GO=$(echo "$GO_VERSIONS" | head -n 1)
-        log "Warnung: Kein $GO_CHANNEL-Release gefunden, verwende: $LATEST_GO"
-    fi
-
-    DOWNLOAD_URL="https://go.dev/dl/${LATEST_GO}.${OS}-${GOARCH}.tar.gz"
-    TEMP_DIR="/tmp/go_install_$$"
-    TAR_FILE="${TEMP_DIR}/${LATEST_GO}.${OS}-${GOARCH}.tar.gz"
-
-    mkdir -p "$TEMP_DIR"
-    log "Go $LATEST_GO ($GO_CHANNEL) wird heruntergeladen..."
-
-    if ! curl -fL --progress-bar "$DOWNLOAD_URL" -o "$TAR_FILE"; then
-        log "Fehler: Go-Download fehlgeschlagen."
-        rm -rf "$TEMP_DIR"
-        exit 1
-    fi
-
-    log "Alte Go-Installation wird entfernt (falls vorhanden)..."
-    rm -rf /usr/local/go
-
-    log "Go $LATEST_GO wird installiert..."
-    tar -C /usr/local -xzf "$TAR_FILE"
-    rm -rf "$TEMP_DIR"
-
-    if [ ! -f "/etc/profile.d/go.sh" ]; then
-        echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
-        chmod +x /etc/profile.d/go.sh
-    fi
-
-    log "Go-Installation abgeschlossen."
-    /usr/local/go/bin/go version | tee -a "$LOG_FILE"
-}
-
-check_go() {
-    if ! command -v go &>/dev/null && ! [ -x "/usr/local/go/bin/go" ]; then
-        log "Go ist nicht installiert."
-        install_go
-        export PATH=$PATH:/usr/local/go/bin
-    else
-        log "Go gefunden: $(go version 2>/dev/null || /usr/local/go/bin/go version)"
-    fi
-}
-
-check_base_dependencies() {
-    log "Abhängigkeiten werden geprüft..."
+check_dependencies() {
+    log "Prüfe Abhängigkeiten..."
     local missing=()
-    command -v git  &>/dev/null || missing+=("git")
-    command -v curl &>/dev/null || missing+=("curl")
-    command -v file &>/dev/null || missing+=("file")
-    command -v lsof &>/dev/null || missing+=("lsof")
+    command -v curl  &>/dev/null || missing+=("curl")
+    command -v jq    &>/dev/null || missing+=("jq")
+    command -v file  &>/dev/null || missing+=("file")
+    command -v lsof  &>/dev/null || missing+=("lsof")
 
     if [ ${#missing[@]} -gt 0 ]; then
-        log "Fehler: Folgende Programme fehlen: ${missing[*]}"
-        log "Installation z.B. mit: apt install ${missing[*]}"
+        log_error "Fehlende Programme: ${missing[*]}"
+        log_info "Installation: apt install ${missing[*]}"
         exit 1
     fi
 }
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Process & Port cleanup
-# ──────────────────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# Architecture Detection
+# ═══════════════════════════════════════════════════════════════════════════════
+
+detect_architecture() {
+    local ARCH=$(uname -m)
+    local DETECTED_ARCH=""
+    local ARCH_NAME=""
+
+    case "$ARCH" in
+        x86_64)
+            DETECTED_ARCH="amd64"
+            ARCH_NAME="Intel/AMD 64-bit (Standard Server)"
+            ;;
+        aarch64)
+            DETECTED_ARCH="arm64"
+            ARCH_NAME="ARM 64-bit (Raspberry Pi 4/5, ARM Server)"
+            ;;
+        armv7l|armv6l)
+            DETECTED_ARCH="arm"
+            ARCH_NAME="ARM 32-bit (Raspberry Pi Zero/1/2/3, 32-bit OS)"
+            ;;
+        i386|i686)
+            DETECTED_ARCH="386"
+            ARCH_NAME="Intel 32-bit (veraltet)"
+            ;;
+        *)
+            log_error "Unbekannte Architektur: $ARCH"
+            exit 1
+            ;;
+    esac
+
+    echo "$DETECTED_ARCH|$ARCH_NAME"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Cleanup Functions
+# ═══════════════════════════════════════════════════════════════════════════════
 
 kill_all_modbridge_processes() {
     log "🔍 Suche nach laufenden Modbridge-Prozessen..."
 
-    # Find modbridge processes, but exclude the script itself (modbridge.sh)
     local PIDS
     PIDS=$(pgrep -x "modbridge" 2>/dev/null | grep -v "^$$\$" || true)
 
@@ -160,13 +133,11 @@ kill_all_modbridge_processes() {
     fi
 
     if [ -n "$PIDS" ]; then
-        log "⚠ Gefundene Prozesse: $PIDS"
+        log "⚠  Gefundene Prozesse: $PIDS"
         log "🔪 Beende alle Modbridge-Prozesse..."
 
-        # First try graceful SIGTERM
         kill $PIDS 2>/dev/null || true
 
-        # Wait up to 5 seconds for processes to terminate
         local count=0
         while [ $count -lt 10 ]; do
             sleep 0.5
@@ -178,18 +149,16 @@ kill_all_modbridge_processes() {
             count=$((count + 1))
         done
 
-        # If still running, force kill with SIGKILL
         PIDS=$(pgrep -x "modbridge" 2>/dev/null || true)
         if [ -n "$PIDS" ]; then
-            log "⚠ Einige Prozesse laufen noch, erzwinges Beendigung (SIGKILL)..."
+            log_warn "Einige Prozesse laufen noch, erzwinges Beendigung (SIGKILL)..."
             kill -9 $PIDS 2>/dev/null || true
             sleep 1
         fi
 
-        # Final check
         PIDS=$(pgrep -x "modbridge" 2>/dev/null || true)
         if [ -n "$PIDS" ]; then
-            log "❌ FEHLER: Konnte Prozesse nicht beenden: $PIDS"
+            log_error "Konnte Prozesse nicht beenden: $PIDS"
             return 1
         else
             log "✓ Alle Modbridge-Prozesse beendet."
@@ -220,7 +189,7 @@ check_and_wait_for_ports() {
         return 0
     fi
 
-    log "⚠ Blockierte Ports gefunden: ${BLOCKED_PORTS[*]}"
+    log "⚠  Blockierte Ports gefunden: ${BLOCKED_PORTS[*]}"
     log "⏳ Warte auf Freigabe der Ports (max ${MAX_WAIT}s)..."
 
     while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
@@ -228,7 +197,7 @@ check_and_wait_for_ports() {
         WAIT_COUNT=$((WAIT_COUNT + 1))
 
         BLOCKED_PORTS=()
-        for port in $PORTS; do
+        for port in "${BLOCKED_PORTS[@]}"; do
             if lsof -i ":$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
                 BLOCKED_PORTS+=("$port")
             fi
@@ -244,36 +213,26 @@ check_and_wait_for_ports() {
         fi
     done
 
-    log "❌ FEHLER: Ports werden nicht freigegeben: ${BLOCKED_PORTS[*]}"
-    log "   Folgende Prozesse blockieren die Ports:"
-    for port in "${BLOCKED_PORTS[@]}"; do
-        log "   Port $port:"
-        lsof -i ":$port" -sTCP:LISTEN 2>/dev/null | while read -r line; do
-            log "     $line"
-        done
-    done
+    log_error "Ports werden nicht freigegeben: ${BLOCKED_PORTS[*]}"
     return 1
 }
 
 cleanup_modbridge() {
     log "🧹 Cleanup: Beende alle Prozesse und gib Ports frei..."
 
-    # 1. Stop systemd service if active
     if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-        log "⏹ Stoppe systemd-Service..."
+        log "⏹  Stoppe systemd-Service..."
         systemctl stop "$SERVICE_NAME" 2>/dev/null || true
         sleep 1
     fi
 
-    # 2. Kill ALL modbridge processes (including orphans)
     if ! kill_all_modbridge_processes; then
-        log "❌ Konnte nicht alle Prozesse beenden. Abbruch."
+        log_error "Cleanup fehlgeschlagen. Abbruch."
         return 1
     fi
 
-    # 3. Wait for ports to be released
     if ! check_and_wait_for_ports; then
-        log "❌ Ports werden nicht freigegeben. Abbruch."
+        log_error "Ports werden nicht freigegeben. Abbruch."
         return 1
     fi
 
@@ -281,227 +240,152 @@ cleanup_modbridge() {
     return 0
 }
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Release selection
-# Sets global MODBRIDGE_VERSION – does NOT use stdout for the result so that
-# the function can be called normally (not via $(...) substitution).
-# ──────────────────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# Release Download
+# ═══════════════════════════════════════════════════════════════════════════════
 
-select_modbridge_release() {
-    MODBRIDGE_VERSION=""
-
-    log "Verfügbare Modbridge-Releases werden von GitHub abgerufen..."
-    local ALL_RELEASES
-    ALL_RELEASES=$(curl -sSL "$RELEASES_API?per_page=20" 2>/dev/null)
-
-    if [ -z "$ALL_RELEASES" ]; then
-        log "⚠ GitHub-Releases konnten nicht abgerufen werden."
-        return 1
+fetch_available_versions() {
+    log "Frage verfügbare Versionen ab..."
+    local VERSIONS=$(curl -s "$RELEASES_API" | jq -r '.[].tag_name' | head -10)
+    if [ -z "$VERSIONS" ]; then
+        log_error "Keine Versionen gefunden"
+        exit 1
     fi
-
-    # Extract latest tag for each channel
-    # JSON lines look like:  "tag_name": "v0.0.3-beta",
-    local LATEST_RELEASE LATEST_BETA LATEST_ALPHA
-    LATEST_RELEASE=$(echo "$ALL_RELEASES" | grep '"tag_name"' | grep -v 'beta\|alpha\|rc' \
-        | head -n 1 | grep -o '"v[^"]*"' | tr -d '"')
-    LATEST_BETA=$(echo "$ALL_RELEASES" | grep '"tag_name"' | grep 'beta' \
-        | head -n 1 | grep -o '"v[^"]*"' | tr -d '"')
-    LATEST_ALPHA=$(echo "$ALL_RELEASES" | grep '"tag_name"' | grep 'alpha' \
-        | head -n 1 | grep -o '"v[^"]*"' | tr -d '"')
-
-    # Build display labels
-    local RELEASE_LABEL BETA_LABEL ALPHA_LABEL
-    RELEASE_LABEL="${LATEST_RELEASE:-nicht verfügbar}"
-    BETA_LABEL="${LATEST_BETA:-nicht verfügbar}"
-    ALPHA_LABEL="${LATEST_ALPHA:-nicht verfügbar}"
-
-    echo ""
-    echo "╔═══════════════════════════════════════════════════════════════╗"
-    echo "║         Welche Modbridge-Version möchtest du?                ║"
-    echo "╠═══════════════════════════════════════════════════════════════╣"
-    printf "║  [1] Release  (Stabil)      →  %-30s ║\n" "$RELEASE_LABEL"
-    printf "║  [2] Beta     (Vorabversion) →  %-30s ║\n" "$BETA_LABEL"
-    printf "║  [3] Alpha    (Entwicklung)  →  %-30s ║\n" "$ALPHA_LABEL"
-    echo "╚═══════════════════════════════════════════════════════════════╝"
-    read -rp "Wahl [1/2/3] (Standard: 1 - Release): " release_choice
-    release_choice=${release_choice:-1}
-
-    local SELECTED_VERSION=""
-    case "$release_choice" in
-        1|release|Release) SELECTED_VERSION="$LATEST_RELEASE" ;;
-        2|beta|Beta)       SELECTED_VERSION="$LATEST_BETA" ;;
-        3|alpha|Alpha)     SELECTED_VERSION="$LATEST_ALPHA" ;;
-        *) log "Ungültige Eingabe, verwende Release."; SELECTED_VERSION="$LATEST_RELEASE" ;;
-    esac
-
-    # Fallback: if chosen channel has no version, use the absolute latest
-    if [ -z "$SELECTED_VERSION" ]; then
-        log "⚠ Für diesen Kanal ist keine Version verfügbar. Neueste verfügbare Version wird verwendet."
-        SELECTED_VERSION=$(echo "$ALL_RELEASES" | grep '"tag_name"' \
-            | head -n 1 | grep -o '"v[^"]*"' | tr -d '"')
-    fi
-
-    if [ -z "$SELECTED_VERSION" ]; then
-        log "⚠ Keine Releases auf GitHub gefunden."
-        return 1
-    fi
-
-    log "Gewählte Version: $SELECTED_VERSION"
-    MODBRIDGE_VERSION="$SELECTED_VERSION"
-    return 0
+    echo "$VERSIONS"
 }
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Binary download (primary installation method – no Go required)
-# ──────────────────────────────────────────────────────────────────────────────
 
 download_modbridge_binary() {
-    log "Precompiled Modbridge-Binary wird heruntergeladen..."
+    local VERSION=$1
+    local VARIANT=$2  # "full" or "headless"
+    local ARCH=$3
 
-    local ARCH GOARCH
-    ARCH=$(uname -m)
-    case "$ARCH" in
-        x86_64)  GOARCH="amd64" ;;
-        aarch64) GOARCH="arm64" ;;
-        *) log "⚠ Keine vorkompilierte Binary für Architektur '$ARCH' verfügbar. Quellcode-Build wird gestartet."; return 1 ;;
-    esac
-    log "Systemarchitektur: linux-${GOARCH}"
-
-    # Let user choose the release (result in $MODBRIDGE_VERSION)
-    if ! select_modbridge_release; then
-        log "⚠ Release-Auswahl fehlgeschlagen."
-        return 1
+    local BINARY_NAME="modbridge-linux-${ARCH}"
+    if [ "$VARIANT" = "headless" ]; then
+        BINARY_NAME="${BINARY_NAME}-headless"
     fi
 
-    local RELEASE_TAG="$MODBRIDGE_VERSION"
+    local DOWNLOAD_URL="${REPO_URL}/releases/download/${VERSION}/${BINARY_NAME}"
+    local TEMP_FILE="/tmp/${BINARY_NAME}"
 
-    log "Release-Details für $RELEASE_TAG werden abgerufen..."
-    local RELEASE_JSON
-    RELEASE_JSON=$(curl -sSL "$RELEASES_API/tags/$RELEASE_TAG" 2>/dev/null)
+    log "Lade herunter: $BINARY_NAME"
+    log "URL: $DOWNLOAD_URL"
 
-    if [ -z "$RELEASE_JSON" ]; then
-        log "⚠ Release-Details für $RELEASE_TAG konnten nicht abgerufen werden."
+    if curl -L -o "$TEMP_FILE" "$DOWNLOAD_URL" --progress-bar; then
+        # Verify it's a valid binary
+        if file "$TEMP_FILE" | grep -q "ELF"; then
+            mv "$TEMP_FILE" "$INSTALL_DIR/modbridge"
+            chmod +x "$INSTALL_DIR/modbridge"
+            log "✓ Binary erfolgreich heruntergeladen"
+            return 0
+        else
+            log_error "Heruntergeladene Datei ist keine gültige Binary"
+            rm -f "$TEMP_FILE"
+            return 1
+        fi
+    else
+        log_error "Download fehlgeschlagen"
+        rm -f "$TEMP_FILE"
         return 1
     fi
-
-    local ASSET_COUNT
-    ASSET_COUNT=$(echo "$RELEASE_JSON" | grep -o '"browser_download_url"' | wc -l)
-    if [ "$ASSET_COUNT" -eq 0 ]; then
-        log "⚠ $RELEASE_TAG enthält keine Release-Assets (keine vorkompilierten Binaries)."
-        return 1
-    fi
-
-    local BINARY_NAME="modbridge-linux-${GOARCH}"
-    local DOWNLOAD_URL
-    DOWNLOAD_URL=$(echo "$RELEASE_JSON" \
-        | grep -o "\"browser_download_url\": \"[^\"]*${BINARY_NAME}[^\"]*\"" \
-        | head -n 1 | cut -d'"' -f4)
-
-    if [ -z "$DOWNLOAD_URL" ]; then
-        log "⚠ Kein Binary '${BINARY_NAME}' in Release $RELEASE_TAG gefunden."
-        log "  Vorhandene Assets: $(echo "$RELEASE_JSON" | grep -o '"name": "[^"]*"' | grep -v 'tag_name\|target' | cut -d'"' -f4 | tr '\n' ' ')"
-        return 1
-    fi
-
-    local TEMP_BIN="/tmp/modbridge_temp_$$"
-    log "✓ Lade $RELEASE_TAG binary herunter..."
-    log "  URL: $DOWNLOAD_URL"
-
-    if ! curl -fL --progress-bar "$DOWNLOAD_URL" -o "$TEMP_BIN"; then
-        log "⚠ Download fehlgeschlagen."
-        rm -f "$TEMP_BIN"
-        return 1
-    fi
-
-    chmod +x "$TEMP_BIN"
-
-    # Verify it is a valid ELF executable
-    if ! file "$TEMP_BIN" 2>/dev/null | grep -qi "ELF"; then
-        log "⚠ Heruntergeladene Datei ist kein gültiges ELF-Binary."
-        rm -f "$TEMP_BIN"
-        return 1
-    fi
-
-    mkdir -p "$INSTALL_DIR"
-    mv "$TEMP_BIN" "$INSTALL_DIR/modbridge"
-    log "✓ Modbridge $RELEASE_TAG erfolgreich heruntergeladen und installiert."
-    return 0
 }
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Source build (fallback)
-# ──────────────────────────────────────────────────────────────────────────────
-
-build_modbridge_from_source() {
-    log "Quellcode-Build wird gestartet (dies kann einige Minuten dauern)..."
-
-    check_go   # Install Go only when actually needed
-
-    if [ ! -d "$INSTALL_DIR" ]; then
-        log "Repository wird geklont..."
-        git clone "$REPO_URL" "$INSTALL_DIR"
-    else
-        log "Repository existiert bereits. Wird aktualisiert..."
-        cd "$INSTALL_DIR"
-        git pull
-    fi
-
-    cd "$INSTALL_DIR"
-
-    log "Frontend wird gebaut..."
-    if [ -f "build.sh" ]; then
-        chmod +x build.sh
-        ./build.sh
-    else
-        cd frontend
-        export NODE_OPTIONS="--max-old-space-size=2048"
-        log "  npm-Abhängigkeiten werden installiert..."
-        npm install >/dev/null 2>&1 || npm install
-        log "  Frontend wird kompiliert..."
-        npm run build
-        cd ..
-        rm -rf pkg/web/dist/*
-        cp -r frontend/dist/* pkg/web/dist/
-    fi
-
-    log "Go-Abhängigkeiten werden heruntergeladen..."
-    go mod download
-    go mod verify
-
-    log "Go-Binary wird kompiliert..."
-    CGO_ENABLED=1 go build -ldflags="-s -w" -o modbridge ./main.go
-
-    log "✓ Build erfolgreich abgeschlossen."
-}
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Install / Update / Service commands
-# ──────────────────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# Installation
+# ═══════════════════════════════════════════════════════════════════════════════
 
 install_modbridge() {
     check_root
-    check_base_dependencies
+    check_dependencies
 
-    echo ""
-    log "🚀 Modbridge-Installation wird gestartet..."
-    log "   Installationsverzeichnis: $INSTALL_DIR"
+    print_header
 
-    # Cleanup any existing instances
-    if ! cleanup_modbridge; then
-        log "❌ Cleanup fehlgeschlagen. Installation abgebrochen."
+    # Detect architecture
+    IFS='|' read -r ARCH_INFO ARCH_NAME <<< "$(detect_architecture)"
+    log "Erkannte Architektur: ${BOLD}$ARCH_NAME${NC}"
+
+    # Check if whiptail is available
+    if ! command -v whiptail &>/dev/null; then
+        log_error "whiptail ist nicht installiert"
+        log_info "Installation: apt install whiptail"
         exit 1
     fi
 
-    mkdir -p "$INSTALL_DIR"
+    # Show welcome message
+    whiptail --title "ModBridge Installer" \
+            --yesno "Willkommen zum ModBridge Installer!\n\n\
+Erkannte Architektur: $ARCH_NAME\n\n\
+ModBridge wird jetzt installiert.\n\n\
+Fortfahren?" \
+            --yes-button "Ja" --no-button "Nein" \
+            15 80 || exit 0
 
-    # Prefer binary download; fall back to source build
-    if ! download_modbridge_binary; then
-        log "⚙ Kein vorkompiliertes Binary verfügbar – wird aus dem Quellcode gebaut..."
-        build_modbridge_from_source
+    # Choose WebUI variant
+    local WEBUI_VARIANT
+    if whiptail --title "WebUI oder Headless?" \
+               --radiolist "Wähle die Variante:\n\n\
+Mit WebUI = Größere Binary, mit grafischer Oberfläche\n\
+Headless = Kleinere Binary (22% weniger), nur Config-Datei" \
+               15 80 \
+               "Mit WebUI" "ON" \
+               "Ohne WebUI (Headless)" "OFF" \
+               2>&1 >/dev/tty; then
+        WEBUI_VARIANT="headless"
+    else
+        WEBUI_VARIANT="full"
     fi
 
-    log "⚙ systemd-Service wird konfiguriert..."
-    cat > "$SERVICE_FILE" << SYSTEMD_EOF
+    # Cleanup
+    if ! cleanup_modbridge; then
+        whiptail --title "Fehler" --msgbox "Cleanup fehlgeschlagen. Bitte manuell prüfen." 10 60
+        exit 1
+    fi
+
+    # Create directory
+    mkdir -p "$INSTALL_DIR"
+    log "Installationsverzeichnis: $INSTALL_DIR"
+
+    # Select version
+    local VERSIONS=$(fetch_available_versions)
+    local VERSION_LIST=""
+    local i=1
+    while IFS= read -r version; do
+        if [ $i -eq 1 ]; then
+            VERSION_LIST="$version $i ON"
+        else
+            VERSION_LIST="$VERSION_LIST $version $i OFF"
+        fi
+        i=$((i+1))
+    done <<< "$VERSIONS"
+
+    local SELECTED_VERSION
+    SELECTED_VERSION=$(whiptail --title "Version wählen" \
+                                    --radiolist "Wähle die zu installierende Version:" \
+                                    20 80 \
+                                    $VERSION_LIST \
+                                    3>&1 >/dev/tty)
+
+    if [ -z "$SELECTED_VERSION" ]; then
+        log_info "Installation abgebrochen"
+        exit 0
+    fi
+
+    log "Gewählte Version: $SELECTED_VERSION"
+
+    # Download binary
+    if ! download_modbridge_binary "$SELECTED_VERSION" "$WEBUI_VARIANT" "$ARCH_INFO"; then
+        whiptail --title "Download fehlgeschlagen" \
+                 --msgbox "Der Download ist fehlgeschlagen.\n\n\
+Bitte prüfen:\n\
+- Internetverbindung\n\
+- GitHub Repository verfügbar\n\
+- Version existiert" \
+                 12 60
+        exit 1
+    fi
+
+    # Create systemd service
+    log "Erstelle systemd-Service..."
+    cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=ModBridge Service
 After=network.target
@@ -510,104 +394,181 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/modbridge
-Restart=on-failure
-RestartSec=5
+ExecStart=$INSTALL_DIR/modbridge -config $INSTALL_DIR/config.json
+Restart=always
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
-SYSTEMD_EOF
+EOF
 
+    # Enable and start service
+    log "Aktiviere und starte Service..."
     systemctl daemon-reload
     systemctl enable "$SERVICE_NAME"
-
-    log "✅ Modbridge-Installation abgeschlossen!"
-    log "✓ Autostart aktiviert (systemd)"
-    log "⏳ Modbridge-Service wird gestartet..."
     systemctl start "$SERVICE_NAME"
-    log "✓ Modbridge-Service erfolgreich gestartet."
-    echo ""
-    log "Status prüfen mit: sudo modbridge status"
+
+    if systemctl is-active --quiet "$SERVICE_NAME"; then
+        log "✓ Service läuft erfolgreich"
+    else
+        log_error "Service konnte nicht gestartet werden"
+        systemctl status "$SERVICE_NAME" --no-pager
+        exit 1
+    fi
+
+    # Success message
+    whiptail --title "Installation erfolgreich" \
+             --msgbox "ModBridge $SELECTED_VERSION wurde erfolgreich installiert!\n\n\
+Version: $SELECTED_VERSION\n\
+Variante: $([ "$WEBUI_VARIANT" = "headless" ] && echo "Headless (ohne WebUI)" || echo "Full (mit WebUI)")\n\
+Architektur: $ARCH_NAME\n\n\
+Service: systemctl $SERVICE_NAME {start,stop,restart,status}\n\
+Config: $INSTALL_DIR/config.json\n\n\
+WebUI: http://$(hostname -I | awk '{print $1}'):8080" \
+             15 80
 }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Update
+# ═══════════════════════════════════════════════════════════════════════════════
 
 update_modbridge() {
     check_root
-    check_base_dependencies
+    check_dependencies
 
     if [ ! -d "$INSTALL_DIR" ]; then
-        log "❌ Modbridge ist nicht unter $INSTALL_DIR installiert. Bitte zuerst 'modbridge install' ausführen."
+        log_error "Modbridge ist nicht unter $INSTALL_DIR installiert"
+        log_info "Bitte zuerst 'modbridge.sh install' ausführen"
         exit 1
     fi
 
-    echo ""
-    log "🔄 Modbridge wird aktualisiert..."
+    print_header
 
-    # 1. Cleanup: Stop service, kill all processes, wait for ports
+    # Detect current architecture
+    IFS='|' read -r ARCH_INFO ARCH_NAME <<< "$(detect_architecture)"
+    log "Erkannte Architektur: ${BOLD}$ARCH_NAME${NC}"
+
+    # Check current installation
+    local CURRENT_VARIANT=""
+    if file "$INSTALL_DIR/modbridge" 2>/dev/null | grep -q "not stripped"; then
+        CURRENT_VARIANT="full (mit WebUI)"
+    else
+        # Try to detect from size
+        local SIZE=$(stat -f%z "$INSTALL_DIR/modbridge" 2>/dev/null || stat -c%s "$INSTALL_DIR/modbridge" 2>/dev/null)
+        if [ "$SIZE" -lt 8000000 ]; then
+            CURRENT_VARIANT="headless (ohne WebUI)"
+        else
+            CURRENT_VARIANT="full (mit WebUI)"
+        fi
+    fi
+
+    log "Aktuelle Installation: $CURRENT_VARIANT"
+
+    # Confirm update
+    whiptail --title "ModBridge Update" \
+            --yesno "ModBridge wird aktualisiert.\n\n\
+Architektur: $ARCH_NAME\n\
+Aktuell: $CURRENT_VARIANT\n\n\
+Fortfahren?" \
+            --yes-button "Ja" --no-button "Nein" \
+            15 80 || exit 0
+
+    # Choose variant
+    local WEBUI_VARIANT
+    if whiptail --title "WebUI oder Headless?" \
+               --defaultitem \
+               --radiolist "Wähle die Variante:\n\n\
+Mit WebUI = Größere Binary, mit grafischer Oberfläche\n\
+Headless = Kleinere Binary (22% weniger), nur Config-Datei" \
+               15 80 \
+               "Mit WebUI" "ON" \
+               "Ohne WebUI (Headless)" "OFF" \
+               2>&1 >/dev/tty; then
+        WEBUI_VARIANT="headless"
+    else
+        WEBUI_VARIANT="full"
+    fi
+
+    # Cleanup
     if ! cleanup_modbridge; then
-        log "❌ Cleanup fehlgeschlagen. Update abgebrochen."
+        whiptail --title "Fehler" --msgbox "Cleanup fehlgeschlagen. Bitte manuell prüfen." 10 60
         exit 1
     fi
 
-    # 2. Altes Binary sichern (falls vorhanden)
+    # Backup
     if [ -f "$INSTALL_DIR/modbridge" ]; then
         local BACKUP_NAME="modbridge.backup.$(date +%Y%m%d_%H%M%S)"
         cp "$INSTALL_DIR/modbridge" "$INSTALL_DIR/$BACKUP_NAME"
         log "✓ Altes Binary gesichert als: $BACKUP_NAME"
     fi
 
-    # 3. Altes Binary löschen
-    if [ -f "$INSTALL_DIR/modbridge" ]; then
-        rm -f "$INSTALL_DIR/modbridge"
-        log "✓ Altes Binary gelöscht."
-    fi
-
-    # 4. Neues Binary herunterladen oder bauen
-    if ! download_modbridge_binary; then
-        log "⚙ Kein Binary verfügbar – wird aus dem Quellcode gebaut..."
-        build_modbridge_from_source
-    fi
-
-    # 5. Prüfen ob neues Binary vorhanden ist
-    if [ ! -f "$INSTALL_DIR/modbridge" ]; then
-        log "❌ Update fehlgeschlagen: Kein neues Binary vorhanden."
-        # Rollback: Backup wiederherstellen falls vorhanden
-        local LATEST_BACKUP
-        LATEST_BACKUP=$(ls -t "$INSTALL_DIR"/modbridge.backup.* 2>/dev/null | head -n 1)
-        if [ -n "$LATEST_BACKUP" ]; then
-            cp "$LATEST_BACKUP" "$INSTALL_DIR/modbridge"
-            chmod +x "$INSTALL_DIR/modbridge"
-            log "⚠ Rollback: Altes Binary aus Backup wiederhergestellt."
+    # Select version
+    local VERSIONS=$(fetch_available_versions)
+    local VERSION_LIST=""
+    local i=1
+    while IFS= read -r version; do
+        if [ $i -eq 1 ]; then
+            VERSION_LIST="$version $i ON"
+        else
+            VERSION_LIST="$VERSION_LIST $version $i OFF"
         fi
-        # Service trotzdem starten versuchen
-        systemctl start "$SERVICE_NAME" 2>/dev/null || true
+        i=$((i+1))
+    done <<< "$VERSIONS"
+
+    local SELECTED_VERSION
+    SELECTED_VERSION=$(whiptail --title "Version wählen" \
+                                    --radiolist "Wähle die zu installierende Version:" \
+                                    20 80 \
+                                    $VERSION_LIST \
+                                    3>&1 >/dev/tty)
+
+    if [ -z "$SELECTED_VERSION" ]; then
+        log_info "Update abgebrochen"
+        exit 0
+    fi
+
+    log "Gewählte Version: $SELECTED_VERSION"
+
+    # Download binary
+    if ! download_modbridge_binary "$SELECTED_VERSION" "$WEBUI_VARIANT" "$ARCH_INFO"; then
+        whiptail --title "Download fehlgeschlagen" \
+                 --msgbox "Der Download ist fehlgeschlagen.\n\n\
+Bitte prüfen:\n\
+- Internetverbindung\n\
+- GitHub Repository verfügbar\n\
+- Version existiert" \
+                 12 60
         exit 1
     fi
 
-    # 6. Service wieder starten
-    log "▶ Modbridge-Service wird gestartet..."
-    systemctl start "$SERVICE_NAME"
+    # Restart service
+    log "Starte Service neu..."
+    systemctl restart "$SERVICE_NAME"
 
-    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-        log "✅ Update abgeschlossen. Service läuft."
+    if systemctl is-active --quiet "$SERVICE_NAME"; then
+        log "✓ Update erfolgreich. Service läuft."
     else
-        log "⚠ Service konnte nicht gestartet werden. Logs prüfen mit: journalctl -u $SERVICE_NAME -n 50"
-        # Rollback bei fehlgeschlagenem Start
+        log_error "Service konnte nicht gestartet werden"
+        systemctl status "$SERVICE_NAME" --no-pager
+
+        # Rollback
         local LATEST_BACKUP
         LATEST_BACKUP=$(ls -t "$INSTALL_DIR"/modbridge.backup.* 2>/dev/null | head -n 1)
         if [ -n "$LATEST_BACKUP" ]; then
-            log "⚠ Rollback wird versucht..."
+            log "Rollback wird versucht..."
             cp "$LATEST_BACKUP" "$INSTALL_DIR/modbridge"
             chmod +x "$INSTALL_DIR/modbridge"
-            systemctl start "$SERVICE_NAME" 2>/dev/null || true
-            if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-                log "✓ Rollback erfolgreich, alter Service läuft wieder."
+            systemctl restart "$SERVICE_NAME" 2>/dev/null || true
+            if systemctl is-active --quiet "$SERVICE_NAME"; then
+                log "✓ Rollback erfolgreich"
             else
-                log "❌ Rollback fehlgeschlagen. Manuelle Intervention erforderlich."
+                log_error "Rollback fehlgeschlagen"
             fi
         fi
+        exit 1
     fi
 
-    # 7. Alte Backups aufräumen (nur die letzten 3 behalten)
+    # Cleanup old backups (keep last 3)
     local BACKUP_COUNT
     BACKUP_COUNT=$(ls "$INSTALL_DIR"/modbridge.backup.* 2>/dev/null | wc -l)
     if [ "$BACKUP_COUNT" -gt 3 ]; then
@@ -615,92 +576,122 @@ update_modbridge() {
         log "✓ Alte Backups aufgeräumt (3 behalten)."
     fi
 
-    echo ""
+    whiptail --title "Update erfolgreich" \
+             --msgbox "ModBridge wurde erfolgreich auf $SELECTED_VERSION aktualisiert!\n\n\
+Variante: $([ "$WEBUI_VARIANT" = "headless" ] && echo "Headless (ohne WebUI)" || echo "Full (mit WebUI)")\n\n\
+Service läuft!" \
+             12 60
 }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Service Management
+# ═══════════════════════════════════════════════════════════════════════════════
 
 start_service() {
     check_root
-    log "Modbridge-Service wird gestartet..."
+    log "Starte Modbridge-Service..."
+    if ! cleanup_modbridge; then
+        log_error "Cleanup fehlgeschlagen"
+        exit 1
+    fi
     systemctl start "$SERVICE_NAME"
-    log "Service gestartet."
+    log "✓ Service gestartet"
 }
 
 stop_service() {
     check_root
-    log "Modbridge-Service wird gestoppt..."
+    log "Stoppe Modbridge-Service..."
     if ! cleanup_modbridge; then
-        log "⚠ Cleanup nicht vollständig erfolgreich, aber Service-Stop wurde versucht."
+        log_warn "Cleanup nicht vollständig erfolgreich, aber Service-Stop wurde versucht."
     fi
-    log "Service gestoppt und Ports freigegeben."
+    log "✓ Service gestoppt und Ports freigegeben."
 }
 
 restart_service() {
     check_root
-    log "Modbridge-Service wird neu gestartet..."
-
-    # First stop and cleanup
+    log "Starte Modbridge-Service neu..."
     if ! cleanup_modbridge; then
-        log "⚠ Cleanup nicht vollständig erfolgreich. Versuche trotzdem Neustart..."
+        log_warn "Cleanup nicht vollständig erfolgreich. Versuche trotzdem Neustart..."
     fi
-
-    # Then start
-    systemctl start "$SERVICE_NAME"
+    systemctl restart "$SERVICE_NAME"
     log "✓ Service neu gestartet."
 }
 
 status_service() {
-    systemctl status "$SERVICE_NAME" || true
-}
-
-logs_service() {
-    journalctl -u "$SERVICE_NAME" -n "${2:-50}" --no-pager
-}
-
-uninstall_modbridge() {
     check_root
+    echo "ModBridge Service Status:"
+    echo "========================="
+    systemctl status "$SERVICE_NAME" --no-pager
     echo ""
-    log "🗑 Modbridge wird deinstalliert..."
-
-    # Service stoppen und deaktivieren
-    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-        systemctl stop "$SERVICE_NAME"
-        log "✓ Service gestoppt."
-    fi
-    if systemctl is-enabled --quiet "$SERVICE_NAME" 2>/dev/null; then
-        systemctl disable "$SERVICE_NAME"
-        log "✓ Autostart deaktiviert."
-    fi
-
-    # Service-Datei entfernen
-    if [ -f "$SERVICE_FILE" ]; then
-        rm -f "$SERVICE_FILE"
-        systemctl daemon-reload
-        log "✓ Service-Datei entfernt."
-    fi
-
-    # Installationsverzeichnis entfernen
-    if [ -d "$INSTALL_DIR" ]; then
-        rm -rf "$INSTALL_DIR"
-        log "✓ Installationsverzeichnis $INSTALL_DIR entfernt."
-    fi
-
-    log "✅ Modbridge wurde vollständig deinstalliert."
+    echo "Prozesse:"
+    pgrep -a modbridge || echo "Keine Prozesse gefunden"
     echo ""
+    echo "Ports:"
+    for port in 8080 5020 5021 5022 5023; do
+        if lsof -i ":$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo "  Port $port: ${GREEN}BELEGT${NC}"
+        else
+            echo "  Port $port: ${RED}FREI${NC}"
+        fi
+    done
 }
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Command routing
-# ──────────────────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# Help
+# ═══════════════════════════════════════════════════════════════════════════════
 
-case "$1" in
+show_help() {
+    cat <<EOF
+${BOLD}ModBridge Installation Script${NC}
+${BOLD}============================${NC}
+
+${CYAN}Verwendung:${NC}
+  sudo bash modbridge.sh ${GREEN}install${NC}      - Installation mit interaktivem Menü
+  sudo bash modbridge.sh ${GREEN}update${NC}       - Update mit interaktivem Menü
+  sudo bash modbridge.sh ${GREEN}start${NC}        - Service starten
+  sudo bash modbridge.sh ${GREEN}stop${NC}         - Service stoppen
+  sudo bash modbridge.sh ${GREEN}restart${NC}      - Service neustarten
+  sudo bash modbridge.sh ${GREEN}status${NC}       - Service-Status anzeigen
+
+${CYAN}Features:${NC}
+  ✓ Interaktive grafische Menüs (whiptail)
+  ✓ Automatische Architektur-Erkennung (amd64, arm64, arm)
+  ✓ Wahl zwischen WebUI und Headless-Versionen
+  ✓ Download der passenden Binary von GitHub Releases
+  ✓ Automatische Service-Verwaltung via systemd
+  ✓ Robuster Cleanup: Beendet alle Prozesse, gibt Ports frei
+  ✓ Backup-Management mit automatischem Rollback
+
+${CYAN}Unterstützte Architekturen:${NC}
+  • ${YELLOW}amd64${NC}  - Intel/AMD 64-bit (Standard Server)
+  • ${YELLOW}arm64${NC}  - ARM 64-bit (Raspberry Pi 4/5, ARM Server)
+  • ${YELLOW}arm${NC}    - ARM 32-bit (Raspberry Pi Zero/1/2/3, 32-bit OS)
+
+${CYAN}Varianten:${NC}
+  • ${GREEN}Full${NC}     - Mit WebUI (~8.8 MB)
+  • ${GREEN}Headless${NC} - Ohne WebUI (~6.9 MB, 22% kleiner)
+
+${CYAN}Beispiel:${NC}
+  $ sudo bash modbridge.sh install
+  # → Öffnet interaktives Menü
+  # → Zeigt erkannte Architektur
+  # → Auswahl: WebUI oder Headless
+  # → Auswahl der Version
+  # → Download und Installation
+
+EOF
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Main
+# ═══════════════════════════════════════════════════════════════════════════════
+
+case "${1:-}" in
     install)
         install_modbridge
         ;;
     update)
         update_modbridge
-        ;;
-    uninstall)
-        uninstall_modbridge
         ;;
     start)
         start_service
@@ -714,50 +705,7 @@ case "$1" in
     status)
         status_service
         ;;
-    logs)
-        logs_service "$@"
-        ;;
     *)
-        echo "╔════════════════════════════════════════════════════════════════╗"
-        echo "║                   Modbridge Manager                          ║"
-        echo "╚════════════════════════════════════════════════════════════════╝"
-        echo ""
-        echo "Verwendung: sudo modbridge {install|update|uninstall|start|stop|restart|status|logs}"
-        echo ""
-        echo "Befehle:"
-        echo "  install   - Modbridge installieren"
-        echo "              (lädt vorkompiliertes Binary herunter oder baut aus Quellcode)"
-        echo "              (aktiviert Autostart via systemd)"
-        echo ""
-        echo "  update    - Modbridge auf die neueste Version aktualisieren"
-        echo "              (stoppt Service → sichert altes Binary → installiert neues → startet Service)"
-        echo "              (automatischer Rollback bei Fehlern)"
-        echo ""
-        echo "  uninstall - Modbridge vollständig deinstallieren"
-        echo "              (stoppt Service, entfernt Dateien und systemd-Konfiguration)"
-        echo ""
-        echo "  start     - Modbridge-Service starten"
-        echo "  stop      - Modbridge-Service stoppen"
-        echo "  restart   - Modbridge-Service neu starten"
-        echo "  status    - Status des Modbridge-Service anzeigen"
-        echo "  logs      - Letzte Log-Einträge anzeigen (Standard: 50 Zeilen)"
-        echo ""
-        echo "Features:"
-        echo "  ✓ Lädt vorkompilierte Binaries von GitHub Releases herunter"
-        echo "  ✓ Kein Build erforderlich wenn Binary verfügbar ist"
-        echo "  ✓ Zeigt verfügbare Versionsnummern im Auswahlmenü an"
-        echo "  ✓ Fallback: automatischer Quellcode-Build (inkl. Go-Installation)"
-        echo "  ✓ Autostart via systemd"
-        echo "  ✓ Automatischer Rollback bei fehlgeschlagenem Update"
-        echo "  ✓ Backup-Verwaltung (behält die letzten 3 Backups)"
-        echo "  ✓ Robuster Cleanup: Beendet alle Prozesse und gibt Ports frei"
-        echo ""
-        echo "Beispiele:"
-        echo "  sudo bash modbridge.sh install    # Installieren"
-        echo "  sudo bash modbridge.sh update     # Aktualisieren"
-        echo "  sudo bash modbridge.sh uninstall  # Deinstallieren"
-        echo "  sudo bash modbridge.sh status     # Status prüfen"
-        echo "  sudo bash modbridge.sh logs       # Logs anzeigen"
-        exit 1
+        show_help
         ;;
 esac
