@@ -22,6 +22,7 @@ type EnhancedStats struct {
 	totalLatency      time.Duration
 	lastRequestTime   time.Time
 	requestStartTimes map[int64]time.Time // Track request start times
+	requestsResetTime time.Time          // When the current request window started
 
 	// Connection stats
 	activeConnections int
@@ -29,7 +30,9 @@ type EnhancedStats struct {
 	totalConnections  int64
 
 	// Configuration
-	latencyWindow int // Number of latencies to track
+	latencyWindow    int           // Number of latencies to track
+	requestsWindow   time.Duration // Time window for request counter (default: 60 minutes)
+	totalRequests    int64         // Total requests ever (for stats)
 }
 
 // LatencyPercentiles returns latency statistics
@@ -49,13 +52,16 @@ func NewEnhancedStats(latencyWindow int) *EnhancedStats {
 		latencyWindow = 1000 // Track last 1000 requests
 	}
 
+	now := time.Now()
 	return &EnhancedStats{
 		latencies:         make([]time.Duration, 0, latencyWindow),
 		maxLatency:        0,
 		minLatency:        0,
 		latencyWindow:     latencyWindow,
 		requestStartTimes: make(map[int64]time.Time),
-		lastRequestTime:   time.Now(),
+		lastRequestTime:   now,
+		requestsResetTime: now,
+		requestsWindow:    60 * time.Minute, // Default 60 minute window
 	}
 }
 
@@ -87,11 +93,15 @@ func (s *EnhancedStats) RecordRequestComplete(requestID int64, bytesRead, bytesW
 	latency := time.Since(startTime)
 	s.lastRequestTime = time.Now()
 
+	// Check if we need to reset the request counter window
+	s.checkRequestWindow()
+
 	// Update counters
 	if err != nil {
 		s.errors++
 	} else {
 		s.requests++
+		s.totalRequests++ // Track total ever
 	}
 
 	s.bytesRead += int64(bytesRead)
@@ -120,6 +130,16 @@ func (s *EnhancedStats) recordLatency(latency time.Duration) {
 	}
 
 	s.totalLatency += latency
+}
+
+// checkRequestWindow checks if the request window has expired and resets if needed
+// Caller must hold lock
+func (s *EnhancedStats) checkRequestWindow() {
+	if time.Since(s.requestsResetTime) > s.requestsWindow {
+		// Reset request counter for new window
+		s.requests = 0
+		s.requestsResetTime = time.Now()
+	}
 }
 
 // getPercentilesLocked calculates latency percentiles (caller must hold at least RLock)
@@ -169,8 +189,11 @@ func (s *EnhancedStats) GetPercentiles() LatencyPercentiles {
 
 // GetSnapshot returns a snapshot of current stats
 func (s *EnhancedStats) GetSnapshot() map[string]interface{} {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Check if we need to reset the request counter window
+	s.checkRequestWindow()
 
 	percentiles := s.getPercentilesLocked()
 
@@ -189,16 +212,18 @@ func (s *EnhancedStats) GetSnapshot() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"requests":           s.requests,
-		"errors":             s.errors,
-		"error_rate":         errorRate,
-		"active_connections": s.activeConnections,
-		"max_connections":    s.maxConns,
-		"total_connections":  s.totalConnections,
-		"bytes_read":         s.bytesRead,
-		"bytes_written":      s.bytesWritten,
-		"requests_per_sec":   requestsPerSecond,
-		"latency":            percentiles,
+		"requests":              s.requests,
+		"total_requests":        s.totalRequests,
+		"errors":                s.errors,
+		"error_rate":            errorRate,
+		"active_connections":    s.activeConnections,
+		"max_connections":       s.maxConns,
+		"total_connections":     s.totalConnections,
+		"bytes_read":            s.bytesRead,
+		"bytes_written":         s.bytesWritten,
+		"requests_per_sec":      requestsPerSecond,
+		"latency":               percentiles,
+		"requests_window_reset": s.requestsResetTime,
 	}
 }
 
