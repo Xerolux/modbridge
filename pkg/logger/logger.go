@@ -33,6 +33,7 @@ type Logger struct {
 	ringBuffer  []LogEntry
 	ringSize    int
 	subscribers map[chan LogEntry]struct{}
+	minLevel    LogLevel  // Minimum log level to output
 }
 
 // NewLogger creates a new logger.
@@ -51,6 +52,7 @@ func NewLogger(filePath string, bufferSize int) (*Logger, error) {
 		ringBuffer:  make([]LogEntry, 0, bufferSize),
 		ringSize:    bufferSize,
 		subscribers: make(map[chan LogEntry]struct{}),
+		minLevel:    INFO, // Default to INFO
 	}, nil
 }
 
@@ -61,11 +63,33 @@ func NewNullLogger(bufferSize int) *Logger {
 		ringBuffer:  make([]LogEntry, 0, bufferSize),
 		ringSize:    bufferSize,
 		subscribers: make(map[chan LogEntry]struct{}),
+		minLevel:    INFO, // Default to INFO
 	}
+}
+
+// shouldLog returns true if the given level should be logged.
+func (l *Logger) shouldLog(level LogLevel) bool {
+	// Order: DEBUG < INFO < WARN < ERROR
+	levels := map[LogLevel]int{
+		DEBUG: 0,
+		INFO:  1,
+		WARN:  2,
+		ERROR: 3,
+	}
+
+	currentLevel := levels[level]
+	minLevel := levels[l.minLevel]
+
+	return currentLevel >= minLevel
 }
 
 // Log writes a log entry.
 func (l *Logger) Log(level LogLevel, proxyID, msg string) {
+	// Check if we should log this level
+	if !l.shouldLog(level) {
+		return
+	}
+
 	entry := LogEntry{
 		Timestamp: time.Now().Format(time.RFC3339),
 		Level:     level,
@@ -160,6 +184,24 @@ func (l *Logger) Error(proxyID, msg string) {
 
 func (l *Logger) Debug(proxyID, msg string) {
 	l.Log(DEBUG, proxyID, msg)
+}
+
+func (l *Logger) Warn(proxyID, msg string) {
+	l.Log(WARN, proxyID, msg)
+}
+
+// SetLogLevel changes the minimum log level.
+func (l *Logger) SetLogLevel(level LogLevel) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.minLevel = level
+}
+
+// GetLogLevel returns the current minimum log level.
+func (l *Logger) GetLogLevel() LogLevel {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.minLevel
 }
 
 // Close closes the logger file.

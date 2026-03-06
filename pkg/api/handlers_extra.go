@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"modbridge/pkg/config"
+	"modbridge/pkg/logger"
 	"net/http"
 	"runtime"
 	"time"
@@ -117,6 +118,9 @@ func (s *Server) handleSystemConfig(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
+		// Apply log level change immediately to the running logger
+		s.log.SetLogLevel(logger.LogLevel(req.LogLevel))
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
