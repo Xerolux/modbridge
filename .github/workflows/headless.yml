@@ -76,7 +76,7 @@ jobs:
             -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
             -trimpath \
             -o "$OUTPUT" \
-            ./main.go
+            .
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
