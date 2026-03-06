@@ -22,7 +22,7 @@ type EnhancedStats struct {
 	totalLatency      time.Duration
 	lastRequestTime   time.Time
 	requestStartTimes map[int64]time.Time // Track request start times
-	requestsResetTime time.Time          // When the current request window started
+	requestsResetTime time.Time           // When the current request window started
 
 	// Connection stats
 	activeConnections int
@@ -30,9 +30,9 @@ type EnhancedStats struct {
 	totalConnections  int64
 
 	// Configuration
-	latencyWindow    int           // Number of latencies to track
-	requestsWindow   time.Duration // Time window for request counter (default: 60 minutes)
-	totalRequests    int64         // Total requests ever (for stats)
+	latencyWindow  int           // Number of latencies to track
+	requestsWindow time.Duration // Time window for request counter (default: 60 minutes)
+	totalRequests  int64         // Total requests ever (for stats)
 }
 
 // LatencyPercentiles returns latency statistics
