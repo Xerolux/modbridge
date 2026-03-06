@@ -136,7 +136,13 @@ Nach der Installation: **http://localhost:8080** im Browser öffnen.
 
 ### Methode 1: modbridge.sh (empfohlen)
 
-Das Skript `scripts/modbridge.sh` lädt automatisch das passende vorkompilierte Binary von GitHub Releases herunter, richtet einen systemd-Service ein und verwaltet Starts, Stops und Updates.
+Das Skript `scripts/modbridge.sh` ist die einfachste Installationsmethode. Es:
+
+- 📍 **Erkennt automatisch Ihre System-Architektur** (amd64, arm64, arm 32-bit)
+- 🎨 **Zeigt ein interaktives Menü** zur Auswahl der Variante
+- 📥 **Lädt die passende Binary** von GitHub Releases herunter
+- ⚙️ **Richtet einen systemd-Service** automatisch ein
+- 🔄 **Automatische Selbst-Aktualisierung** vor jedem Befehl
 
 ```bash
 # Repository klonen
@@ -147,17 +153,53 @@ cd modbridge
 sudo bash scripts/modbridge.sh install
 ```
 
-**Was das Skript macht:**
-1. Prüft Abhängigkeiten (`git`, `curl`, `file`)
-2. Fragt, welche Release-Version installiert werden soll (Stable / Beta / Alpha)
-3. Lädt das vorkompilierte Binary von GitHub Releases herunter
-4. Fällt bei Bedarf auf einen Quellcode-Build zurück (inkl. automatischer Go-Installation)
+**Installations-Ablauf:**
+1. Prüft Abhängigkeiten (`curl`, `jq`, `file`, `lsof`, `whiptail`)
+2. Zeigt ein interaktives Menü mit Fragen:
+   - **WebUI oder Headless?** - Mit oder ohne grafische Oberfläche
+   - **Welche Version?** - Auswahl aus den verfügbaren Releases
+3. Lädt das passende vorkompilierte Binary herunter
+4. **Bei Headless:** Erstellt automatisch eine Standard-Konfiguration
 5. Richtet einen systemd-Service ein und aktiviert Autostart
 
+**Varianten:**
+
+| Variante | Größe | Beschreibung | Verwendung |
+|----------|-------|--------------|-------------|
+| **Mit WebUI** | ~8.8 MB | Volle grafische Oberfläche | Standard-Installation, bequeme Konfiguration |
+| **Headless** | ~6.9 MB | Nur API, keine WebUI | Server, Embedded-Systeme, Config-Datei-Betrieb |
+
 **Nach der Installation:**
+
+**Mit WebUI:**
+```bash
+# WebUI öffnen
+http://<Ihre-IP>:8080
+
+# Das Standard-Passwort wird beim ersten Start automatisch generiert
+# und in den Logs angezeigt:
+sudo journalctl -u modbridge.service -n 50
+```
+
+**Headless (ohne WebUI):**
+```bash
+# Konfiguration bearbeiten
+sudo nano /opt/modbridge/config.json
+
+# Service neu starten
+sudo systemctl restart modbridge.service
+
+# Status prüfen
+sudo systemctl status modbridge.service
+```
+
+**Service-Management:**
 ```bash
 sudo bash scripts/modbridge.sh status   # Service-Status prüfen
-sudo bash scripts/modbridge.sh logs     # Logs anzeigen
+sudo bash scripts/modbridge.sh start    # Service starten
+sudo bash scripts/modbridge.sh stop     # Service stoppen
+sudo bash scripts/modbridge.sh restart  # Service neu starten
+sudo bash scripts/modbridge.sh update   # Auf neue Version aktualisieren
 ```
 
 ---
@@ -324,6 +366,113 @@ client.close()
 ---
 
 ## Konfiguration
+
+Die Konfiguration wird in `config.json` gespeichert und kann entweder über das Web-Interface oder manuell als JSON-Datei verwaltet werden.
+
+### Headless-Betrieb (ohne WebUI)
+
+Wenn Sie ModBridge ohne WebUI installieren (Headless-Variante), erfolgt die Konfiguration ausschließlich über eine JSON-Datei.
+
+#### Konfigurationsdatei erstellen
+
+Bei der Installation mit dem Script wird automatisch eine Standard-Konfiguration erstellt. Alternativ können Sie eine manuell erstellen:
+
+```bash
+/opt/modbridge/modbridge -config > /opt/modbridge/config.json
+```
+
+#### Konfiguration bearbeiten
+
+Bearbeiten Sie die Konfigurationsdatei mit Ihrem Lieblingseditor:
+
+```bash
+sudo nano /opt/modbridge/config.json
+```
+
+#### Konfigurations-Beispiel
+
+```json
+{
+  "web_port": ":8080",
+  "admin_pass_hash": "",
+  "force_password_change": true,
+  "session_timeout": 24,
+  "proxies": [
+    {
+      "id": "1",
+      "name": "PLC1",
+      "listen_addr": ":5020",
+      "target_addr": "192.168.1.100:502",
+      "enabled": true,
+      "paused": false,
+      "connection_timeout": 10,
+      "read_timeout": 10,
+      "max_retries": 3,
+      "description": "Verbindet sich mit PLC1",
+      "max_read_size": 0,
+      "tags": ["production", "critical"]
+    }
+  ],
+  "log_level": "INFO",
+  "log_max_size": 100,
+  "log_max_files": 10,
+  "log_max_age_days": 30
+}
+```
+
+#### Headless-Konfigurationsoptionen
+
+| Option | Typ | Beschreibung |
+|--------|-----|--------------|
+| `web_port` | string | Port für API (Standard: `:8080`) |
+| `admin_pass_hash` | string | Hash des Admin-Passworts (bei Headless optional, leer für Auto-Generierung) |
+| `force_password_change` | bool | Erzwingt Passwortänderung beim ersten Login |
+| `session_timeout` | int | Session-Timeout in Stunden (Standard: 24) |
+| `log_level` | string | Log-Level: `DEBUG`, `INFO`, `WARN`, `ERROR` |
+| `log_max_size` | int | Max. Log-Dateigröße in MB |
+| `proxies` | array | Liste der Modbus-Proxies (siehe unten) |
+
+#### Proxy-Konfiguration (Headless)
+
+Jeder Proxy in der `proxies`-Liste hat folgende Optionen:
+
+| Option | Typ | Beschreibung |
+|--------|-----|--------------|
+| `id` | string | Eindeutige ID des Proxies (beliebiger String) |
+| `name` | string | Anzeigename |
+| `listen_addr` | string | Lokaler Port (z.B. `:5020`) |
+| `target_addr` | string | Remote-Adresse (z.B. `192.168.1.100:502`) |
+| `enabled` | bool | Proxy aktivieren/deaktivieren |
+| `paused` | bool | Proxy pausieren (Verbindungen werden abgelehnt) |
+| `connection_timeout` | int | Verbindungs-Timeout in Sekunden |
+| `read_timeout` | int | Lese-Timeout in Sekunden |
+| `max_retries` | int | Maximale Wiederholungsversuche bei Fehler |
+| `max_read_size` | int | Max. Modbus-Read-Größe (0 = unbegrenzt) |
+| `description` | string | Optionale Beschreibung |
+| `tags` | array | Optionale Tags zur Kategorisierung |
+
+#### Service nach Konfigurationsänderung neu starten
+
+```bash
+sudo systemctl restart modbridge.service
+```
+
+#### Service-Status und Logs prüfen
+
+```bash
+# Status prüfen
+sudo systemctl status modbridge.service
+
+# Logs anzeigen
+sudo journalctl -u modbridge.service -f
+
+# Letzte 100 Logs
+sudo journalctl -u modbridge.service -n 100
+```
+
+---
+
+### Web-UI-Betrieb (mit WebUI)
 
 Die Konfiguration wird in `config.json` gespeichert und kann auch über das Web-Interface verwaltet werden (Export / Import).
 

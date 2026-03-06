@@ -453,6 +453,18 @@ Bitte prüfen:\n\
         exit 1
     fi
 
+    # Create default config.json for headless installations
+    if [ "$WEBUI_VARIANT" = "headless" ]; then
+        log "Erstelle Standard-Konfiguration für Headless-Betrieb..."
+        if ! "$INSTALL_DIR/modbridge" -config > "$INSTALL_DIR/config.json" 2>/dev/null; then
+            log_warn "Konnte Standard-Konfiguration nicht erstellen"
+            log_info "Sie können sie später manuell erstellen mit:"
+            log_info "  $ $INSTALL_DIR/modbridge -config > $INSTALL_DIR/config.json"
+        else
+            log "✓ Standard-Konfiguration erstellt: $INSTALL_DIR/config.json"
+        fi
+    fi
+
     # Create systemd service
     log "Erstelle systemd-Service..."
     cat > "$SERVICE_FILE" <<EOF
@@ -487,15 +499,42 @@ EOF
     fi
 
     # Success message
-    whiptail --title "Installation erfolgreich" \
-             --msgbox "ModBridge $SELECTED_VERSION wurde erfolgreich installiert!\n\n\
+    if [ "$WEBUI_VARIANT" = "headless" ]; then
+        # Headless success message with configuration info
+        whiptail --title "Installation erfolgreich" \
+                 --msgbox "ModBridge $SELECTED_VERSION wurde erfolgreich installiert!\n\n\
 Version: $SELECTED_VERSION\n\
-Variante: $([ "$WEBUI_VARIANT" = "headless" ] && echo "Headless (ohne WebUI)" || echo "Full (mit WebUI)")\n\
+Variante: Headless (ohne WebUI)\n\
+Architektur: $ARCH_NAME\n\n\
+${BOLD}KONFIGURATION:${NC}\n\
+Die Konfiguration erfolgt über eine JSON-Datei:\n\n\
+📁 Config-Datei: $INSTALL_DIR/config.json\n\n\
+So erstellen Sie die Konfiguration:\n\
+  1. Standard-Konfiguration erstellen:\n\
+     $ $INSTALL_DIR/modbridge -config > $INSTALL_DIR/config.json\n\n\
+  2. Konfiguration bearbeiten:\n\
+     $ sudo nano $INSTALL_DIR/config.json\n\n\
+  3. Service neu starten:\n\
+     $ sudo systemctl restart $SERVICE_NAME\n\n\
+Service: systemctl $SERVICE_NAME {start,stop,restart,status}\n\n\
+${BOLD}DOKUMENTATION:${NC}\n\
+Ausführliche Informationen finden Sie in der README.md\n\
+im GitHub Repository oder mit: modbridge.sh help" \
+                 22 80
+    else
+        # Full success message with WebUI info
+        whiptail --title "Installation erfolgreich" \
+                 --msgbox "ModBridge $SELECTED_VERSION wurde erfolgreich installiert!\n\n\
+Version: $SELECTED_VERSION\n\
+Variante: Full (mit WebUI)\n\
 Architektur: $ARCH_NAME\n\n\
 Service: systemctl $SERVICE_NAME {start,stop,restart,status}\n\
 Config: $INSTALL_DIR/config.json\n\n\
-WebUI: http://$(hostname -I | awk '{print $1}'):8080" \
-             15 80
+WebUI: http://$(hostname -I | awk '{print $1}'):8080\n\n\
+Das Standard-Passwort wurde beim ersten Start\n\
+automatisch generiert und in den Logs angezeigt." \
+                 18 80
+    fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
