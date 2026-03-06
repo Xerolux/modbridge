@@ -40,6 +40,76 @@ log() {
     echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $1" | tee -a "$LOG_FILE"
 }
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Self-Update Function
+# ═══════════════════════════════════════════════════════════════════════════════
+
+self_update() {
+    # Skip update if NO_UPDATE env var is set
+    if [ "${NO_UPDATE:-}" = "1" ]; then
+        return 0
+    fi
+
+    # Only update when running with install, update, start, stop, restart commands
+    local cmd="${1:-}"
+    if [[ ! "$cmd" =~ ^(install|update|start|stop|restart)$ ]]; then
+        return 0
+    fi
+
+    log_info "Prüfe auf Script-Updates..."
+
+    # Get the script's own location
+    local SCRIPT_PATH="${BASH_SOURCE[0]}"
+    local SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
+    local TEMP_SCRIPT="$SCRIPT_DIR/modbridge.sh.new"
+
+    # Download latest version from GitHub
+    local REMOTE_URL="https://raw.githubusercontent.com/Xerolux/modbridge/main/scripts/modbridge.sh"
+
+    if ! curl -fsSL "$REMOTE_URL" -o "$TEMP_SCRIPT" 2>/dev/null; then
+        log_warn "Konnte Script-Update nicht prüfen (Download fehlgeschlagen)"
+        rm -f "$TEMP_SCRIPT"
+        return 0
+    fi
+
+    # Make it executable
+    chmod +x "$TEMP_SCRIPT"
+
+    # Compare versions using checksum
+    local CURRENT_MD5=$(md5sum "$SCRIPT_PATH" 2>/dev/null | awk '{print $1}')
+    local NEW_MD5=$(md5sum "$TEMP_SCRIPT" 2>/dev/null | awk '{print $1}')
+
+    if [ "$CURRENT_MD5" = "$NEW_MD5" ]; then
+        log_info "✓ Script ist aktuell"
+        rm -f "$TEMP_SCRIPT"
+        return 0
+    fi
+
+    # Versions are different - update available
+    log ""
+    log "${YELLOW}══════════════════════════════════════════════════════════════════${NC}"
+    log "${BOLD}${YELLOW}🔄 NEUE SCRIPT-VERSION VERFÜGBAR${NC}"
+    log "${YELLOW}══════════════════════════════════════════════════════════════════${NC}"
+    log ""
+    log "Das Script wird automatisch aktualisiert..."
+    log ""
+
+    # Replace old script with new one
+    if mv "$TEMP_SCRIPT" "$SCRIPT_PATH"; then
+        log "${GREEN}✓ Script erfolgreich aktualisiert${NC}"
+        log ""
+        log "Starte neu mit dem aktualisierten Script..."
+        log ""
+
+        # Re-execute this script with the same arguments
+        exec bash "$SCRIPT_PATH" "$@"
+    else
+        log_error "Konnte Script nicht aktualisieren"
+        rm -f "$TEMP_SCRIPT"
+        return 1
+    fi
+}
+
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE"
 }
@@ -653,7 +723,12 @@ ${CYAN}Verwendung:${NC}
   sudo bash modbridge.sh ${GREEN}restart${NC}      - Service neustarten
   sudo bash modbridge.sh ${GREEN}status${NC}       - Service-Status anzeigen
 
+${CYAN}Optionen:${NC}
+  ${YELLOW}NO_UPDATE=1${NC} sudo bash modbridge.sh install
+  # Überspringt die automatische Script-Aktualisierung
+
 ${CYAN}Features:${NC}
+  ✓ Automatische Script-Aktualisierung vor jeder Ausführung
   ✓ Interaktive grafische Menüs (whiptail)
   ✓ Automatische Architektur-Erkennung (amd64, arm64, arm)
   ✓ Wahl zwischen WebUI und Headless-Versionen
@@ -671,8 +746,15 @@ ${CYAN}Varianten:${NC}
   • ${GREEN}Full${NC}     - Mit WebUI (~8.8 MB)
   • ${GREEN}Headless${NC} - Ohne WebUI (~6.9 MB, 22% kleiner)
 
+${CYAN}Auto-Update:${NC}
+  Das Script prüft vor jedem Befehl (install, update, start, stop, restart),
+  ob eine neuere Version im Git Repository verfügbar ist.
+  Falls ja, wird es automatisch aktualisiert und neu gestartet.
+
 ${CYAN}Beispiel:${NC}
   $ sudo bash modbridge.sh install
+  # → Prüft auf Script-Updates
+  # → Falls nötig: Aktualisiert sich selbst und startet neu
   # → Öffnet interaktives Menü
   # → Zeigt erkannte Architektur
   # → Auswahl: WebUI oder Headless
@@ -685,6 +767,9 @@ EOF
 # ═══════════════════════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════════════════════
+
+# Self-update before doing anything else
+self_update "$@"
 
 case "${1:-}" in
     install)
