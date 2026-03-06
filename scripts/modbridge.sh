@@ -761,57 +761,54 @@ status_service() {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 show_help() {
-    cat <<EOF
-${BOLD}ModBridge Installation Script${NC}
-${BOLD}============================${NC}
+    printf "${BOLD}ModBridge Installation Script${NC}\n"
+    printf "${BOLD}============================${NC}\n\n"
 
-${CYAN}Verwendung:${NC}
-  sudo bash modbridge.sh ${GREEN}install${NC}      - Installation mit interaktivem Menü
-  sudo bash modbridge.sh ${GREEN}update${NC}       - Update mit interaktivem Menü
-  sudo bash modbridge.sh ${GREEN}start${NC}        - Service starten
-  sudo bash modbridge.sh ${GREEN}stop${NC}         - Service stoppen
-  sudo bash modbridge.sh ${GREEN}restart${NC}      - Service neustarten
-  sudo bash modbridge.sh ${GREEN}status${NC}       - Service-Status anzeigen
+    printf "${CYAN}Verwendung:${NC}\n"
+    printf "  sudo bash modbridge.sh ${GREEN}install${NC}      - Installation mit interaktivem Menü\n"
+    printf "  sudo bash modbridge.sh ${GREEN}update${NC}       - Update mit interaktivem Menü\n"
+    printf "  sudo bash modbridge.sh ${GREEN}start${NC}        - Service starten\n"
+    printf "  sudo bash modbridge.sh ${GREEN}stop${NC}         - Service stoppen\n"
+    printf "  sudo bash modbridge.sh ${GREEN}restart${NC}      - Service neustarten\n"
+    printf "  sudo bash modbridge.sh ${GREEN}status${NC}       - Service-Status anzeigen\n\n"
 
-${CYAN}Optionen:${NC}
-  ${YELLOW}NO_UPDATE=1${NC} sudo bash modbridge.sh install
-  # Überspringt die automatische Script-Aktualisierung
+    printf "${CYAN}Optionen:${NC}\n"
+    printf "  ${YELLOW}NO_UPDATE=1${NC} sudo bash modbridge.sh install\n"
+    printf "  # Überspringt die automatische Script-Aktualisierung\n\n"
 
-${CYAN}Features:${NC}
-  ✓ Automatische Script-Aktualisierung vor jeder Ausführung
-  ✓ Interaktive grafische Menüs (whiptail)
-  ✓ Automatische Architektur-Erkennung (amd64, arm64, arm)
-  ✓ Wahl zwischen WebUI und Headless-Versionen
-  ✓ Download der passenden Binary von GitHub Releases
-  ✓ Automatische Service-Verwaltung via systemd
-  ✓ Robuster Cleanup: Beendet alle Prozesse, gibt Ports frei
-  ✓ Backup-Management mit automatischem Rollback
+    printf "${CYAN}Features:${NC}\n"
+    printf "  ✓ Automatische Script-Aktualisierung vor jeder Ausführung\n"
+    printf "  ✓ Interaktive grafische Menüs (whiptail)\n"
+    printf "  ✓ Automatische Architektur-Erkennung (amd64, arm64, arm)\n"
+    printf "  ✓ Wahl zwischen WebUI und Headless-Versionen\n"
+    printf "  ✓ Download der passenden Binary von GitHub Releases\n"
+    printf "  ✓ Automatische Service-Verwaltung via systemd\n"
+    printf "  ✓ Robuster Cleanup: Beendet alle Prozesse, gibt Ports frei\n"
+    printf "  ✓ Backup-Management mit automatischem Rollback\n\n"
 
-${CYAN}Unterstützte Architekturen:${NC}
-  • ${YELLOW}amd64${NC}  - Intel/AMD 64-bit (Standard Server)
-  • ${YELLOW}arm64${NC}  - ARM 64-bit (Raspberry Pi 4/5, ARM Server)
-  • ${YELLOW}arm${NC}    - ARM 32-bit (Raspberry Pi Zero/1/2/3, 32-bit OS)
+    printf "${CYAN}Unterstützte Architekturen:${NC}\n"
+    printf "  • ${YELLOW}amd64${NC}  - Intel/AMD 64-bit (Standard Server)\n"
+    printf "  • ${YELLOW}arm64${NC}  - ARM 64-bit (Raspberry Pi 4/5, ARM Server)\n"
+    printf "  • ${YELLOW}arm${NC}    - ARM 32-bit (Raspberry Pi Zero/1/2/3, 32-bit OS)\n\n"
 
-${CYAN}Varianten:${NC}
-  • ${GREEN}Full${NC}     - Mit WebUI (~8.8 MB)
-  • ${GREEN}Headless${NC} - Ohne WebUI (~6.9 MB, 22% kleiner)
+    printf "${CYAN}Varianten:${NC}\n"
+    printf "  • ${GREEN}Full${NC}     - Mit WebUI (~8.8 MB)\n"
+    printf "  • ${GREEN}Headless${NC} - Ohne WebUI (~6.9 MB, 22% kleiner)\n\n"
 
-${CYAN}Auto-Update:${NC}
-  Das Script prüft vor jedem Befehl (install, update, start, stop, restart),
-  ob eine neuere Version im Git Repository verfügbar ist.
-  Falls ja, wird es automatisch aktualisiert und neu gestartet.
+    printf "${CYAN}Auto-Update:${NC}\n"
+    printf "  Das Script prüft vor jedem Befehl (install, update, start, stop, restart),\n"
+    printf "  ob eine neuere Version im Git Repository verfügbar ist.\n"
+    printf "  Falls ja, wird es automatisch aktualisiert und neu gestartet.\n\n"
 
-${CYAN}Beispiel:${NC}
-  $ sudo bash modbridge.sh install
-  # → Prüft auf Script-Updates
-  # → Falls nötig: Aktualisiert sich selbst und startet neu
-  # → Öffnet interaktives Menü
-  # → Zeigt erkannte Architektur
-  # → Auswahl: WebUI oder Headless
-  # → Auswahl der Version
-  # → Download und Installation
-
-EOF
+    printf "${CYAN}Beispiel:${NC}\n"
+    printf "  $ sudo bash modbridge.sh install\n"
+    printf "  # → Prüft auf Script-Updates\n"
+    printf "  # → Falls nötig: Aktualisiert sich selbst und startet neu\n"
+    printf "  # → Öffnet interaktives Menü\n"
+    printf "  # → Zeigt erkannte Architektur\n"
+    printf "  # → Auswahl: WebUI oder Headless\n"
+    printf "  # → Auswahl der Version\n"
+    printf "  # → Download und Installation\n\n"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
