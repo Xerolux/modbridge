@@ -27,7 +27,7 @@ permissions:
   packages: write
 
 env:
-  GO_VERSION: '1.24.0'
+  GO_VERSION: '1.26.0'
   NODE_VERSION: '22'
   REGISTRY: ghcr.io
   IMAGE_NAME: xerolux/modbridge

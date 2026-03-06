@@ -495,7 +495,7 @@ const (
 ## 🎯 Fazit
 
 ### Positives
-- ✅ Moderne Tech-Stack (Go 1.24, Vue 3, PrimeVue)
+- ✅ Moderne Tech-Stack (Go 1.26, Vue 3, PrimeVue)
 - ✅ Gute Grundarchitektur
 - ✅ Thread-Safety verbessert (atomic.Int64)
 - ✅ Connection Pooling implementiert
