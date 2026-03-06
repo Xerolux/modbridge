@@ -386,19 +386,22 @@ install_modbridge() {
 Erkannte Architektur: $ARCH_NAME\n\n\
 ModBridge wird jetzt installiert.\n\n\
 Fortfahren?" \
+            15 80 \
             --yes-button "Ja" --no-button "Nein" \
-            15 80 || exit 0
+            3>&1 1>&2 2>&3 || exit 0
 
     # Choose WebUI variant
     local WEBUI_VARIANT
-    if whiptail --title "WebUI oder Headless?" \
+    local CHOICE=$(whiptail --title "WebUI oder Headless?" \
                --radiolist "Wähle die Variante:\n\n\
 Mit WebUI = Größere Binary, mit grafischer Oberfläche\n\
 Headless = Kleinere Binary (22% weniger), nur Config-Datei" \
-               15 80 \
-               "Mit WebUI" "ON" \
-               "Ohne WebUI (Headless)" "OFF" \
-               2>&1 >/dev/tty; then
+               15 80 2 \
+               "full" "Mit WebUI" "ON" \
+               "headless" "Ohne WebUI (Headless)" "OFF" \
+               3>&1 1>&2 2>&3)
+
+    if [ "$CHOICE" = "headless" ]; then
         WEBUI_VARIANT="headless"
     else
         WEBUI_VARIANT="full"
@@ -416,23 +419,26 @@ Headless = Kleinere Binary (22% weniger), nur Config-Datei" \
 
     # Select version
     local VERSIONS=$(fetch_available_versions)
+    local VERSION_COUNT=$(echo "$VERSIONS" | wc -l)
+    local LIST_HEIGHT=$((VERSION_COUNT + 2))
+
     local VERSION_LIST=""
     local i=1
     while IFS= read -r version; do
         if [ $i -eq 1 ]; then
-            VERSION_LIST="$version $i ON"
+            VERSION_LIST="$VERSION_LIST \"$version\" \"Version $i\" \"ON\""
         else
-            VERSION_LIST="$VERSION_LIST $version $i OFF"
+            VERSION_LIST="$VERSION_LIST \"$version\" \"Version $i\" \"OFF\""
         fi
         i=$((i+1))
     done <<< "$VERSIONS"
 
     local SELECTED_VERSION
-    SELECTED_VERSION=$(whiptail --title "Version wählen" \
-                                    --radiolist "Wähle die zu installierende Version:" \
-                                    20 80 \
+    eval "SELECTED_VERSION=\$(whiptail --title \"Version wählen\" \
+                                    --radiolist \"Wähle die zu installierende Version:\" \
+                                    20 80 $LIST_HEIGHT \
                                     $VERSION_LIST \
-                                    3>&1 >/dev/tty)
+                                    3>&1 1>&2 2>&3)"
 
     if [ -z "$SELECTED_VERSION" ]; then
         log_info "Installation abgebrochen"
@@ -579,20 +585,22 @@ update_modbridge() {
 Architektur: $ARCH_NAME\n\
 Aktuell: $CURRENT_VARIANT\n\n\
 Fortfahren?" \
+            15 80 \
             --yes-button "Ja" --no-button "Nein" \
-            15 80 || exit 0
+            3>&1 1>&2 2>&3 || exit 0
 
     # Choose variant
     local WEBUI_VARIANT
-    if whiptail --title "WebUI oder Headless?" \
-               --defaultitem \
+    local CHOICE=$(whiptail --title "WebUI oder Headless?" \
                --radiolist "Wähle die Variante:\n\n\
 Mit WebUI = Größere Binary, mit grafischer Oberfläche\n\
 Headless = Kleinere Binary (22% weniger), nur Config-Datei" \
-               15 80 \
-               "Mit WebUI" "ON" \
-               "Ohne WebUI (Headless)" "OFF" \
-               2>&1 >/dev/tty; then
+               15 80 2 \
+               "full" "Mit WebUI" "ON" \
+               "headless" "Ohne WebUI (Headless)" "OFF" \
+               3>&1 1>&2 2>&3)
+
+    if [ "$CHOICE" = "headless" ]; then
         WEBUI_VARIANT="headless"
     else
         WEBUI_VARIANT="full"
@@ -613,23 +621,26 @@ Headless = Kleinere Binary (22% weniger), nur Config-Datei" \
 
     # Select version
     local VERSIONS=$(fetch_available_versions)
+    local VERSION_COUNT=$(echo "$VERSIONS" | wc -l)
+    local LIST_HEIGHT=$((VERSION_COUNT + 2))
+
     local VERSION_LIST=""
     local i=1
     while IFS= read -r version; do
         if [ $i -eq 1 ]; then
-            VERSION_LIST="$version $i ON"
+            VERSION_LIST="$VERSION_LIST \"$version\" \"Version $i\" \"ON\""
         else
-            VERSION_LIST="$VERSION_LIST $version $i OFF"
+            VERSION_LIST="$VERSION_LIST \"$version\" \"Version $i\" \"OFF\""
         fi
         i=$((i+1))
     done <<< "$VERSIONS"
 
     local SELECTED_VERSION
-    SELECTED_VERSION=$(whiptail --title "Version wählen" \
-                                    --radiolist "Wähle die zu installierende Version:" \
-                                    20 80 \
+    eval "SELECTED_VERSION=\$(whiptail --title \"Version wählen\" \
+                                    --radiolist \"Wähle die zu installierende Version:\" \
+                                    20 80 $LIST_HEIGHT \
                                     $VERSION_LIST \
-                                    3>&1 >/dev/tty)
+                                    3>&1 1>&2 2>&3)"
 
     if [ -z "$SELECTED_VERSION" ]; then
         log_info "Update abgebrochen"
