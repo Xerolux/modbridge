@@ -150,8 +150,14 @@ check_base_dependencies() {
 kill_all_modbridge_processes() {
     log "🔍 Suche nach laufenden Modbridge-Prozessen..."
 
+    # Find modbridge processes, but exclude the script itself (modbridge.sh)
     local PIDS
-    PIDS=$(pgrep -f "modbridge" 2>/dev/null || true)
+    PIDS=$(pgrep -x "modbridge" 2>/dev/null | grep -v "^$$\$" || true)
+
+    # Also try to find by install directory if pgrep doesn't work
+    if [ -z "$PIDS" ] && [ -x "$INSTALL_DIR/modbridge" ]; then
+        PIDS=$(pidof modbridge 2>/dev/null || true)
+    fi
 
     if [ -n "$PIDS" ]; then
         log "⚠ Gefundene Prozesse: $PIDS"
@@ -164,7 +170,7 @@ kill_all_modbridge_processes() {
         local count=0
         while [ $count -lt 10 ]; do
             sleep 0.5
-            PIDS=$(pgrep -f "modbridge" 2>/dev/null || true)
+            PIDS=$(pgrep -x "modbridge" 2>/dev/null || true)
             if [ -z "$PIDS" ]; then
                 log "✓ Alle Prozesse wurden sauber beendet."
                 break
@@ -173,7 +179,7 @@ kill_all_modbridge_processes() {
         done
 
         # If still running, force kill with SIGKILL
-        PIDS=$(pgrep -f "modbridge" 2>/dev/null || true)
+        PIDS=$(pgrep -x "modbridge" 2>/dev/null || true)
         if [ -n "$PIDS" ]; then
             log "⚠ Einige Prozesse laufen noch, erzwinges Beendigung (SIGKILL)..."
             kill -9 $PIDS 2>/dev/null || true
@@ -181,7 +187,7 @@ kill_all_modbridge_processes() {
         fi
 
         # Final check
-        PIDS=$(pgrep -f "modbridge" 2>/dev/null || true)
+        PIDS=$(pgrep -x "modbridge" 2>/dev/null || true)
         if [ -n "$PIDS" ]; then
             log "❌ FEHLER: Konnte Prozesse nicht beenden: $PIDS"
             return 1
