@@ -55,7 +55,7 @@ jobs:
         env:
           CGO_ENABLED: "1"
         with:
-          version: v1.64
+          version: v1.65.0
           args: --timeout=5m
 
   test:
