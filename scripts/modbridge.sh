@@ -36,11 +36,46 @@ BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Cache Variables
+# ═══════════════════════════════════════════════════════════════════════════════
+CACHED_VERSIONS=""
+VERSIONS_CACHE_TIME=0
+CACHE_EXPIRY=300  # 5 minutes
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Helper Functions
 # ═══════════════════════════════════════════════════════════════════════════════
 
+log_msg() {
+    local LEVEL=$1
+    local MSG=$2
+    local COLOR=""
+    local PREFIX=""
+
+    case "$LEVEL" in
+        INFO) COLOR="$CYAN"; PREFIX="[INFO]" ;;
+        WARN) COLOR="$YELLOW"; PREFIX="[WARN]" ;;
+        ERROR) COLOR="$RED"; PREFIX="[ERROR]" ;;
+        *) COLOR="$GREEN"; PREFIX="[$(date +'%H:%M:%S')]" ;;
+    esac
+
+    echo -e "${COLOR}${PREFIX}${NC} $MSG" | tee -a "$LOG_FILE"
+}
+
 log() {
     echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+log_error() {
+    log_msg "ERROR" "$1"
+}
+
+log_warn() {
+    log_msg "WARN" "$1"
+}
+
+log_info() {
+    log_msg "INFO" "$1"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -111,18 +146,6 @@ self_update() {
         rm -f "$TEMP_SCRIPT"
         return 1
     fi
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE"
-}
-
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1" | tee -a "$LOG_FILE"
-}
-
-log_info() {
-    echo -e "${CYAN}[INFO]${NC} $1" | tee -a "$LOG_FILE"
 }
 
 print_header() {
@@ -340,11 +363,14 @@ detect_architecture() {
 # Cleanup Functions
 # ═══════════════════════════════════════════════════════════════════════════════
 
+get_modbridge_pids() {
+    pgrep -x "modbridge" 2>/dev/null || true
+}
+
 kill_all_modbridge_processes() {
     log "🔍 Suche nach laufenden Modbridge-Prozessen..."
 
-    local PIDS
-    PIDS=$(pgrep -x "modbridge" 2>/dev/null | grep -v "^$$\$" || true)
+    local PIDS=$(get_modbridge_pids)
 
     # Also try to find by install directory if pgrep doesn't work
     if [ -z "$PIDS" ] && [ -x "$INSTALL_DIR/modbridge" ]; then
@@ -360,7 +386,7 @@ kill_all_modbridge_processes() {
         local count=0
         while [ $count -lt 10 ]; do
             sleep 0.5
-            PIDS=$(pgrep -x "modbridge" 2>/dev/null || true)
+            PIDS=$(get_modbridge_pids)
             if [ -z "$PIDS" ]; then
                 log "✓ Alle Prozesse wurden sauber beendet."
                 break
@@ -368,14 +394,14 @@ kill_all_modbridge_processes() {
             count=$((count + 1))
         done
 
-        PIDS=$(pgrep -x "modbridge" 2>/dev/null || true)
+        PIDS=$(get_modbridge_pids)
         if [ -n "$PIDS" ]; then
             log_warn "Einige Prozesse laufen noch, erzwinges Beendigung (SIGKILL)..."
             kill -9 $PIDS 2>/dev/null || true
             sleep 1
         fi
 
-        PIDS=$(pgrep -x "modbridge" 2>/dev/null || true)
+        PIDS=$(get_modbridge_pids)
         if [ -n "$PIDS" ]; then
             log_error "Konnte Prozesse nicht beenden: $PIDS"
             return 1
@@ -415,12 +441,13 @@ check_and_wait_for_ports() {
         sleep 1
         WAIT_COUNT=$((WAIT_COUNT + 1))
 
-        BLOCKED_PORTS=()
-        for port in "${BLOCKED_PORTS[@]}"; do
+        local NEW_BLOCKED_PORTS=()
+        for port in $PORTS; do
             if lsof -i ":$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
-                BLOCKED_PORTS+=("$port")
+                NEW_BLOCKED_PORTS+=("$port")
             fi
         done
+        BLOCKED_PORTS=("${NEW_BLOCKED_PORTS[@]}")
 
         if [ ${#BLOCKED_PORTS[@]} -eq 0 ]; then
             log "✓ Alle Ports sind jetzt frei."
@@ -464,13 +491,23 @@ cleanup_modbridge() {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 fetch_available_versions() {
+    local CURRENT_TIME=$(date +%s)
+    local CACHE_AGE=$((CURRENT_TIME - VERSIONS_CACHE_TIME))
+
+    if [ -n "$CACHED_VERSIONS" ] && [ $CACHE_AGE -lt $CACHE_EXPIRY ]; then
+        echo "$CACHED_VERSIONS"
+        return 0
+    fi
+
     log "Frage verfügbare Versionen ab..."
-    local VERSIONS=$(curl -s "$RELEASES_API" | jq -r '.[].tag_name' | head -10)
-    if [ -z "$VERSIONS" ]; then
+    CACHED_VERSIONS=$(curl -s "$RELEASES_API" | jq -r '.[].tag_name' | head -10)
+    VERSIONS_CACHE_TIME=$CURRENT_TIME
+
+    if [ -z "$CACHED_VERSIONS" ]; then
         log_error "Keine Versionen gefunden"
         exit 1
     fi
-    echo "$VERSIONS"
+    echo "$CACHED_VERSIONS"
 }
 
 download_modbridge_binary() {
@@ -638,23 +675,25 @@ Headless = Kleinere Binary (22% weniger), nur Config-Datei" \
     local VERSION_COUNT=$(echo "$VERSIONS" | wc -l)
     local LIST_HEIGHT=$((VERSION_COUNT + 2))
 
-    local VERSION_LIST=""
+    # Build array for whiptail instead of string with eval
+    local -a VERSION_ARGS=()
     local i=1
     while IFS= read -r version; do
+        VERSION_ARGS+=("$version" "Version $i")
         if [ $i -eq 1 ]; then
-            VERSION_LIST="$VERSION_LIST \"$version\" \"Version $i\" \"ON\""
+            VERSION_ARGS+=("ON")
         else
-            VERSION_LIST="$VERSION_LIST \"$version\" \"Version $i\" \"OFF\""
+            VERSION_ARGS+=("OFF")
         fi
         i=$((i+1))
     done <<< "$VERSIONS"
 
     local SELECTED_VERSION
-    eval "SELECTED_VERSION=\$(whiptail --title \"Version wählen\" \
-                                    --radiolist \"Wähle die zu installierende Version:\" \
-                                    20 80 $LIST_HEIGHT \
-                                    $VERSION_LIST \
-                                    3>&1 1>&2 2>&3)"
+    SELECTED_VERSION=$(whiptail --title "Version wählen" \
+                                --radiolist "Wähle die zu installierende Version:" \
+                                20 80 "$LIST_HEIGHT" \
+                                "${VERSION_ARGS[@]}" \
+                                3>&1 1>&2 2>&3) || true
 
     if [ -z "$SELECTED_VERSION" ]; then
         log_info "Installation abgebrochen"
