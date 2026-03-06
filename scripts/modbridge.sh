@@ -134,12 +134,145 @@ check_base_dependencies() {
     command -v git  &>/dev/null || missing+=("git")
     command -v curl &>/dev/null || missing+=("curl")
     command -v file &>/dev/null || missing+=("file")
+    command -v lsof &>/dev/null || missing+=("lsof")
 
     if [ ${#missing[@]} -gt 0 ]; then
         log "Fehler: Folgende Programme fehlen: ${missing[*]}"
         log "Installation z.B. mit: apt install ${missing[*]}"
         exit 1
     fi
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Process & Port cleanup
+# ──────────────────────────────────────────────────────────────────────────────
+
+kill_all_modbridge_processes() {
+    log "🔍 Suche nach laufenden Modbridge-Prozessen..."
+
+    local PIDS
+    PIDS=$(pgrep -f "modbridge" 2>/dev/null || true)
+
+    if [ -n "$PIDS" ]; then
+        log "⚠ Gefundene Prozesse: $PIDS"
+        log "🔪 Beende alle Modbridge-Prozesse..."
+
+        # First try graceful SIGTERM
+        kill $PIDS 2>/dev/null || true
+
+        # Wait up to 5 seconds for processes to terminate
+        local count=0
+        while [ $count -lt 10 ]; do
+            sleep 0.5
+            PIDS=$(pgrep -f "modbridge" 2>/dev/null || true)
+            if [ -z "$PIDS" ]; then
+                log "✓ Alle Prozesse wurden sauber beendet."
+                break
+            fi
+            count=$((count + 1))
+        done
+
+        # If still running, force kill with SIGKILL
+        PIDS=$(pgrep -f "modbridge" 2>/dev/null || true)
+        if [ -n "$PIDS" ]; then
+            log "⚠ Einige Prozesse laufen noch, erzwinges Beendigung (SIGKILL)..."
+            kill -9 $PIDS 2>/dev/null || true
+            sleep 1
+        fi
+
+        # Final check
+        PIDS=$(pgrep -f "modbridge" 2>/dev/null || true)
+        if [ -n "$PIDS" ]; then
+            log "❌ FEHLER: Konnte Prozesse nicht beenden: $PIDS"
+            return 1
+        else
+            log "✓ Alle Modbridge-Prozesse beendet."
+        fi
+    else
+        log "✓ Keine laufenden Modbridge-Prozesse gefunden."
+    fi
+
+    return 0
+}
+
+check_and_wait_for_ports() {
+    local PORTS="8080 5020 5021 5022 5023 5024 5025 5026 5027 5028 5029 5030"
+    local MAX_WAIT=15
+    local WAIT_COUNT=0
+
+    log "🔍 Prüfe ob Ports belegt sind: $PORTS"
+
+    local BLOCKED_PORTS=()
+    for port in $PORTS; do
+        if lsof -i ":$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
+            BLOCKED_PORTS+=("$port")
+        fi
+    done
+
+    if [ ${#BLOCKED_PORTS[@]} -eq 0 ]; then
+        log "✓ Alle Ports sind frei."
+        return 0
+    fi
+
+    log "⚠ Blockierte Ports gefunden: ${BLOCKED_PORTS[*]}"
+    log "⏳ Warte auf Freigabe der Ports (max ${MAX_WAIT}s)..."
+
+    while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+        sleep 1
+        WAIT_COUNT=$((WAIT_COUNT + 1))
+
+        BLOCKED_PORTS=()
+        for port in $PORTS; do
+            if lsof -i ":$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
+                BLOCKED_PORTS+=("$port")
+            fi
+        done
+
+        if [ ${#BLOCKED_PORTS[@]} -eq 0 ]; then
+            log "✓ Alle Ports sind jetzt frei."
+            return 0
+        fi
+
+        if [ $((WAIT_COUNT % 5)) -eq 0 ]; then
+            log "   Noch blockiert: ${BLOCKED_PORTS[*]} (${WAIT_COUNT}s)"
+        fi
+    done
+
+    log "❌ FEHLER: Ports werden nicht freigegeben: ${BLOCKED_PORTS[*]}"
+    log "   Folgende Prozesse blockieren die Ports:"
+    for port in "${BLOCKED_PORTS[@]}"; do
+        log "   Port $port:"
+        lsof -i ":$port" -sTCP:LISTEN 2>/dev/null | while read -r line; do
+            log "     $line"
+        done
+    done
+    return 1
+}
+
+cleanup_modbridge() {
+    log "🧹 Cleanup: Beende alle Prozesse und gib Ports frei..."
+
+    # 1. Stop systemd service if active
+    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+        log "⏹ Stoppe systemd-Service..."
+        systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+        sleep 1
+    fi
+
+    # 2. Kill ALL modbridge processes (including orphans)
+    if ! kill_all_modbridge_processes; then
+        log "❌ Konnte nicht alle Prozesse beenden. Abbruch."
+        return 1
+    fi
+
+    # 3. Wait for ports to be released
+    if ! check_and_wait_for_ports; then
+        log "❌ Ports werden nicht freigegeben. Abbruch."
+        return 1
+    fi
+
+    log "✅ Cleanup erfolgreich: Alle Prozesse beendet, alle Ports frei."
+    return 0
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -347,6 +480,12 @@ install_modbridge() {
     log "🚀 Modbridge-Installation wird gestartet..."
     log "   Installationsverzeichnis: $INSTALL_DIR"
 
+    # Cleanup any existing instances
+    if ! cleanup_modbridge; then
+        log "❌ Cleanup fehlgeschlagen. Installation abgebrochen."
+        exit 1
+    fi
+
     mkdir -p "$INSTALL_DIR"
 
     # Prefer binary download; fall back to source build
@@ -397,13 +536,10 @@ update_modbridge() {
     echo ""
     log "🔄 Modbridge wird aktualisiert..."
 
-    # 1. Service stoppen (falls er läuft)
-    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-        log "⏹ Modbridge-Service wird gestoppt..."
-        systemctl stop "$SERVICE_NAME"
-        log "✓ Service gestoppt."
-    else
-        log "ℹ Service ist nicht aktiv, kein Stopp nötig."
+    # 1. Cleanup: Stop service, kill all processes, wait for ports
+    if ! cleanup_modbridge; then
+        log "❌ Cleanup fehlgeschlagen. Update abgebrochen."
+        exit 1
     fi
 
     # 2. Altes Binary sichern (falls vorhanden)
@@ -486,19 +622,24 @@ start_service() {
 stop_service() {
     check_root
     log "Modbridge-Service wird gestoppt..."
-    systemctl stop "$SERVICE_NAME"
-    log "Service gestoppt."
+    if ! cleanup_modbridge; then
+        log "⚠ Cleanup nicht vollständig erfolgreich, aber Service-Stop wurde versucht."
+    fi
+    log "Service gestoppt und Ports freigegeben."
 }
 
 restart_service() {
     check_root
     log "Modbridge-Service wird neu gestartet..."
-    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-        systemctl stop "$SERVICE_NAME"
-        log "✓ Service gestoppt."
+
+    # First stop and cleanup
+    if ! cleanup_modbridge; then
+        log "⚠ Cleanup nicht vollständig erfolgreich. Versuche trotzdem Neustart..."
     fi
+
+    # Then start
     systemctl start "$SERVICE_NAME"
-    log "✓ Service gestartet."
+    log "✓ Service neu gestartet."
 }
 
 status_service() {
@@ -603,6 +744,7 @@ case "$1" in
         echo "  ✓ Autostart via systemd"
         echo "  ✓ Automatischer Rollback bei fehlgeschlagenem Update"
         echo "  ✓ Backup-Verwaltung (behält die letzten 3 Backups)"
+        echo "  ✓ Robuster Cleanup: Beendet alle Prozesse und gibt Ports frei"
         echo ""
         echo "Beispiele:"
         echo "  sudo bash modbridge.sh install    # Installieren"
