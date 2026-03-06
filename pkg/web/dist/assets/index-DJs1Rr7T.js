@@ -1,4 +1,4 @@
-import{s as n}from"./index-vAtZlzka.js";import{B as l,o as r,c as a,x as t,y as o,d as s,a as d}from"./index-CEa4SUZO.js";var i=`
+import{s as n}from"./index-B4g-VDxE.js";import{B as l,o as r,c as a,x as t,y as o,d as s,a as d}from"./index-Bwue72Vd.js";var i=`
     .p-card {
         background: dt('card.background');
         color: dt('card.color');
