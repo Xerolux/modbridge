@@ -156,6 +156,102 @@ check_dependencies() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Installation Check
+# ═══════════════════════════════════════════════════════════════════════════════
+
+is_modbridge_installed() {
+    [ -f "$INSTALL_DIR/modbridge" ]
+}
+
+get_current_version() {
+    if ! is_modbridge_installed; then
+        echo ""
+        return
+    fi
+
+    # Try to get version from binary
+    "$INSTALL_DIR/modbridge" -version 2>/dev/null || echo "unbekannt"
+}
+
+get_latest_version() {
+    local VERSIONS=$(fetch_available_versions)
+    echo "$VERSIONS" | head -n 1
+}
+
+check_updates_available() {
+    if ! is_modbridge_installed; then
+        echo "0"
+        return
+    fi
+
+    local CURRENT=$(get_current_version)
+    local LATEST=$(get_latest_version)
+
+    if [ "$CURRENT" = "$LATEST" ]; then
+        echo "0"  # Up to date
+    elif [ -z "$CURRENT" ] || [ "$CURRENT" = "unbekannt" ]; then
+        echo "2"  # Unknown current version
+    else
+        echo "1"  # Update available
+    fi
+}
+
+show_installation_status() {
+    if is_modbridge_installed; then
+        local CURRENT=$(get_current_version)
+        local LATEST=$(get_latest_version)
+        local STATUS=$(check_updates_available)
+
+        echo ""
+        echo "${CYAN}══════════════════════════════════════════════════════════════════${NC}"
+        echo "${BOLD}${CYAN}  ModBridge Installations-Status${NC}"
+        echo "${CYAN}══════════════════════════════════════════════════════════════════${NC}"
+        echo ""
+
+        if [ "$STATUS" = "0" ]; then
+            echo -e "  Status: ${GREEN}✓ Aktuell${NC}"
+            echo -e "  Installierte Version: ${BOLD}$CURRENT${NC}"
+            echo -e "  Verfügbar: ${GREEN}$LATEST${NC}"
+        elif [ "$STATUS" = "1" ]; then
+            echo -e "  Status: ${YELLOW}⚠ Update verfügbar${NC}"
+            echo -e "  Installierte Version: ${BOLD}$CURRENT${NC}"
+            echo -e "  Neu verfügbar: ${GREEN}$LATEST${NC}"
+        else
+            echo -e "  Status: ${YELLOW}⚠ Installiert, Version unklar${NC}"
+            echo -e "  Installierte Version: ${YELLOW}$CURRENT${NC}"
+            echo -e "  Neu verfügbar: ${GREEN}$LATEST${NC}"
+        fi
+
+        # Get variant
+        if [ -f "$INSTALL_DIR/modbridge" ]; then
+            local SIZE=$(stat -c%s "$INSTALL_DIR/modbridge" 2>/dev/null || stat -f%z "$INSTALL_DIR/modbridge" 2>/dev/null)
+            if [ "$SIZE" -lt 8000000 ]; then
+                echo -e "  Variante: Headless (ohne WebUI)"
+            else
+                echo -e "  Variante: Full (mit WebUI)"
+            fi
+        fi
+
+        # Service status
+        if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+            echo -e "  Service: ${GREEN}Läuft${NC}"
+        else
+            echo -e "  Service: ${RED}Gestoppt${NC}"
+        fi
+
+        echo ""
+        echo "${CYAN}══════════════════════════════════════════════════════════════════${NC}"
+        echo ""
+    else
+        echo ""
+        echo "${CYAN}══════════════════════════════════════════════════════════════════${NC}"
+        echo "${BOLD}${CYAN}  ModBridge ist nicht installiert${NC}"
+        echo "${CYAN}══════════════════════════════════════════════════════════════════${NC}"
+        echo ""
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Architecture Detection
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -370,6 +466,73 @@ install_modbridge() {
     check_root
     check_dependencies
 
+    # Check if already installed and show status (unless --force is used)
+    if is_modbridge_installed && [ "${MODBRIDGE_FORCE:-0}" != "1" ]; then
+        local CURRENT=$(get_current_version)
+        local LATEST=$(get_latest_version)
+        local STATUS=$(check_updates_available)
+
+        show_installation_status
+
+        if [ "$STATUS" = "1" ] || [ "$STATUS" = "2" ]; then
+            # Update available or version unknown
+            log "${YELLOW}ModBridge ist bereits installiert (Version: $CURRENT)${NC}"
+            log "${GREEN}Neuere Version verfügbar: $LATEST${NC}"
+            echo ""
+
+            if command -v whiptail &>/dev/null; then
+                if whiptail --title "Update verfügbar" \
+                        --yesno "ModBridge ist bereits installiert.\n\n\
+Aktuell: $CURRENT\n\
+Verfügbar: $LATEST\n\n\
+Möchten Sie auf die neueste Version aktualisieren?" \
+                        12 80 \
+                        --yes-button "Ja, aktualisieren" --no-button "Abbrechen" \
+                        3>&1 1>&2 2>&3; then
+                    log "Starte Update-Prozess..."
+                    update_modbridge
+                    return $?
+                else
+                    log_info "Update abgebrochen"
+                    log_info "Verwenden Sie 'modbridge.sh update' für ein manuelles Update"
+                    log_info "Verwenden Sie 'modbridge.sh install --force' für eine Neuinstallation"
+                    return 0
+                fi
+            else
+                log_info "Verwenden Sie 'modbridge.sh update' zum Aktualisieren"
+                log_info "Verwenden Sie 'modbridge.sh install --force' für eine Neuinstallation"
+                return 0
+            fi
+        else
+            # Up to date
+            log "${GREEN}ModBridge ist bereits installiert und auf dem aktuellen Stand!${NC}"
+            log "Version: $CURRENT"
+            echo ""
+
+            if command -v whiptail &>/dev/null; then
+                if whiptail --title "Bereits installiert" \
+                        --yesno "ModBridge ist bereits installiert und aktuell.\n\n\
+Version: $CURRENT\n\n\
+Möchten Sie die Installation wiederholen (Neuinstallation)?" \
+                        12 80 \
+                        --yes-button "Ja, neu installieren" --no-button "Abbrechen" \
+                        3>&1 1>&2 2>&3; then
+                    log "Starte Neuinstallation..."
+                    # Continue with normal installation
+                else
+                    log_info "Installation abgebrochen"
+                    log_info "Verwenden Sie 'modbridge.sh update' für ein Update"
+                    log_info "Verwenden Sie 'modbridge.sh install --force' für eine erzwungene Neuinstallation"
+                    return 0
+                fi
+            else
+                log_info "Verwenden Sie 'modbridge.sh update' für ein Update"
+                log_info "Verwenden Sie 'modbridge.sh install --force' für eine erzwungene Neuinstallation"
+                return 0
+            fi
+        fi
+    fi
+
     print_header
 
     # Detect architecture
@@ -561,6 +724,15 @@ update_modbridge() {
     fi
 
     print_header
+
+    # Show current version info
+    if is_modbridge_installed; then
+        local CURRENT=$(get_current_version)
+        local LATEST=$(get_latest_version)
+        log "Aktuelle Version: ${BOLD}$CURRENT${NC}"
+        log "Verfügbare Version: ${BOLD}$LATEST${NC}"
+        echo ""
+    fi
 
     # Detect current architecture
     IFS='|' read -r ARCH_INFO ARCH_NAME <<< "$(detect_architecture)"
@@ -1006,8 +1178,8 @@ show_help() {
     printf "  sudo bash modbridge.sh ${GREEN}uninstall${NC}    - Vollständig deinstallieren\n\n"
 
     printf "${CYAN}Optionen:${NC}\n"
-    printf "  ${YELLOW}NO_UPDATE=1${NC} sudo bash modbridge.sh install\n"
-    printf "  # Überspringt die automatische Script-Aktualisierung\n\n"
+    printf "  ${YELLOW}--force${NC}                    - Installation erzwingen (überschreibt vorhandene)\n"
+    printf "  ${YELLOW}NO_UPDATE=1${NC}                - Script-Auto-Update überspringen\n\n"
 
     printf "${CYAN}Features:${NC}\n"
     printf "  ✓ Automatische Script-Aktualisierung vor jeder Ausführung\n"
@@ -1062,8 +1234,25 @@ show_help() {
 # Self-update before doing anything else
 self_update "$@"
 
+# Check for --force flag
+FORCE_INSTALL=0
+SKIP_STATUS=0
+
+for arg in "$@"; do
+    if [ "$arg" = "--force" ]; then
+        FORCE_INSTALL=1
+    fi
+    if [ "$arg" = "--skip-status" ]; then
+        SKIP_STATUS=1
+    fi
+done
+
 case "${1:-}" in
     install)
+        if [ $FORCE_INSTALL -eq 1 ]; then
+            log "${YELLOW}Force-Installation: Überspringe Installationsprüfung${NC}"
+            export MODBRIDGE_FORCE=1
+        fi
         install_modbridge
         ;;
     update)
@@ -1079,6 +1268,9 @@ case "${1:-}" in
         restart_service
         ;;
     status)
+        if [ $SKIP_STATUS -eq 0 ]; then
+            show_installation_status
+        fi
         status_service
         ;;
     logs)
@@ -1094,6 +1286,7 @@ case "${1:-}" in
         uninstall_modbridge
         ;;
     *)
+        show_installation_status
         show_help
         ;;
 esac
