@@ -8,7 +8,7 @@ import (
 )
 
 // getWebHandler returns the web UI handler
-// This file is used when NOT building with 'headless' tag
+// This file is ONLY compiled when NOT building with -tags headless
 func getWebHandler() http.Handler {
 	return web.Handler()
 }
