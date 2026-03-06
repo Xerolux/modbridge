@@ -8,6 +8,9 @@
 # - Choose between WebUI and Headless versions
 # - Download correct binary from GitHub Releases
 # - Automatic service management
+# - Automatic config backup before updates
+# - Health check and version info
+# - Complete uninstall with confirmation
 # ═══════════════════════════════════════════════════════════════════════════════
 
 set -e
@@ -612,7 +615,12 @@ Headless = Kleinere Binary (22% weniger), nur Config-Datei" \
         exit 1
     fi
 
-    # Backup
+    # Backup config before update
+    if [ -f "$INSTALL_DIR/config.json" ]; then
+        backup_config
+    fi
+
+    # Backup old binary
     if [ -f "$INSTALL_DIR/modbridge" ]; then
         local BACKUP_NAME="modbridge.backup.$(date +%Y%m%d_%H%M%S)"
         cp "$INSTALL_DIR/modbridge" "$INSTALL_DIR/$BACKUP_NAME"
@@ -757,6 +765,226 @@ status_service() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Logs
+# ═══════════════════════════════════════════════════════════════════════════════
+
+logs_service() {
+    check_root
+    local LINES="${2:-50}"
+
+    if [ "${1:-}" = "--follow" ] || [ "${1:-}" = "-f" ]; then
+        log "Zeige Live-Logs (Ctrl+C zum Beenden)..."
+        journalctl -u "$SERVICE_NAME" -f
+    else
+        echo "=== Letzte $LINES Log-Einträge ==="
+        journalctl -u "$SERVICE_NAME" -n "$LINES" --no-pager
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Version
+# ═══════════════════════════════════════════════════════════════════════════════
+
+version_service() {
+    echo "ModBridge Version:"
+    echo "=================="
+    echo ""
+
+    # Script version
+    echo "Script-Version: 2.1 - Enhanced"
+
+    # Check if modbridge binary exists
+    if [ -f "$INSTALL_DIR/modbridge" ]; then
+        echo "Installiert: $INSTALL_DIR/modbridge"
+
+        # Get version from binary
+        local VERSION=$("$INSTALL_DIR/modbridge" -version 2>/dev/null || echo "Unbekannt")
+        echo "Binary-Version: $VERSION"
+
+        # Get binary size
+        local SIZE=$(stat -c%s "$INSTALL_DIR/modbridge" 2>/dev/null || stat -f%z "$INSTALL_DIR/modbridge" 2>/dev/null)
+        local SIZE_MB=$(awk "BEGIN {printf \"%.2f\", $SIZE/1024/1024}")
+        echo "Binary-Größe: ${SIZE_MB} MB"
+
+        # Get variant
+        if [ "$SIZE" -lt 8000000 ]; then
+            echo "Variante: Headless (ohne WebUI)"
+        else
+            echo "Variante: Full (mit WebUI)"
+        fi
+
+        # Check if service is running
+        if systemctl is-active --quiet "$SERVICE_NAME"; then
+            echo "Service: ${GREEN}Aktiv${NC}"
+        else
+            echo "Service: ${RED}Inaktiv${NC}"
+        fi
+    else
+        echo "${YELLOW}ModBridge ist nicht installiert${NC}"
+    fi
+    echo ""
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Health Check
+# ═══════════════════════════════════════════════════════════════════════════════
+
+health_check() {
+    local EXIT_CODE=0
+
+    echo "ModBridge Health Check:"
+    echo "====================="
+    echo ""
+
+    # Check binary
+    if [ -f "$INSTALL_DIR/modbridge" ]; then
+        echo -e "[${GREEN}✓${NC}] Binary vorhanden: $INSTALL_DIR/modbridge"
+    else
+        echo -e "[${RED}✗${NC}] Binary nicht gefunden"
+        EXIT_CODE=1
+    fi
+
+    # Check config
+    if [ -f "$INSTALL_DIR/config.json" ]; then
+        echo -e "[${GREEN}✓${NC}] Konfiguration vorhanden: $INSTALL_DIR/config.json"
+    else
+        echo -e "[${YELLOW}⚠${NC}] Konfiguration nicht gefunden"
+    fi
+
+    # Check service file
+    if [ -f "$SERVICE_FILE" ]; then
+        echo -e "[${GREEN}✓${NC}] Service-Datei vorhanden: $SERVICE_FILE"
+    else
+        echo -e "[${RED}✗${NC}] Service-Datei nicht gefunden"
+        EXIT_CODE=1
+    fi
+
+    # Check if service is running
+    if systemctl is-active --quiet "$SERVICE_NAME"; then
+        echo -e "[${GREEN}✓${NC}] Service läuft"
+    else
+        echo -e "[${RED}✗${NC}] Service läuft nicht"
+        EXIT_CODE=1
+    fi
+
+    # Check if service is enabled
+    if systemctl is-enabled --quiet "$SERVICE_NAME"; then
+        echo -e "[${GREEN}✓${NC}] Service ist aktiviert (Autostart)"
+    else
+        echo -e "[${YELLOW}⚠${NC}] Service ist nicht aktiviert"
+    fi
+
+    # Check ports
+    echo ""
+    echo "Port-Status:"
+    local PORTS="8080 5020 5021 5022 5023"
+    for port in $PORTS; do
+        if lsof -i ":$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo -e "  Port $port: [${GREEN}BELEGT${NC}]"
+        else
+            echo -e "  Port $port: [${RED}FREI${NC}]"
+        fi
+    done
+
+    echo ""
+    if [ $EXIT_CODE -eq 0 ]; then
+        echo -e "${GREEN}Overall Health: OK${NC}"
+        return 0
+    else
+        echo -e "${RED}Overall Health: PROBLEMS DETECTED${NC}"
+        return 1
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Config Backup
+# ═══════════════════════════════════════════════════════════════════════════════
+
+backup_config() {
+    if [ ! -f "$INSTALL_DIR/config.json" ]; then
+        log_error "Keine Konfiguration gefunden: $INSTALL_DIR/config.json"
+        return 1
+    fi
+
+    local BACKUP_DIR="$INSTALL_DIR/backups"
+    mkdir -p "$BACKUP_DIR"
+
+    local BACKUP_FILE="$BACKUP_DIR/config-backup-$(date +%Y%m%d_%H%M%S).json"
+    cp "$INSTALL_DIR/config.json" "$BACKUP_FILE"
+
+    log "✓ Konfiguration gesichert: $BACKUP_FILE"
+    return 0
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Uninstall
+# ═══════════════════════════════════════════════════════════════════════════════
+
+uninstall_modbridge() {
+    check_root
+
+    print_header
+
+    # Check if installed
+    if [ ! -d "$INSTALL_DIR" ]; then
+        log_error "ModBridge ist nicht installiert"
+        return 1
+    fi
+
+    # Ask for confirmation
+    if command -v whiptail &>/dev/null; then
+        whiptail --title "ModBridge Deinstallieren" \
+                --yesno "Möchten Sie ModBridge wirklich vollständig deinstallieren?\n\n\
+Dies wird:\n\
+- Den Service stoppen und deaktivieren\n\
+- Die Service-Datei löschen\n\
+- Das Installationsverzeichnis $INSTALL_DIR löschen\n\
+- ALLE Daten inkl. Konfiguration und Datenbank löschen\n\n\
+${YELLOW}WARNUNG: Diese Aktion kann nicht rückgängig gemacht werden!${NC}" \
+                18 80 \
+                --yes-button "Ja, deinstallieren" --no-button "Abbrechen" \
+                3>&1 1>&2 2>&3 || exit 0
+
+        # Ask about config backup
+        if whiptail --title "Konfiguration sichern?" \
+                    --yesno "Möchten Sie die Konfiguration sichern vor dem Löschen?\n\n\
+Die Konfiguration wird nach $INSTALL_DIR/backups/ kopiert." \
+                    10 80 \
+                    --yes-button "Ja, sichern" --no-button "Nein, löschen" \
+                    3>&1 1>&2 2>&3; then
+            backup_config
+        fi
+    else
+        log_error "whiptail nicht verfügbar. Breche ab."
+        log_info "Verwenden Sie --force um ohne Bestätigung zu deinstallieren"
+        return 1
+    fi
+
+    log "Stoppe und deaktiviere Service..."
+    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+
+    # Cleanup processes and ports
+    if ! cleanup_modbridge; then
+        log_warn "Cleanup nicht vollständig erfolgreich"
+    fi
+
+    # Remove service file
+    log "Entferne Service-Datei..."
+    rm -f "$SERVICE_FILE"
+    systemctl daemon-reload
+
+    # Remove installation directory
+    log "Entferne Installationsverzeichnis..."
+    rm -rf "$INSTALL_DIR"
+
+    log "${GREEN}✓ ModBridge erfolgreich deinstalliert${NC}"
+    echo ""
+    log "Backup-Verzeichnis (falls vorhanden) wurde gelöscht"
+    log "Service-Datei wurde entfernt"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Help
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -770,7 +998,12 @@ show_help() {
     printf "  sudo bash modbridge.sh ${GREEN}start${NC}        - Service starten\n"
     printf "  sudo bash modbridge.sh ${GREEN}stop${NC}         - Service stoppen\n"
     printf "  sudo bash modbridge.sh ${GREEN}restart${NC}      - Service neustarten\n"
-    printf "  sudo bash modbridge.sh ${GREEN}status${NC}       - Service-Status anzeigen\n\n"
+    printf "  sudo bash modbridge.sh ${GREEN}status${NC}       - Service-Status anzeigen\n"
+    printf "  sudo bash modbridge.sh ${GREEN}logs${NC} [N]     - Logs anzeigen (letzte N Einträge)\n"
+    printf "  sudo bash modbridge.sh ${GREEN}logs${NC} -f      - Live-Logs anzeigen\n"
+    printf "  sudo bash modbridge.sh ${GREEN}version${NC}      - Version anzeigen\n"
+    printf "  sudo bash modbridge.sh ${GREEN}health${NC}       - Health-Check ausführen\n"
+    printf "  sudo bash modbridge.sh ${GREEN}uninstall${NC}    - Vollständig deinstallieren\n\n"
 
     printf "${CYAN}Optionen:${NC}\n"
     printf "  ${YELLOW}NO_UPDATE=1${NC} sudo bash modbridge.sh install\n"
@@ -809,6 +1042,17 @@ show_help() {
     printf "  # → Auswahl: WebUI oder Headless\n"
     printf "  # → Auswahl der Version\n"
     printf "  # → Download und Installation\n\n"
+
+    printf "${CYAN}Weitere Befehle:${NC}\n"
+    printf "  sudo bash modbridge.sh ${GREEN}logs${NC} [100]       - Logs anzeigen (letzte 100 Einträge)\n"
+    printf "  sudo bash modbridge.sh ${GREEN}logs${NC} -f         - Live-Logs anzeigen (follow)\n"
+    printf "  sudo bash modbridge.sh ${GREEN}version${NC}         - Version anzeigen\n"
+    printf "  sudo bash modbridge.sh ${GREEN}health${NC}          - Health-Check ausführen\n"
+    printf "  sudo bash modbridge.sh ${GREEN}uninstall${NC}       - Vollständig deinstallieren\n\n"
+
+    printf "${CYAN}Backup & Restore:${NC}\n"
+    printf "  Vor jedem Update wird automatisch ein Backup der Konfiguration erstellt.\n"
+    printf "  Backups werden in $INSTALL_DIR/backups/ gespeichert.\n\n"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -836,6 +1080,18 @@ case "${1:-}" in
         ;;
     status)
         status_service
+        ;;
+    logs)
+        logs_service "$2" "$3"
+        ;;
+    version|--version|-v)
+        version_service
+        ;;
+    health|--health)
+        health_check
+        ;;
+    uninstall)
+        uninstall_modbridge
         ;;
     *)
         show_help
