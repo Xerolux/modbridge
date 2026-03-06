@@ -206,30 +206,32 @@ jobs:
 
   # ─────────────────────────────────────────────────────────────────────────────
   # 5. Build & Push Docker Image (Linux amd64 + arm64)
+  # AUSKOMMENTIERT: Docker build wurde in separaten Workflow ausgelagert (docker.yml)
+  # Kann manuell über GitHub Actions ausgelöst werden
   # ─────────────────────────────────────────────────────────────────────────────
-  build-docker:
-    name: Docker Build & Push
-    runs-on: ubuntu-latest
-    needs: [prepare, test]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ needs.prepare.outputs.docker_tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+  # build-docker:
+  #   name: Docker Build & Push
+  #   runs-on: ubuntu-latest
+  #   needs: [prepare, test]
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: docker/setup-qemu-action@v3
+  #     - uses: docker/setup-buildx-action@v3
+  #     - name: Login to GHCR
+  #       uses: docker/login-action@v3
+  #       with:
+  #         registry: ${{ env.REGISTRY }}
+  #         username: ${{ github.actor }}
+  #         password: ${{ secrets.GITHUB_TOKEN }}
+  #     - name: Build and push
+  #       uses: docker/build-push-action@v6
+  #       with:
+  #         context: .
+  #         platforms: linux/amd64,linux/arm64
+  #         push: true
+  #         tags: ${{ needs.prepare.outputs.docker_tags }}
+  #         cache-from: type=gha
+  #         cache-to: type=gha,mode=max
 
   # ─────────────────────────────────────────────────────────────────────────────
   # 6. Create GitHub Release
@@ -237,7 +239,7 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [prepare, build-binaries, build-docker]
+    needs: [prepare, build-binaries]
     steps:
       - uses: actions/checkout@v4
       - name: Download all artifacts
@@ -267,11 +269,8 @@ jobs:
             **Typ:** ${{ inputs.release_type }}
 
             ### Docker
-            ```bash
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.docker_tag }}
-            docker run -d -p 8080:8080 -p 5020-5030:5020-5030 \
-              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.docker_tag }}
-            ```
+            Docker Images werden separat über den "Docker Build & Push" Workflow erstellt.
+            Bitte führe diesen Workflow manuell aus nach dem Release.
 
             ### Binaries
             | Plattform | Datei |
