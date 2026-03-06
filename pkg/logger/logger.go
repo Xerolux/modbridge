@@ -33,7 +33,7 @@ type Logger struct {
 	ringBuffer  []LogEntry
 	ringSize    int
 	subscribers map[chan LogEntry]struct{}
-	minLevel    LogLevel  // Minimum log level to output
+	minLevel    LogLevel // Minimum log level to output
 }
 
 // NewLogger creates a new logger.
