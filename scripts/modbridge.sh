@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # ModBridge Installation Script
 # Features:
@@ -11,7 +12,8 @@
 # - Health check and version info
 # - Complete uninstall with confirmation
 # ═══════════════════════════════════════════════════════════════════════════════
-set -euo pipefail  # Verbesserte Fehlerbehandlung: Exit on error, undefined vars, pipe failures
+
+set -e
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Configuration
@@ -22,38 +24,111 @@ SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}"
 LOG_FILE="/var/log/modbridge-install.log"
 REPO_URL="https://github.com/Xerolux/modbridge"
 RELEASES_API="https://api.github.com/repos/Xerolux/modbridge/releases"
-# Colors (optimiert für bessere Lesbarkeit)
+
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Helper Functions (optimiert: Einheitliche Logging-Funktionen)
+# Helper Functions
 # ═══════════════════════════════════════════════════════════════════════════════
+
 log() {
-    local level="$1"
-    shift
-    local color=""
-    case "$level" in
-        INFO) color="${CYAN}" ;;
-        WARN) color="${YELLOW}" ;;
-        ERROR) color="${RED}" ;;
-        *) color="${GREEN}" ;;
-    esac
-    echo -e "${color}[$(date +'%H:%M:%S') $level]${NC} $*" | tee -a "$LOG_FILE"
+    echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $1" | tee -a "$LOG_FILE"
 }
-log_info() { log INFO "$@"; }
-log_warn() { log WARN "$@"; }
-log_error() { log ERROR "$@"; }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Self-Update Function
+# ═══════════════════════════════════════════════════════════════════════════════
+
+self_update() {
+    # Skip update if NO_UPDATE env var is set
+    if [ "${NO_UPDATE:-}" = "1" ]; then
+        return 0
+    fi
+
+    # Only update when running with install, update, start, stop, restart commands
+    local cmd="${1:-}"
+    if [[ ! "$cmd" =~ ^(install|update|start|stop|restart)$ ]]; then
+        return 0
+    fi
+
+    log_info "Prüfe auf Script-Updates..."
+
+    # Get the script's own location
+    local SCRIPT_PATH="${BASH_SOURCE[0]}"
+    local SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
+    local TEMP_SCRIPT="$SCRIPT_DIR/modbridge.sh.new"
+
+    # Download latest version from GitHub
+    local REMOTE_URL="https://raw.githubusercontent.com/Xerolux/modbridge/main/scripts/modbridge.sh"
+
+    if ! curl -fsSL "$REMOTE_URL" -o "$TEMP_SCRIPT" 2>/dev/null; then
+        log_warn "Konnte Script-Update nicht prüfen (Download fehlgeschlagen)"
+        rm -f "$TEMP_SCRIPT"
+        return 0
+    fi
+
+    # Make it executable
+    chmod +x "$TEMP_SCRIPT"
+
+    # Compare versions using checksum
+    local CURRENT_MD5=$(md5sum "$SCRIPT_PATH" 2>/dev/null | awk '{print $1}')
+    local NEW_MD5=$(md5sum "$TEMP_SCRIPT" 2>/dev/null | awk '{print $1}')
+
+    if [ "$CURRENT_MD5" = "$NEW_MD5" ]; then
+        log_info "✓ Script ist aktuell"
+        rm -f "$TEMP_SCRIPT"
+        return 0
+    fi
+
+    # Versions are different - update available
+    log ""
+    log "${YELLOW}══════════════════════════════════════════════════════════════════${NC}"
+    log "${BOLD}${YELLOW}🔄 NEUE SCRIPT-VERSION VERFÜGBAR${NC}"
+    log "${YELLOW}══════════════════════════════════════════════════════════════════${NC}"
+    log ""
+    log "Das Script wird automatisch aktualisiert..."
+    log ""
+
+    # Replace old script with new one
+    if mv "$TEMP_SCRIPT" "$SCRIPT_PATH"; then
+        log "${GREEN}✓ Script erfolgreich aktualisiert${NC}"
+        log ""
+        log "Starte neu mit dem aktualisierten Script..."
+        log ""
+
+        # Re-execute this script with the same arguments
+        exec bash "$SCRIPT_PATH" "$@"
+    else
+        log_error "Konnte Script nicht aktualisieren"
+        rm -f "$TEMP_SCRIPT"
+        return 1
+    fi
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+log_info() {
+    echo -e "${CYAN}[INFO]${NC} $1" | tee -a "$LOG_FILE"
+}
 
 print_header() {
     echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║${NC} ${BOLD} ModBridge Installer ${NC} ${CYAN}║${NC}"
-    echo -e "${CYAN}║${NC} Version 2.1 - Optimized ${NC} ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC} ${BOLD}                  ModBridge Installer                      ${NC} ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}                    Version 2.0 - Enhanced                       ${NC} ${CYAN}║${NC}"
     echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 }
@@ -66,11 +141,13 @@ check_root() {
 }
 
 check_dependencies() {
-    log_info "Prüfe Abhängigkeiten..."
+    log "Prüfe Abhängigkeiten..."
     local missing=()
-    for dep in curl jq file lsof whiptail; do  # whiptail hinzugefügt als explizite Abhängigkeit
-        command -v "$dep" &>/dev/null || missing+=("$dep")
-    done
+    command -v curl  &>/dev/null || missing+=("curl")
+    command -v jq    &>/dev/null || missing+=("jq")
+    command -v file  &>/dev/null || missing+=("file")
+    command -v lsof  &>/dev/null || missing+=("lsof")
+
     if [ ${#missing[@]} -gt 0 ]; then
         log_error "Fehlende Programme: ${missing[*]}"
         log_info "Installation: apt install ${missing[*]}"
@@ -79,91 +156,94 @@ check_dependencies() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Self-Update Function (optimiert: Bessere Fehlerbehandlung, MD5 durch SHA256 ersetzt für Sicherheit)
+# Installation Check
 # ═══════════════════════════════════════════════════════════════════════════════
-self_update() {
-    if [ "${NO_UPDATE:-0}" = "1" ]; then
-        log_info "Script-Update übersprungen (NO_UPDATE=1)"
-        return 0
-    fi
-    local cmd="${1:-}"
-    if [[ ! "$cmd" =~ ^(install|update|start|stop|restart)$ ]]; then
-        return 0
-    fi
-    log_info "Prüfe auf Script-Updates..."
-    local SCRIPT_PATH="${BASH_SOURCE[0]}"
-    local TEMP_SCRIPT="/tmp/modbridge.sh.new"
-    local REMOTE_URL="https://raw.githubusercontent.com/Xerolux/modbridge/main/scripts/modbridge.sh"
-    if ! curl -fsSL "$REMOTE_URL" -o "$TEMP_SCRIPT" 2>/dev/null; then
-        log_warn "Konnte Script-Update nicht prüfen (Download fehlgeschlagen)"
-        rm -f "$TEMP_SCRIPT"
-        return 0
-    fi
-    chmod +x "$TEMP_SCRIPT"
-    local CURRENT_HASH=$(sha256sum "$SCRIPT_PATH" 2>/dev/null | awk '{print $1}')
-    local NEW_HASH=$(sha256sum "$TEMP_SCRIPT" 2>/dev/null | awk '{print $1}')
-    if [ "$CURRENT_HASH" = "$NEW_HASH" ]; then
-        log_info "✓ Script ist aktuell"
-        rm -f "$TEMP_SCRIPT"
-        return 0
-    fi
-    log ""
-    log_info "${YELLOW}NEUE SCRIPT-VERSION VERFÜGBAR${NC}"
-    log "Das Script wird automatisch aktualisiert..."
-    if mv "$TEMP_SCRIPT" "$SCRIPT_PATH"; then
-        log_info "✓ Script erfolgreich aktualisiert"
-        log "Starte neu mit dem aktualisierten Script..."
-        exec bash "$SCRIPT_PATH" "$@"
-    else
-        log_error "Konnte Script nicht aktualisieren"
-        rm -f "$TEMP_SCRIPT"
-        return 1
-    fi
-}
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Installation Check (optimiert: Bessere Versionsvergleichslogik)
-# ═══════════════════════════════════════════════════════════════════════════════
 is_modbridge_installed() {
     [ -f "$INSTALL_DIR/modbridge" ]
 }
 
+# Normalize version string by removing 'v' prefix and extracting base version
 normalize_version() {
-    echo "${1#v}" | cut -d'-' -f1
+    echo "${1#v}" | cut -d'-' -f1  # Remove 'v' prefix and pre-release suffix
 }
 
+# Compare two semantic versions. Returns 0 if equal, 1 if first < second, 2 if first > second
 compare_versions() {
     local v1=$(normalize_version "$1")
     local v2=$(normalize_version "$2")
-    if [ "$v1" = "$v2" ]; then return 0; fi
+
+    # If strings are equal after normalization
+    if [ "$v1" = "$v2" ]; then
+        return 0
+    fi
+
+    # Try numeric comparison with version parts
     local IFS='.'
     local i ver1=($v1) ver2=($v2)
-    local max_len=${#ver1[@]}
-    [ ${#ver2[@]} -gt $max_len ] && max_len=${#ver2[@]}
-    for ((i=0; i<$max_len; i++)); do
-        ver1[i]=${ver1[i]:-0}
-        ver2[i]=${ver2[i]:-0}
-        if ((10#${ver1[i]} < 10#${ver2[i]})); then return 1; fi
-        if ((10#${ver1[i]} > 10#${ver2[i]})); then return 2; fi
+
+    for ((i=${#ver1[@]}; i<${#ver2[@]}; i++)); do
+        ver1[i]=0
     done
+
+    for ((i=0; i<${#ver1[@]}; i++)); do
+        if [[ -z ${ver2[i]} ]]; then
+            ver2[i]=0
+        fi
+        if ((10#${ver1[i]:-0} < 10#${ver2[i]:-0})); then
+            return 1
+        elif ((10#${ver1[i]:-0} > 10#${ver2[i]:-0})); then
+            return 2
+        fi
+    done
+
     return 0
 }
 
 get_current_version() {
-    is_modbridge_installed && "$INSTALL_DIR/modbridge" -version 2>/dev/null || echo "unbekannt"
+    if ! is_modbridge_installed; then
+        echo ""
+        return
+    fi
+
+    # Try to get version from binary
+    "$INSTALL_DIR/modbridge" -version 2>/dev/null || echo "unbekannt"
 }
 
 get_latest_version() {
-    curl -s "$RELEASES_API" | jq -r '.[0].tag_name' 2>/dev/null || echo ""
+    local VERSIONS=$(fetch_available_versions)
+    echo "$VERSIONS" | head -n 1
 }
 
 check_updates_available() {
-    if ! is_modbridge_installed; then return 0; fi  # 0 = up to date
+    if ! is_modbridge_installed; then
+        echo "0"
+        return
+    fi
+
     local CURRENT=$(get_current_version)
     local LATEST=$(get_latest_version)
-    [ -z "$LATEST" ] && return 0
-    [ "$CURRENT" = "unbekannt" ] && return 2
+
+    if [ -z "$CURRENT" ] || [ "$CURRENT" = "unbekannt" ]; then
+        echo "2"  # Unknown current version
+        return
+    fi
+
+    if [ -z "$LATEST" ]; then
+        echo "0"  # Can't determine latest, assume up to date
+        return
+    fi
+
     compare_versions "$CURRENT" "$LATEST"
+    local result=$?
+
+    if [ $result -eq 0 ]; then
+        echo "0"  # Up to date
+    elif [ $result -eq 1 ]; then
+        echo "1"  # Update available (current < latest)
+    else
+        echo "0"  # Already on newer version than release (shouldn't happen)
+    fi
 }
 
 show_installation_status() {
@@ -171,159 +251,449 @@ show_installation_status() {
         local CURRENT=$(get_current_version)
         local LATEST=$(get_latest_version)
         local STATUS=$(check_updates_available)
-        local SIZE=$(stat -c%s "$INSTALL_DIR/modbridge" 2>/dev/null || echo 0)
-        local VARIANT=$([ "$SIZE" -lt 8000000 ] && echo "Headless (ohne WebUI)" || echo "Full (mit WebUI)")
-        local SERVICE_STATUS=$([ "$(systemctl is-active "$SERVICE_NAME" 2>/dev/null)" = "active" ] && echo "${GREEN}Läuft${NC}" || echo "${RED}Gestoppt${NC}")
-        echo -e "${CYAN}══════════════════════════════════════════════════════════════════${NC}"
-        echo -e "${BOLD}${CYAN} ModBridge Installations-Status${NC}"
-        echo -e "${CYAN}══════════════════════════════════════════════════════════════════${NC}"
-        echo -e " Status: $([ $STATUS -eq 1 ] && echo "${YELLOW}Update verfügbar${NC}" || echo "${GREEN}Aktuell${NC}")"
-        echo -e " Installierte Version: ${BOLD}$CURRENT${NC}"
-        echo -e " Verfügbar: ${GREEN}$LATEST${NC}"
-        echo -e " Variante: $VARIANT"
-        echo -e " Service: $SERVICE_STATUS"
-        echo -e "${CYAN}══════════════════════════════════════════════════════════════════${NC}"
+
+        echo ""
+        echo "${CYAN}══════════════════════════════════════════════════════════════════${NC}"
+        echo "${BOLD}${CYAN}  ModBridge Installations-Status${NC}"
+        echo "${CYAN}══════════════════════════════════════════════════════════════════${NC}"
+        echo ""
+
+        if [ "$STATUS" = "0" ]; then
+            echo -e "  Status: ${GREEN}✓ Aktuell${NC}"
+            echo -e "  Installierte Version: ${BOLD}$CURRENT${NC}"
+            echo -e "  Verfügbar: ${GREEN}$LATEST${NC}"
+        elif [ "$STATUS" = "1" ]; then
+            echo -e "  Status: ${YELLOW}⚠ Update verfügbar${NC}"
+            echo -e "  Installierte Version: ${BOLD}$CURRENT${NC}"
+            echo -e "  Neu verfügbar: ${GREEN}$LATEST${NC}"
+        else
+            echo -e "  Status: ${YELLOW}⚠ Installiert, Version unklar${NC}"
+            echo -e "  Installierte Version: ${YELLOW}$CURRENT${NC}"
+            echo -e "  Neu verfügbar: ${GREEN}$LATEST${NC}"
+        fi
+
+        # Get variant
+        if [ -f "$INSTALL_DIR/modbridge" ]; then
+            local SIZE=$(stat -c%s "$INSTALL_DIR/modbridge" 2>/dev/null || stat -f%z "$INSTALL_DIR/modbridge" 2>/dev/null)
+            if [ "$SIZE" -lt 8000000 ]; then
+                echo -e "  Variante: Headless (ohne WebUI)"
+            else
+                echo -e "  Variante: Full (mit WebUI)"
+            fi
+        fi
+
+        # Service status
+        if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+            echo -e "  Service: ${GREEN}Läuft${NC}"
+        else
+            echo -e "  Service: ${RED}Gestoppt${NC}"
+        fi
+
+        echo ""
+        echo "${CYAN}══════════════════════════════════════════════════════════════════${NC}"
+        echo ""
     else
-        echo -e "${CYAN}══════════════════════════════════════════════════════════════════${NC}"
-        echo -e "${BOLD}${CYAN} ModBridge ist nicht installiert${NC}"
-        echo -e "${CYAN}══════════════════════════════════════════════════════════════════${NC}"
+        echo ""
+        echo "${CYAN}══════════════════════════════════════════════════════════════════${NC}"
+        echo "${BOLD}${CYAN}  ModBridge ist nicht installiert${NC}"
+        echo "${CYAN}══════════════════════════════════════════════════════════════════${NC}"
+        echo ""
     fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Architecture Detection (optimiert: Mehr Architekturen, bessere Namen)
+# Architecture Detection
 # ═══════════════════════════════════════════════════════════════════════════════
+
 detect_architecture() {
     local ARCH=$(uname -m)
+    local DETECTED_ARCH=""
+    local ARCH_NAME=""
+
     case "$ARCH" in
-        x86_64) echo "amd64|Intel/AMD 64-bit (Standard Server)" ;;
-        aarch64) echo "arm64|ARM 64-bit (Raspberry Pi 4/5, ARM Server)" ;;
-        armv7l|armv6l) echo "arm|ARM 32-bit (Raspberry Pi Zero/1/2/3)" ;;
-        i386|i686) echo "386|Intel 32-bit (veraltet)" ;;
-        *) log_error "Unbekannte Architektur: $ARCH"; exit 1 ;;
+        x86_64)
+            DETECTED_ARCH="amd64"
+            ARCH_NAME="Intel/AMD 64-bit (Standard Server)"
+            ;;
+        aarch64)
+            DETECTED_ARCH="arm64"
+            ARCH_NAME="ARM 64-bit (Raspberry Pi 4/5, ARM Server)"
+            ;;
+        armv7l|armv6l)
+            DETECTED_ARCH="arm"
+            ARCH_NAME="ARM 32-bit (Raspberry Pi Zero/1/2/3, 32-bit OS)"
+            ;;
+        i386|i686)
+            DETECTED_ARCH="386"
+            ARCH_NAME="Intel 32-bit (veraltet)"
+            ;;
+        *)
+            log_error "Unbekannte Architektur: $ARCH"
+            exit 1
+            ;;
     esac
+
+    echo "$DETECTED_ARCH|$ARCH_NAME"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Cleanup Functions (optimiert: Timeout reduziert, Logging verbessert)
+# Cleanup Functions
 # ═══════════════════════════════════════════════════════════════════════════════
+
 kill_all_modbridge_processes() {
-    log_info "Suche nach laufenden Modbridge-Prozessen..."
-    local PIDS=$(pgrep -x "modbridge" 2>/dev/null || true)
-    [ -z "$PIDS" ] && log_info "✓ Keine Prozesse gefunden" && return 0
-    log_warn "Gefundene Prozesse: $PIDS"
-    kill $PIDS 2>/dev/null
-    local count=0
-    while [ $count -lt 5 ]; do  # Reduzierter Timeout
-        sleep 0.5
+    log "🔍 Suche nach laufenden Modbridge-Prozessen..."
+
+    local PIDS
+    PIDS=$(pgrep -x "modbridge" 2>/dev/null | grep -v "^$$\$" || true)
+
+    # Also try to find by install directory if pgrep doesn't work
+    if [ -z "$PIDS" ] && [ -x "$INSTALL_DIR/modbridge" ]; then
+        PIDS=$(pidof modbridge 2>/dev/null || true)
+    fi
+
+    if [ -n "$PIDS" ]; then
+        log "⚠  Gefundene Prozesse: $PIDS"
+        log "🔪 Beende alle Modbridge-Prozesse..."
+
+        kill $PIDS 2>/dev/null || true
+
+        local count=0
+        while [ $count -lt 10 ]; do
+            sleep 0.5
+            PIDS=$(pgrep -x "modbridge" 2>/dev/null || true)
+            if [ -z "$PIDS" ]; then
+                log "✓ Alle Prozesse wurden sauber beendet."
+                break
+            fi
+            count=$((count + 1))
+        done
+
         PIDS=$(pgrep -x "modbridge" 2>/dev/null || true)
-        [ -z "$PIDS" ] && log_info "✓ Prozesse beendet" && return 0
-        count=$((count + 1))
-    done
-    log_warn "Erzwinge Beendigung (SIGKILL)..."
-    kill -9 $PIDS 2>/dev/null
-    sleep 1
-    PIDS=$(pgrep -x "modbridge" 2>/dev/null || true)
-    [ -n "$PIDS" ] && log_error "Konnte Prozesse nicht beenden: $PIDS" && return 1
-    log_info "✓ Alle Prozesse beendet"
+        if [ -n "$PIDS" ]; then
+            log_warn "Einige Prozesse laufen noch, erzwinges Beendigung (SIGKILL)..."
+            kill -9 $PIDS 2>/dev/null || true
+            sleep 1
+        fi
+
+        PIDS=$(pgrep -x "modbridge" 2>/dev/null || true)
+        if [ -n "$PIDS" ]; then
+            log_error "Konnte Prozesse nicht beenden: $PIDS"
+            return 1
+        else
+            log "✓ Alle Modbridge-Prozesse beendet."
+        fi
+    else
+        log "✓ Keine laufenden Modbridge-Prozesse gefunden."
+    fi
+
     return 0
 }
 
 check_and_wait_for_ports() {
     local PORTS="8080 5020 5021 5022 5023 5024 5025 5026 5027 5028 5029 5030"
-    local MAX_WAIT=10  # Reduzierter Timeout
+    local MAX_WAIT=15
+    local WAIT_COUNT=0
+
+    log "🔍 Prüfe ob Ports belegt sind: $PORTS"
+
     local BLOCKED_PORTS=()
     for port in $PORTS; do
-        lsof -i ":$port" -sTCP:LISTEN >/dev/null 2>&1 && BLOCKED_PORTS+=("$port")
+        if lsof -i ":$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
+            BLOCKED_PORTS+=("$port")
+        fi
     done
-    [ ${#BLOCKED_PORTS[@]} -eq 0 ] && log_info "✓ Alle Ports frei" && return 0
-    log_warn "Blockierte Ports: ${BLOCKED_PORTS[*]}"
-    log_info "Warte auf Freigabe (max ${MAX_WAIT}s)..."
-    local WAIT_COUNT=0
+
+    if [ ${#BLOCKED_PORTS[@]} -eq 0 ]; then
+        log "✓ Alle Ports sind frei."
+        return 0
+    fi
+
+    log "⚠  Blockierte Ports gefunden: ${BLOCKED_PORTS[*]}"
+    log "⏳ Warte auf Freigabe der Ports (max ${MAX_WAIT}s)..."
+
     while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
         sleep 1
         WAIT_COUNT=$((WAIT_COUNT + 1))
+
         BLOCKED_PORTS=()
-        for port in $PORTS; do
-            lsof -i ":$port" -sTCP:LISTEN >/dev/null 2>&1 && BLOCKED_PORTS+=("$port")
+        for port in "${BLOCKED_PORTS[@]}"; do
+            if lsof -i ":$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
+                BLOCKED_PORTS+=("$port")
+            fi
         done
-        [ ${#BLOCKED_PORTS[@]} -eq 0 ] && log_info "✓ Ports frei" && return 0
+
+        if [ ${#BLOCKED_PORTS[@]} -eq 0 ]; then
+            log "✓ Alle Ports sind jetzt frei."
+            return 0
+        fi
+
+        if [ $((WAIT_COUNT % 5)) -eq 0 ]; then
+            log "   Noch blockiert: ${BLOCKED_PORTS[*]} (${WAIT_COUNT}s)"
+        fi
     done
-    log_error "Ports bleiben blockiert: ${BLOCKED_PORTS[*]}"
+
+    log_error "Ports werden nicht freigegeben: ${BLOCKED_PORTS[*]}"
     return 1
 }
 
 cleanup_modbridge() {
-    log_info "Cleanup: Beende Prozesse und Ports..."
-    systemctl stop "$SERVICE_NAME" 2>/dev/null
-    kill_all_modbridge_processes || return 1
-    check_and_wait_for_ports || return 1
-    log_info "✅ Cleanup erfolgreich"
+    log "🧹 Cleanup: Beende alle Prozesse und gib Ports frei..."
+
+    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+        log "⏹  Stoppe systemd-Service..."
+        systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+        sleep 1
+    fi
+
+    if ! kill_all_modbridge_processes; then
+        log_error "Cleanup fehlgeschlagen. Abbruch."
+        return 1
+    fi
+
+    if ! check_and_wait_for_ports; then
+        log_error "Ports werden nicht freigegeben. Abbruch."
+        return 1
+    fi
+
+    log "✅ Cleanup erfolgreich: Alle Prozesse beendet, alle Ports frei."
     return 0
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Release Download (optimiert: Bessere Download-Progress, Validierung)
+# Release Download
 # ═══════════════════════════════════════════════════════════════════════════════
+
 fetch_available_versions() {
-    curl -s "$RELEASES_API" | jq -r '.[].tag_name' | head -10
+    log "Frage verfügbare Versionen ab..."
+    local VERSIONS=$(curl -s "$RELEASES_API" | jq -r '.[].tag_name' | head -10)
+    if [ -z "$VERSIONS" ]; then
+        log_error "Keine Versionen gefunden"
+        exit 1
+    fi
+    echo "$VERSIONS"
 }
 
 download_modbridge_binary() {
-    local VERSION=$1 VARIANT=$2 ARCH=$3
-    local BINARY_NAME="modbridge-linux-${ARCH}${VARIANT:+"-headless"}"
+    local VERSION=$1
+    local VARIANT=$2  # "full" or "headless"
+    local ARCH=$3
+
+    local BINARY_NAME="modbridge-linux-${ARCH}"
+    if [ "$VARIANT" = "headless" ]; then
+        BINARY_NAME="${BINARY_NAME}-headless"
+    fi
+
     local DOWNLOAD_URL="${REPO_URL}/releases/download/${VERSION}/${BINARY_NAME}"
     local TEMP_FILE="/tmp/${BINARY_NAME}"
-    log_info "Lade herunter: $BINARY_NAME von $DOWNLOAD_URL"
-    curl -L -o "$TEMP_FILE" "$DOWNLOAD_URL" --progress-bar || { log_error "Download fehlgeschlagen"; rm -f "$TEMP_FILE"; return 1; }
-    file "$TEMP_FILE" | grep -q "ELF" || { log_error "Ungültige Binary"; rm -f "$TEMP_FILE"; return 1; }
-    mv "$TEMP_FILE" "$INSTALL_DIR/modbridge"
-    chmod +x "$INSTALL_DIR/modbridge"
-    log_info "✓ Binary heruntergeladen"
-    return 0
+
+    log "Lade herunter: $BINARY_NAME"
+    log "URL: $DOWNLOAD_URL"
+
+    if curl -L -o "$TEMP_FILE" "$DOWNLOAD_URL" --progress-bar; then
+        # Verify it's a valid binary
+        if file "$TEMP_FILE" | grep -q "ELF"; then
+            mv "$TEMP_FILE" "$INSTALL_DIR/modbridge"
+            chmod +x "$INSTALL_DIR/modbridge"
+            log "✓ Binary erfolgreich heruntergeladen"
+            return 0
+        else
+            log_error "Heruntergeladene Datei ist keine gültige Binary"
+            rm -f "$TEMP_FILE"
+            return 1
+        fi
+    else
+        log_error "Download fehlgeschlagen"
+        rm -f "$TEMP_FILE"
+        return 1
+    fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Installation (optimiert: Weniger Redundanz, bessere Menüs)
+# Installation
 # ═══════════════════════════════════════════════════════════════════════════════
+
 install_modbridge() {
     check_root
     check_dependencies
-    print_header
-    IFS='|' read -r ARCH ARCH_NAME <<< "$(detect_architecture)"
-    log_info "Erkannte Architektur: ${BOLD}$ARCH_NAME${NC}"
+
+    # Check if already installed and show status (unless --force is used)
     if is_modbridge_installed && [ "${MODBRIDGE_FORCE:-0}" != "1" ]; then
+        local CURRENT=$(get_current_version)
+        local LATEST=$(get_latest_version)
         local STATUS=$(check_updates_available)
+
         show_installation_status
-        if [ $STATUS -eq 0 ]; then
-            whiptail --title "Bereits installiert" --yesno "ModBridge ist aktuell. Neu installieren?" 10 60 --yes-button "Ja" --no-button "Nein" || { log_info "Abgebrochen"; return 0; }
+
+        if [ "$STATUS" = "1" ] || [ "$STATUS" = "2" ]; then
+            # Update available or version unknown
+            log "${YELLOW}ModBridge ist bereits installiert (Version: $CURRENT)${NC}"
+            log "${GREEN}Neuere Version verfügbar: $LATEST${NC}"
+            echo ""
+
+            if command -v whiptail &>/dev/null; then
+                if whiptail --title "Update verfügbar" \
+                        --yesno "ModBridge ist bereits installiert.\n\n\
+Aktuell: $CURRENT\n\
+Verfügbar: $LATEST\n\n\
+Möchten Sie auf die neueste Version aktualisieren?" \
+                        12 80 \
+                        --yes-button "Ja, aktualisieren" --no-button "Abbrechen" \
+                        3>&1 1>&2 2>&3; then
+                    log "Starte Update-Prozess..."
+                    update_modbridge
+                    return $?
+                else
+                    log_info "Update abgebrochen"
+                    log_info "Verwenden Sie 'modbridge.sh update' für ein manuelles Update"
+                    log_info "Verwenden Sie 'modbridge.sh install --force' für eine Neuinstallation"
+                    return 0
+                fi
+            else
+                log_info "Verwenden Sie 'modbridge.sh update' zum Aktualisieren"
+                log_info "Verwenden Sie 'modbridge.sh install --force' für eine Neuinstallation"
+                return 0
+            fi
         else
-            whiptail --title "Update verfügbar" --yesno "Update durchführen?" 10 60 --yes-button "Ja" --no-button "Nein" || { log_info "Abgebrochen"; return 0; }
-            update_modbridge
-            return
+            # Up to date
+            log "${GREEN}ModBridge ist bereits installiert und auf dem aktuellen Stand!${NC}"
+            log "Version: $CURRENT"
+            echo ""
+
+            if command -v whiptail &>/dev/null; then
+                if whiptail --title "Bereits installiert" \
+                        --yesno "ModBridge ist bereits installiert und aktuell.\n\n\
+Version: $CURRENT\n\n\
+Möchten Sie die Installation wiederholen (Neuinstallation)?" \
+                        12 80 \
+                        --yes-button "Ja, neu installieren" --no-button "Abbrechen" \
+                        3>&1 1>&2 2>&3; then
+                    log "Starte Neuinstallation..."
+                    # Continue with normal installation
+                else
+                    log_info "Installation abgebrochen"
+                    log_info "Verwenden Sie 'modbridge.sh update' für ein Update"
+                    log_info "Verwenden Sie 'modbridge.sh install --force' für eine erzwungene Neuinstallation"
+                    return 0
+                fi
+            else
+                log_info "Verwenden Sie 'modbridge.sh update' für ein Update"
+                log_info "Verwenden Sie 'modbridge.sh install --force' für eine erzwungene Neuinstallation"
+                return 0
+            fi
         fi
     fi
-    whiptail --title "Willkommen" --yesno "Fortfahren mit Installation?\nArchitektur: $ARCH_NAME" 10 60 || exit 0
-    local VARIANT=$(whiptail --title "Variante wählen" --radiolist "Wähle Variante:" 15 80 2 "full" "Mit WebUI" ON "headless" "Ohne WebUI" OFF 3>&1 1>&2 2>&3)
-    cleanup_modbridge || { whiptail --title "Fehler" --msgbox "Cleanup fehlgeschlagen" 10 60; exit 1; }
+
+    print_header
+
+    # Detect architecture
+    IFS='|' read -r ARCH_INFO ARCH_NAME <<< "$(detect_architecture)"
+    log "Erkannte Architektur: ${BOLD}$ARCH_NAME${NC}"
+
+    # Check if whiptail is available
+    if ! command -v whiptail &>/dev/null; then
+        log_error "whiptail ist nicht installiert"
+        log_info "Installation: apt install whiptail"
+        exit 1
+    fi
+
+    # Show welcome message
+    whiptail --title "ModBridge Installer" \
+            --yesno "Willkommen zum ModBridge Installer!\n\n\
+Erkannte Architektur: $ARCH_NAME\n\n\
+ModBridge wird jetzt installiert.\n\n\
+Fortfahren?" \
+            15 80 \
+            --yes-button "Ja" --no-button "Nein" \
+            3>&1 1>&2 2>&3 || exit 0
+
+    # Choose WebUI variant
+    local WEBUI_VARIANT
+    local CHOICE=$(whiptail --title "WebUI oder Headless?" \
+               --radiolist "Wähle die Variante:\n\n\
+Mit WebUI = Größere Binary, mit grafischer Oberfläche\n\
+Headless = Kleinere Binary (22% weniger), nur Config-Datei" \
+               15 80 2 \
+               "full" "Mit WebUI" "ON" \
+               "headless" "Ohne WebUI (Headless)" "OFF" \
+               3>&1 1>&2 2>&3)
+
+    if [ "$CHOICE" = "headless" ]; then
+        WEBUI_VARIANT="headless"
+    else
+        WEBUI_VARIANT="full"
+    fi
+
+    # Cleanup
+    if ! cleanup_modbridge; then
+        whiptail --title "Fehler" --msgbox "Cleanup fehlgeschlagen. Bitte manuell prüfen." 10 60
+        exit 1
+    fi
+
+    # Create directory
     mkdir -p "$INSTALL_DIR"
+    log "Installationsverzeichnis: $INSTALL_DIR"
+
+    # Select version
     local VERSIONS=$(fetch_available_versions)
-    local VERSION_LIST=()
+    local VERSION_COUNT=$(echo "$VERSIONS" | wc -l)
+    local LIST_HEIGHT=$((VERSION_COUNT + 2))
+
+    local VERSION_LIST=""
     local i=1
-    while read -r v; do
-        VERSION_LIST+=("$v" "Version $i" $([ $i -eq 1 ] && echo ON || echo OFF))
+    while IFS= read -r version; do
+        if [ $i -eq 1 ]; then
+            VERSION_LIST="$VERSION_LIST \"$version\" \"Version $i\" \"ON\""
+        else
+            VERSION_LIST="$VERSION_LIST \"$version\" \"Version $i\" \"OFF\""
+        fi
         i=$((i+1))
     done <<< "$VERSIONS"
-    local SELECTED_VERSION=$(whiptail --title "Version wählen" --radiolist "Wähle Version:" 20 80 10 "${VERSION_LIST[@]}" 3>&1 1>&2 2>&3)
-    [ -z "$SELECTED_VERSION" ] && { log_info "Abgebrochen"; exit 0; }
-    download_modbridge_binary "$SELECTED_VERSION" "$VARIANT" "$ARCH" || { whiptail --title "Fehler" --msgbox "Download fehlgeschlagen" 10 60; exit 1; }
-    if [ "$VARIANT" = "headless" ]; then
-        "$INSTALL_DIR/modbridge" -config > "$INSTALL_DIR/config.json" 2>/dev/null || log_warn "Standard-Config konnte nicht erstellt werden"
+
+    local SELECTED_VERSION
+    eval "SELECTED_VERSION=\$(whiptail --title \"Version wählen\" \
+                                    --radiolist \"Wähle die zu installierende Version:\" \
+                                    20 80 $LIST_HEIGHT \
+                                    $VERSION_LIST \
+                                    3>&1 1>&2 2>&3)"
+
+    if [ -z "$SELECTED_VERSION" ]; then
+        log_info "Installation abgebrochen"
+        exit 0
     fi
+
+    log "Gewählte Version: $SELECTED_VERSION"
+
+    # Download binary
+    if ! download_modbridge_binary "$SELECTED_VERSION" "$WEBUI_VARIANT" "$ARCH_INFO"; then
+        whiptail --title "Download fehlgeschlagen" \
+                 --msgbox "Der Download ist fehlgeschlagen.\n\n\
+Bitte prüfen:\n\
+- Internetverbindung\n\
+- GitHub Repository verfügbar\n\
+- Version existiert" \
+                 12 60
+        exit 1
+    fi
+
+    # Create default config.json for headless installations
+    if [ "$WEBUI_VARIANT" = "headless" ]; then
+        log "Erstelle Standard-Konfiguration für Headless-Betrieb..."
+        if ! "$INSTALL_DIR/modbridge" -config > "$INSTALL_DIR/config.json" 2>/dev/null; then
+            log_warn "Konnte Standard-Konfiguration nicht erstellen"
+            log_info "Sie können sie später manuell erstellen mit:"
+            log_info "  $ $INSTALL_DIR/modbridge -config > $INSTALL_DIR/config.json"
+        else
+            log "✓ Standard-Konfiguration erstellt: $INSTALL_DIR/config.json"
+        fi
+    fi
+
+    # Create systemd service
+    log "Erstelle systemd-Service..."
     cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=ModBridge Service
 After=network.target
+
 [Service]
 Type=simple
 User=root
@@ -331,183 +701,642 @@ WorkingDirectory=$INSTALL_DIR
 ExecStart=$INSTALL_DIR/modbridge -config $INSTALL_DIR/config.json
 Restart=always
 RestartSec=10
+
 [Install]
 WantedBy=multi-user.target
 EOF
+
+    # Enable and start service
+    log "Aktiviere und starte Service..."
     systemctl daemon-reload
-    systemctl enable --now "$SERVICE_NAME" || { log_error "Service-Start fehlgeschlagen"; systemctl status "$SERVICE_NAME"; exit 1; }
-    local MSG="ModBridge $SELECTED_VERSION installiert!\nVariante: $VARIANT\nArchitektur: $ARCH_NAME\nService: Läuft"
-    if [ "$VARIANT" = "headless" ]; then
-        MSG+="\nConfig: $INSTALL_DIR/config.json (bearbeiten und restart)"
+    systemctl enable "$SERVICE_NAME"
+    systemctl start "$SERVICE_NAME"
+
+    if systemctl is-active --quiet "$SERVICE_NAME"; then
+        log "✓ Service läuft erfolgreich"
     else
-        MSG+="\nWebUI: http://$(hostname -I | awk '{print $1}'):8080"
+        log_error "Service konnte nicht gestartet werden"
+        systemctl status "$SERVICE_NAME" --no-pager
+        exit 1
     fi
-    whiptail --title "Erfolg" --msgbox "$MSG" 15 80
+
+    # Success message
+    if [ "$WEBUI_VARIANT" = "headless" ]; then
+        # Headless success message with configuration info
+        whiptail --title "Installation erfolgreich" \
+                 --msgbox "ModBridge $SELECTED_VERSION wurde erfolgreich installiert!\n\n\
+Version: $SELECTED_VERSION\n\
+Variante: Headless (ohne WebUI)\n\
+Architektur: $ARCH_NAME\n\n\
+${BOLD}KONFIGURATION:${NC}\n\
+Die Konfiguration erfolgt über eine JSON-Datei:\n\n\
+📁 Config-Datei: $INSTALL_DIR/config.json\n\n\
+So erstellen Sie die Konfiguration:\n\
+  1. Standard-Konfiguration erstellen:\n\
+     $ $INSTALL_DIR/modbridge -config > $INSTALL_DIR/config.json\n\n\
+  2. Konfiguration bearbeiten:\n\
+     $ sudo nano $INSTALL_DIR/config.json\n\n\
+  3. Service neu starten:\n\
+     $ sudo systemctl restart $SERVICE_NAME\n\n\
+Service: systemctl $SERVICE_NAME {start,stop,restart,status}\n\n\
+${BOLD}DOKUMENTATION:${NC}\n\
+Ausführliche Informationen finden Sie in der README.md\n\
+im GitHub Repository oder mit: modbridge.sh help" \
+                 22 80
+    else
+        # Full success message with WebUI info
+        whiptail --title "Installation erfolgreich" \
+                 --msgbox "ModBridge $SELECTED_VERSION wurde erfolgreich installiert!\n\n\
+Version: $SELECTED_VERSION\n\
+Variante: Full (mit WebUI)\n\
+Architektur: $ARCH_NAME\n\n\
+Service: systemctl $SERVICE_NAME {start,stop,restart,status}\n\
+Config: $INSTALL_DIR/config.json\n\n\
+WebUI: http://$(hostname -I | awk '{print $1}'):8080\n\n\
+Das Standard-Passwort wurde beim ersten Start\n\
+automatisch generiert und in den Logs angezeigt." \
+                 18 80
+    fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Update (optimiert: Integrierte Backup-Logik, Rollback)
+# Update
 # ═══════════════════════════════════════════════════════════════════════════════
+
 update_modbridge() {
     check_root
     check_dependencies
-    [ ! -d "$INSTALL_DIR" ] && { log_error "Nicht installiert"; exit 1; }
+
+    if [ ! -d "$INSTALL_DIR" ]; then
+        log_error "Modbridge ist nicht unter $INSTALL_DIR installiert"
+        log_info "Bitte zuerst 'modbridge.sh install' ausführen"
+        exit 1
+    fi
+
     print_header
-    show_installation_status
-    IFS='|' read -r ARCH ARCH_NAME <<< "$(detect_architecture)"
-    local CURRENT_VARIANT=$([ $(stat -c%s "$INSTALL_DIR/modbridge" 2>/dev/null) -lt 8000000 ] && echo "headless" || echo "full")
-    whiptail --title "Update" --yesno "Fortfahren?\nArchitektur: $ARCH_NAME\nAktuell: $CURRENT_VARIANT" 10 60 || exit 0
-    local VARIANT=$(whiptail --title "Variante" --radiolist "Wähle:" 15 80 2 "full" "Mit WebUI" ON "headless" "Ohne WebUI" OFF 3>&1 1>&2 2>&3)
-    cleanup_modbridge || { whiptail --title "Fehler" --msgbox "Cleanup fehlgeschlagen" 10 60; exit 1; }
-    [ -f "$INSTALL_DIR/config.json" ] && backup_config
-    cp "$INSTALL_DIR/modbridge" "$INSTALL_DIR/modbridge.backup.$(date +%Y%m%d_%H%M%S)"
+
+    # Show current version info
+    if is_modbridge_installed; then
+        local CURRENT=$(get_current_version)
+        local LATEST=$(get_latest_version)
+        log "Aktuelle Version: ${BOLD}$CURRENT${NC}"
+        log "Verfügbare Version: ${BOLD}$LATEST${NC}"
+        echo ""
+    fi
+
+    # Detect current architecture
+    IFS='|' read -r ARCH_INFO ARCH_NAME <<< "$(detect_architecture)"
+    log "Erkannte Architektur: ${BOLD}$ARCH_NAME${NC}"
+
+    # Check current installation
+    local CURRENT_VARIANT=""
+    if file "$INSTALL_DIR/modbridge" 2>/dev/null | grep -q "not stripped"; then
+        CURRENT_VARIANT="full (mit WebUI)"
+    else
+        # Try to detect from size
+        local SIZE=$(stat -f%z "$INSTALL_DIR/modbridge" 2>/dev/null || stat -c%s "$INSTALL_DIR/modbridge" 2>/dev/null)
+        if [ "$SIZE" -lt 8000000 ]; then
+            CURRENT_VARIANT="headless (ohne WebUI)"
+        else
+            CURRENT_VARIANT="full (mit WebUI)"
+        fi
+    fi
+
+    log "Aktuelle Installation: $CURRENT_VARIANT"
+
+    # Confirm update
+    whiptail --title "ModBridge Update" \
+            --yesno "ModBridge wird aktualisiert.\n\n\
+Architektur: $ARCH_NAME\n\
+Aktuell: $CURRENT_VARIANT\n\n\
+Fortfahren?" \
+            15 80 \
+            --yes-button "Ja" --no-button "Nein" \
+            3>&1 1>&2 2>&3 || exit 0
+
+    # Choose variant
+    local WEBUI_VARIANT
+    local CHOICE=$(whiptail --title "WebUI oder Headless?" \
+               --radiolist "Wähle die Variante:\n\n\
+Mit WebUI = Größere Binary, mit grafischer Oberfläche\n\
+Headless = Kleinere Binary (22% weniger), nur Config-Datei" \
+               15 80 2 \
+               "full" "Mit WebUI" "ON" \
+               "headless" "Ohne WebUI (Headless)" "OFF" \
+               3>&1 1>&2 2>&3)
+
+    if [ "$CHOICE" = "headless" ]; then
+        WEBUI_VARIANT="headless"
+    else
+        WEBUI_VARIANT="full"
+    fi
+
+    # Cleanup
+    if ! cleanup_modbridge; then
+        whiptail --title "Fehler" --msgbox "Cleanup fehlgeschlagen. Bitte manuell prüfen." 10 60
+        exit 1
+    fi
+
+    # Backup config before update
+    if [ -f "$INSTALL_DIR/config.json" ]; then
+        backup_config
+    fi
+
+    # Backup old binary
+    if [ -f "$INSTALL_DIR/modbridge" ]; then
+        local BACKUP_NAME="modbridge.backup.$(date +%Y%m%d_%H%M%S)"
+        cp "$INSTALL_DIR/modbridge" "$INSTALL_DIR/$BACKUP_NAME"
+        log "✓ Altes Binary gesichert als: $BACKUP_NAME"
+    fi
+
+    # Select version
     local VERSIONS=$(fetch_available_versions)
-    local VERSION_LIST=()
+    local VERSION_COUNT=$(echo "$VERSIONS" | wc -l)
+    local LIST_HEIGHT=$((VERSION_COUNT + 2))
+
+    local VERSION_LIST=""
     local i=1
-    while read -r v; do
-        VERSION_LIST+=("$v" "Version $i" $([ $i -eq 1 ] && echo ON || echo OFF))
+    while IFS= read -r version; do
+        if [ $i -eq 1 ]; then
+            VERSION_LIST="$VERSION_LIST \"$version\" \"Version $i\" \"ON\""
+        else
+            VERSION_LIST="$VERSION_LIST \"$version\" \"Version $i\" \"OFF\""
+        fi
         i=$((i+1))
     done <<< "$VERSIONS"
-    local SELECTED_VERSION=$(whiptail --title "Version" --radiolist "Wähle:" 20 80 10 "${VERSION_LIST[@]}" 3>&1 1>&2 2>&3)
-    [ -z "$SELECTED_VERSION" ] && { log_info "Abgebrochen"; exit 0; }
-    download_modbridge_binary "$SELECTED_VERSION" "$VARIANT" "$ARCH" || { whiptail --title "Fehler" --msgbox "Download fehlgeschlagen" 10 60; exit 1; }
-    systemctl restart "$SERVICE_NAME" || {
-        log_error "Restart fehlgeschlagen - Rollback...";
-        LATEST_BACKUP=$(ls -t "$INSTALL_DIR"/modbridge.backup.* | head -1);
-        [ -n "$LATEST_BACKUP" ] && cp "$LATEST_BACKUP" "$INSTALL_DIR/modbridge" && chmod +x "$INSTALL_DIR/modbridge" && systemctl restart "$SERVICE_NAME";
-        exit 1;
-    }
-    ls -t "$INSTALL_DIR"/modbridge.backup.* | tail -n +4 | xargs rm -f 2>/dev/null
-    whiptail --title "Erfolg" --msgbox "Aktualisiert auf $SELECTED_VERSION!\nVariante: $VARIANT" 10 60
+
+    local SELECTED_VERSION
+    eval "SELECTED_VERSION=\$(whiptail --title \"Version wählen\" \
+                                    --radiolist \"Wähle die zu installierende Version:\" \
+                                    20 80 $LIST_HEIGHT \
+                                    $VERSION_LIST \
+                                    3>&1 1>&2 2>&3)"
+
+    if [ -z "$SELECTED_VERSION" ]; then
+        log_info "Update abgebrochen"
+        exit 0
+    fi
+
+    log "Gewählte Version: $SELECTED_VERSION"
+
+    # Download binary
+    if ! download_modbridge_binary "$SELECTED_VERSION" "$WEBUI_VARIANT" "$ARCH_INFO"; then
+        whiptail --title "Download fehlgeschlagen" \
+                 --msgbox "Der Download ist fehlgeschlagen.\n\n\
+Bitte prüfen:\n\
+- Internetverbindung\n\
+- GitHub Repository verfügbar\n\
+- Version existiert" \
+                 12 60
+        exit 1
+    fi
+
+    # Restart service
+    log "Starte Service neu..."
+    systemctl restart "$SERVICE_NAME"
+
+    if systemctl is-active --quiet "$SERVICE_NAME"; then
+        log "✓ Update erfolgreich. Service läuft."
+    else
+        log_error "Service konnte nicht gestartet werden"
+        systemctl status "$SERVICE_NAME" --no-pager
+
+        # Rollback
+        local LATEST_BACKUP
+        LATEST_BACKUP=$(ls -t "$INSTALL_DIR"/modbridge.backup.* 2>/dev/null | head -n 1)
+        if [ -n "$LATEST_BACKUP" ]; then
+            log "Rollback wird versucht..."
+            cp "$LATEST_BACKUP" "$INSTALL_DIR/modbridge"
+            chmod +x "$INSTALL_DIR/modbridge"
+            systemctl restart "$SERVICE_NAME" 2>/dev/null || true
+            if systemctl is-active --quiet "$SERVICE_NAME"; then
+                log "✓ Rollback erfolgreich"
+            else
+                log_error "Rollback fehlgeschlagen"
+            fi
+        fi
+        exit 1
+    fi
+
+    # Cleanup old backups (keep last 3)
+    local BACKUP_COUNT
+    BACKUP_COUNT=$(ls "$INSTALL_DIR"/modbridge.backup.* 2>/dev/null | wc -l)
+    if [ "$BACKUP_COUNT" -gt 3 ]; then
+        ls -t "$INSTALL_DIR"/modbridge.backup.* | tail -n +4 | xargs rm -f
+        log "✓ Alte Backups aufgeräumt (3 behalten)."
+    fi
+
+    whiptail --title "Update erfolgreich" \
+             --msgbox "ModBridge wurde erfolgreich auf $SELECTED_VERSION aktualisiert!\n\n\
+Variante: $([ "$WEBUI_VARIANT" = "headless" ] && echo "Headless (ohne WebUI)" || echo "Full (mit WebUI)")\n\n\
+Service läuft!" \
+             12 60
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Service Management (optimiert: Einheitliche Aufrufe)
+# Service Management
 # ═══════════════════════════════════════════════════════════════════════════════
-start_service() { check_root; cleanup_modbridge; systemctl start "$SERVICE_NAME"; log_info "✓ Gestartet"; }
-stop_service() { check_root; cleanup_modbridge; log_info "✓ Gestoppt"; }
-restart_service() { check_root; cleanup_modbridge; systemctl restart "$SERVICE_NAME"; log_info "✓ Neu gestartet"; }
+
+start_service() {
+    check_root
+    log "Starte Modbridge-Service..."
+    if ! cleanup_modbridge; then
+        log_error "Cleanup fehlgeschlagen"
+        exit 1
+    fi
+    systemctl start "$SERVICE_NAME"
+    log "✓ Service gestartet"
+}
+
+stop_service() {
+    check_root
+    log "Stoppe Modbridge-Service..."
+    if ! cleanup_modbridge; then
+        log_warn "Cleanup nicht vollständig erfolgreich, aber Service-Stop wurde versucht."
+    fi
+    log "✓ Service gestoppt und Ports freigegeben."
+}
+
+restart_service() {
+    check_root
+    log "Starte Modbridge-Service neu..."
+    if ! cleanup_modbridge; then
+        log_warn "Cleanup nicht vollständig erfolgreich. Versuche trotzdem Neustart..."
+    fi
+    systemctl restart "$SERVICE_NAME"
+    log "✓ Service neu gestartet."
+}
+
 status_service() {
     check_root
-    echo "Service Status:"
+    echo "ModBridge Service Status:"
+    echo "========================="
     systemctl status "$SERVICE_NAME" --no-pager
+    echo ""
     echo "Prozesse:"
-    pgrep -a modbridge || echo "Keine"
+    pgrep -a modbridge || echo "Keine Prozesse gefunden"
+    echo ""
     echo "Ports:"
     for port in 8080 5020 5021 5022 5023; do
-        lsof -i ":$port" >/dev/null 2>&1 && echo " $port: ${GREEN}Belegt${NC}" || echo " $port: ${RED}Frei${NC}"
+        if lsof -i ":$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo "  Port $port: ${GREEN}BELEGT${NC}"
+        else
+            echo "  Port $port: ${RED}FREI${NC}"
+        fi
     done
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Logs (optimiert: Bessere Handhabung)
+# Logs
 # ═══════════════════════════════════════════════════════════════════════════════
+
 logs_service() {
     check_root
-    if [ "${1:-}" = "-f" ] || [ "${1:-}" = "--follow" ]; then
+    local LINES="${2:-50}"
+
+    if [ "${1:-}" = "--follow" ] || [ "${1:-}" = "-f" ]; then
+        log "Zeige Live-Logs (Ctrl+C zum Beenden)..."
         journalctl -u "$SERVICE_NAME" -f
     else
-        journalctl -u "$SERVICE_NAME" -n "${1:-50}" --no-pager
+        echo "=== Letzte $LINES Log-Einträge ==="
+        journalctl -u "$SERVICE_NAME" -n "$LINES" --no-pager
     fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Version & Health (optimiert: Tabellenartige Ausgabe)
+# Version
 # ═══════════════════════════════════════════════════════════════════════════════
+
 version_service() {
     echo "ModBridge Version:"
-    echo "Script: 2.1 - Optimized"
-    if is_modbridge_installed; then
-        local VERSION=$(get_current_version)
-        local SIZE_MB=$(awk "BEGIN {printf \"%.2f\", $(stat -c%s "$INSTALL_DIR/modbridge")/1024/1024}")
-        local VARIANT=$([ $(stat -c%s "$INSTALL_DIR/modbridge") -lt 8000000 ] && echo "Headless" || echo "Full")
-        local SERVICE=$([ "$(systemctl is-active "$SERVICE_NAME")" = "active" ] && echo "${GREEN}Aktiv${NC}" || echo "${RED}Inaktiv${NC}")
-        echo "Binary: $VERSION"
-        echo "Größe: ${SIZE_MB} MB"
-        echo "Variante: $VARIANT"
-        echo "Service: $SERVICE"
+    echo "=================="
+    echo ""
+
+    # Script version
+    echo "Script-Version: 2.1 - Enhanced"
+
+    # Check if modbridge binary exists
+    if [ -f "$INSTALL_DIR/modbridge" ]; then
+        echo "Installiert: $INSTALL_DIR/modbridge"
+
+        # Get version from binary
+        local VERSION=$("$INSTALL_DIR/modbridge" -version 2>/dev/null || echo "Unbekannt")
+        echo "Binary-Version: $VERSION"
+
+        # Get binary size
+        local SIZE=$(stat -c%s "$INSTALL_DIR/modbridge" 2>/dev/null || stat -f%z "$INSTALL_DIR/modbridge" 2>/dev/null)
+        local SIZE_MB=$(awk "BEGIN {printf \"%.2f\", $SIZE/1024/1024}")
+        echo "Binary-Größe: ${SIZE_MB} MB"
+
+        # Get variant
+        if [ "$SIZE" -lt 8000000 ]; then
+            echo "Variante: Headless (ohne WebUI)"
+        else
+            echo "Variante: Full (mit WebUI)"
+        fi
+
+        # Check if service is running
+        if systemctl is-active --quiet "$SERVICE_NAME"; then
+            echo "Service: ${GREEN}Aktiv${NC}"
+        else
+            echo "Service: ${RED}Inaktiv${NC}"
+        fi
     else
-        echo "${YELLOW}Nicht installiert${NC}"
+        echo "${YELLOW}ModBridge ist nicht installiert${NC}"
     fi
+    echo ""
 }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Health Check
+# ═══════════════════════════════════════════════════════════════════════════════
 
 health_check() {
     local EXIT_CODE=0
-    echo "Health Check:"
-    [ -f "$INSTALL_DIR/modbridge" ] && echo "[${GREEN}✓${NC}] Binary" || { echo "[${RED}✗${NC}] Binary"; EXIT_CODE=1; }
-    [ -f "$INSTALL_DIR/config.json" ] && echo "[${GREEN}✓${NC}] Config" || echo "[${YELLOW}⚠${NC}] Config"
-    [ -f "$SERVICE_FILE" ] && echo "[${GREEN}✓${NC}] Service-File" || { echo "[${RED}✗${NC}] Service-File"; EXIT_CODE=1; }
-    [ "$(systemctl is-active "$SERVICE_NAME")" = "active" ] && echo "[${GREEN}✓${NC}] Service läuft" || { echo "[${RED}✗${NC}] Service läuft nicht"; EXIT_CODE=1; }
-    [ "$(systemctl is-enabled "$SERVICE_NAME")" = "enabled" ] && echo "[${GREEN}✓${NC}] Autostart" || echo "[${YELLOW}⚠${NC}] Autostart nicht aktiviert"
-    echo "Ports:"
-    for port in 8080 5020 5021 5022 5023; do
-        lsof -i ":$port" >/dev/null 2>&1 && echo " $port [${GREEN}Belegt${NC}]" || echo " $port [${RED}Frei${NC}]"
+
+    echo "ModBridge Health Check:"
+    echo "====================="
+    echo ""
+
+    # Check binary
+    if [ -f "$INSTALL_DIR/modbridge" ]; then
+        echo -e "[${GREEN}✓${NC}] Binary vorhanden: $INSTALL_DIR/modbridge"
+    else
+        echo -e "[${RED}✗${NC}] Binary nicht gefunden"
+        EXIT_CODE=1
+    fi
+
+    # Check config
+    if [ -f "$INSTALL_DIR/config.json" ]; then
+        echo -e "[${GREEN}✓${NC}] Konfiguration vorhanden: $INSTALL_DIR/config.json"
+    else
+        echo -e "[${YELLOW}⚠${NC}] Konfiguration nicht gefunden"
+    fi
+
+    # Check service file
+    if [ -f "$SERVICE_FILE" ]; then
+        echo -e "[${GREEN}✓${NC}] Service-Datei vorhanden: $SERVICE_FILE"
+    else
+        echo -e "[${RED}✗${NC}] Service-Datei nicht gefunden"
+        EXIT_CODE=1
+    fi
+
+    # Check if service is running
+    if systemctl is-active --quiet "$SERVICE_NAME"; then
+        echo -e "[${GREEN}✓${NC}] Service läuft"
+    else
+        echo -e "[${RED}✗${NC}] Service läuft nicht"
+        EXIT_CODE=1
+    fi
+
+    # Check if service is enabled
+    if systemctl is-enabled --quiet "$SERVICE_NAME"; then
+        echo -e "[${GREEN}✓${NC}] Service ist aktiviert (Autostart)"
+    else
+        echo -e "[${YELLOW}⚠${NC}] Service ist nicht aktiviert"
+    fi
+
+    # Check ports
+    echo ""
+    echo "Port-Status:"
+    local PORTS="8080 5020 5021 5022 5023"
+    for port in $PORTS; do
+        if lsof -i ":$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo -e "  Port $port: [${GREEN}BELEGT${NC}]"
+        else
+            echo -e "  Port $port: [${RED}FREI${NC}]"
+        fi
     done
-    [ $EXIT_CODE -eq 0 ] && echo "${GREEN}OK${NC}" || echo "${RED}Probleme${NC}"
+
+    echo ""
+    if [ $EXIT_CODE -eq 0 ]; then
+        echo -e "${GREEN}Overall Health: OK${NC}"
+        return 0
+    else
+        echo -e "${RED}Overall Health: PROBLEMS DETECTED${NC}"
+        return 1
+    fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Config Backup & Uninstall (optimiert: Bessere Pfade)
+# Config Backup
 # ═══════════════════════════════════════════════════════════════════════════════
+
 backup_config() {
-    [ ! -f "$INSTALL_DIR/config.json" ] && { log_error "Keine Config"; return 1; }
+    if [ ! -f "$INSTALL_DIR/config.json" ]; then
+        log_error "Keine Konfiguration gefunden: $INSTALL_DIR/config.json"
+        return 1
+    fi
+
     local BACKUP_DIR="$INSTALL_DIR/backups"
     mkdir -p "$BACKUP_DIR"
-    cp "$INSTALL_DIR/config.json" "$BACKUP_DIR/config-$(date +%Y%m%d_%H%M%S).json"
-    log_info "✓ Config gesichert"
+
+    local BACKUP_FILE="$BACKUP_DIR/config-backup-$(date +%Y%m%d_%H%M%S).json"
+    cp "$INSTALL_DIR/config.json" "$BACKUP_FILE"
+
+    log "✓ Konfiguration gesichert: $BACKUP_FILE"
+    return 0
 }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Uninstall
+# ═══════════════════════════════════════════════════════════════════════════════
 
 uninstall_modbridge() {
     check_root
-    [ ! -d "$INSTALL_DIR" ] && { log_error "Nicht installiert"; return 1; }
+
     print_header
-    whiptail --title "Deinstallieren" --yesno "Wirklich deinstallieren? Alle Daten werden gelöscht!" 10 60 || exit 0
-    whiptail --title "Backup?" --yesno "Config sichern?" 10 60 && backup_config
-    systemctl disable --now "$SERVICE_NAME" 2>/dev/null
-    cleanup_modbridge
+
+    # Check if installed
+    if [ ! -d "$INSTALL_DIR" ]; then
+        log_error "ModBridge ist nicht installiert"
+        return 1
+    fi
+
+    # Ask for confirmation
+    if command -v whiptail &>/dev/null; then
+        whiptail --title "ModBridge Deinstallieren" \
+                --yesno "Möchten Sie ModBridge wirklich vollständig deinstallieren?\n\n\
+Dies wird:\n\
+- Den Service stoppen und deaktivieren\n\
+- Die Service-Datei löschen\n\
+- Das Installationsverzeichnis $INSTALL_DIR löschen\n\
+- ALLE Daten inkl. Konfiguration und Datenbank löschen\n\n\
+${YELLOW}WARNUNG: Diese Aktion kann nicht rückgängig gemacht werden!${NC}" \
+                18 80 \
+                --yes-button "Ja, deinstallieren" --no-button "Abbrechen" \
+                3>&1 1>&2 2>&3 || exit 0
+
+        # Ask about config backup
+        if whiptail --title "Konfiguration sichern?" \
+                    --yesno "Möchten Sie die Konfiguration sichern vor dem Löschen?\n\n\
+Die Konfiguration wird nach $INSTALL_DIR/backups/ kopiert." \
+                    10 80 \
+                    --yes-button "Ja, sichern" --no-button "Nein, löschen" \
+                    3>&1 1>&2 2>&3; then
+            backup_config
+        fi
+    else
+        log_error "whiptail nicht verfügbar. Breche ab."
+        log_info "Verwenden Sie --force um ohne Bestätigung zu deinstallieren"
+        return 1
+    fi
+
+    log "Stoppe und deaktiviere Service..."
+    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+
+    # Cleanup processes and ports
+    if ! cleanup_modbridge; then
+        log_warn "Cleanup nicht vollständig erfolgreich"
+    fi
+
+    # Remove service file
+    log "Entferne Service-Datei..."
     rm -f "$SERVICE_FILE"
     systemctl daemon-reload
+
+    # Remove installation directory
+    log "Entferne Installationsverzeichnis..."
     rm -rf "$INSTALL_DIR"
-    log_info "✓ Deinstalliert"
+
+    log "${GREEN}✓ ModBridge erfolgreich deinstalliert${NC}"
+    echo ""
+    log "Backup-Verzeichnis (falls vorhanden) wurde gelöscht"
+    log "Service-Datei wurde entfernt"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Help (optimiert: Aktualisierte Texte, klarer)
+# Help
 # ═══════════════════════════════════════════════════════════════════════════════
+
 show_help() {
-    echo "${BOLD}ModBridge Script${NC}"
-    echo "Verwendung: sudo bash modbridge.sh [COMMAND]"
-    echo "Commands:"
-    echo "  install   - Installieren"
-    echo "  update    - Aktualisieren"
-    echo "  start     - Starten"
-    echo "  stop      - Stoppen"
-    echo "  restart   - Neustarten"
-    echo "  status    - Status"
-    echo "  logs [N]  - Logs (letzte N, default 50)"
-    echo "  logs -f   - Live Logs"
-    echo "  version   - Version"
-    echo "  health    - Health Check"
-    echo "  uninstall - Deinstallieren"
-    echo "Optionen: --force (für install), NO_UPDATE=1 (kein Self-Update)"
+    printf "${BOLD}ModBridge Installation Script${NC}\n"
+    printf "${BOLD}============================${NC}\n\n"
+
+    printf "${CYAN}Verwendung:${NC}\n"
+    printf "  sudo bash modbridge.sh ${GREEN}install${NC}      - Installation mit interaktivem Menü\n"
+    printf "  sudo bash modbridge.sh ${GREEN}update${NC}       - Update mit interaktivem Menü\n"
+    printf "  sudo bash modbridge.sh ${GREEN}start${NC}        - Service starten\n"
+    printf "  sudo bash modbridge.sh ${GREEN}stop${NC}         - Service stoppen\n"
+    printf "  sudo bash modbridge.sh ${GREEN}restart${NC}      - Service neustarten\n"
+    printf "  sudo bash modbridge.sh ${GREEN}status${NC}       - Service-Status anzeigen\n"
+    printf "  sudo bash modbridge.sh ${GREEN}logs${NC} [N]     - Logs anzeigen (letzte N Einträge)\n"
+    printf "  sudo bash modbridge.sh ${GREEN}logs${NC} -f      - Live-Logs anzeigen\n"
+    printf "  sudo bash modbridge.sh ${GREEN}version${NC}      - Version anzeigen\n"
+    printf "  sudo bash modbridge.sh ${GREEN}health${NC}       - Health-Check ausführen\n"
+    printf "  sudo bash modbridge.sh ${GREEN}uninstall${NC}    - Vollständig deinstallieren\n\n"
+
+    printf "${CYAN}Optionen:${NC}\n"
+    printf "  ${YELLOW}--force${NC}                    - Installation erzwingen (überschreibt vorhandene)\n"
+    printf "  ${YELLOW}NO_UPDATE=1${NC}                - Script-Auto-Update überspringen\n\n"
+
+    printf "${CYAN}Features:${NC}\n"
+    printf "  ✓ Automatische Script-Aktualisierung vor jeder Ausführung\n"
+    printf "  ✓ Interaktive grafische Menüs (whiptail)\n"
+    printf "  ✓ Automatische Architektur-Erkennung (amd64, arm64, arm)\n"
+    printf "  ✓ Wahl zwischen WebUI und Headless-Versionen\n"
+    printf "  ✓ Download der passenden Binary von GitHub Releases\n"
+    printf "  ✓ Automatische Service-Verwaltung via systemd\n"
+    printf "  ✓ Robuster Cleanup: Beendet alle Prozesse, gibt Ports frei\n"
+    printf "  ✓ Backup-Management mit automatischem Rollback\n\n"
+
+    printf "${CYAN}Unterstützte Architekturen:${NC}\n"
+    printf "  • ${YELLOW}amd64${NC}  - Intel/AMD 64-bit (Standard Server)\n"
+    printf "  • ${YELLOW}arm64${NC}  - ARM 64-bit (Raspberry Pi 4/5, ARM Server)\n"
+    printf "  • ${YELLOW}arm${NC}    - ARM 32-bit (Raspberry Pi Zero/1/2/3, 32-bit OS)\n\n"
+
+    printf "${CYAN}Varianten:${NC}\n"
+    printf "  • ${GREEN}Full${NC}     - Mit WebUI (~8.8 MB)\n"
+    printf "  • ${GREEN}Headless${NC} - Ohne WebUI (~6.9 MB, 22% kleiner)\n\n"
+
+    printf "${CYAN}Auto-Update:${NC}\n"
+    printf "  Das Script prüft vor jedem Befehl (install, update, start, stop, restart),\n"
+    printf "  ob eine neuere Version im Git Repository verfügbar ist.\n"
+    printf "  Falls ja, wird es automatisch aktualisiert und neu gestartet.\n\n"
+
+    printf "${CYAN}Beispiel:${NC}\n"
+    printf "  $ sudo bash modbridge.sh install\n"
+    printf "  # → Prüft auf Script-Updates\n"
+    printf "  # → Falls nötig: Aktualisiert sich selbst und startet neu\n"
+    printf "  # → Öffnet interaktives Menü\n"
+    printf "  # → Zeigt erkannte Architektur\n"
+    printf "  # → Auswahl: WebUI oder Headless\n"
+    printf "  # → Auswahl der Version\n"
+    printf "  # → Download und Installation\n\n"
+
+    printf "${CYAN}Weitere Befehle:${NC}\n"
+    printf "  sudo bash modbridge.sh ${GREEN}logs${NC} [100]       - Logs anzeigen (letzte 100 Einträge)\n"
+    printf "  sudo bash modbridge.sh ${GREEN}logs${NC} -f         - Live-Logs anzeigen (follow)\n"
+    printf "  sudo bash modbridge.sh ${GREEN}version${NC}         - Version anzeigen\n"
+    printf "  sudo bash modbridge.sh ${GREEN}health${NC}          - Health-Check ausführen\n"
+    printf "  sudo bash modbridge.sh ${GREEN}uninstall${NC}       - Vollständig deinstallieren\n\n"
+
+    printf "${CYAN}Backup & Restore:${NC}\n"
+    printf "  Vor jedem Update wird automatisch ein Backup der Konfiguration erstellt.\n"
+    printf "  Backups werden in $INSTALL_DIR/backups/ gespeichert.\n\n"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Main (optimiert: Flag-Handhabung, Self-Update zuerst)
+# Main
 # ═══════════════════════════════════════════════════════════════════════════════
+
+# Self-update before doing anything else
 self_update "$@"
-MODBRIDGE_FORCE=0
-for arg in "$@"; do [ "$arg" = "--force" ] && MODBRIDGE_FORCE=1; done
+
+# Check for --force flag
+FORCE_INSTALL=0
+SKIP_STATUS=0
+
+for arg in "$@"; do
+    if [ "$arg" = "--force" ]; then
+        FORCE_INSTALL=1
+    fi
+    if [ "$arg" = "--skip-status" ]; then
+        SKIP_STATUS=1
+    fi
+done
+
 case "${1:-}" in
-    install) install_modbridge ;;
-    update) update_modbridge ;;
-    start) start_service ;;
-    stop) stop_service ;;
-    restart) restart_service ;;
-    status) show_installation_status; status_service ;;
-    logs) logs_service "${2:-}" ;;
-    version) version_service ;;
-    health) health_check ;;
-    uninstall) uninstall_modbridge ;;
-    *) show_installation_status; show_help ;;
+    install)
+        if [ $FORCE_INSTALL -eq 1 ]; then
+            log "${YELLOW}Force-Installation: Überspringe Installationsprüfung${NC}"
+            export MODBRIDGE_FORCE=1
+        fi
+        install_modbridge
+        ;;
+    update)
+        update_modbridge
+        ;;
+    start)
+        start_service
+        ;;
+    stop)
+        stop_service
+        ;;
+    restart)
+        restart_service
+        ;;
+    status)
+        if [ $SKIP_STATUS -eq 0 ]; then
+            show_installation_status
+        fi
+        status_service
+        ;;
+    logs)
+        logs_service "$2" "$3"
+        ;;
+    version|--version|-v)
+        version_service
+        ;;
+    health|--health)
+        health_check
+        ;;
+    uninstall)
+        uninstall_modbridge
+        ;;
+    *)
+        show_installation_status
+        show_help
+        ;;
 esac
