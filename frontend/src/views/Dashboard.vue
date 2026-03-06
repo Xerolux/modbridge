@@ -119,6 +119,10 @@ const proxyOptions = ref([]);
 const loading = ref(true);
 const error = ref(null);
 let sseDisconnect = null;
+let refreshInterval = null;
+
+// Auto-refresh every 10 seconds
+const AUTO_REFRESH_INTERVAL = 10000;
 
 onMounted(async () => {
     try {
@@ -207,6 +211,11 @@ onMounted(async () => {
             }
         });
 
+        // Set up auto-refresh interval as fallback
+        refreshInterval = setInterval(async () => {
+            await fetchData();
+        }, AUTO_REFRESH_INTERVAL);
+
     } catch (err) {
         error.value = err.message;
         loading.value = false;
@@ -219,6 +228,9 @@ onUnmounted(() => {
     }
     if (sseDisconnect) {
         sseDisconnect();
+    }
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
     }
 });
 
