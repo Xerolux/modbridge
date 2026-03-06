@@ -1,0 +1,76 @@
+name: Docker Build & Push
+
+on:
+  workflow_dispatch:
+    inputs:
+      docker_tags:
+        description: 'Docker Tags (kommagetrennt, z.B. latest,1.0.0,v1.0.0)'
+        required: true
+        default: 'latest'
+        type: string
+      push_image:
+        description: 'Image pushen?'
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: xerolux/modbridge
+
+jobs:
+  build-docker:
+    name: Docker Build & Push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker tags
+        id: tags
+        run: |
+          TAGS_INPUT="${{ inputs.docker_tags }}"
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+
+          # Split by comma and build full image tags
+          TAGS=""
+          IFS=',' read -ra TAG_ARRAY <<< "$TAGS_INPUT"
+          for tag in "${TAG_ARRAY[@]}"; do
+            # Trim whitespace
+            tag=$(echo "$tag" | xargs)
+            if [ -z "$TAGS" ]; then
+              TAGS="${IMAGE}:${tag}"
+            else
+              TAGS="${TAGS},${IMAGE}:${tag}"
+            fi
+          done
+
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          echo "🐳 Tags: ${TAGS}"
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ inputs.push_image }}
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
