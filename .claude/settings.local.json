@@ -49,7 +49,28 @@
       "Bash(go mod tidy)",
       "Bash(git add .github/workflows/main.yml go.mod go.sum)",
       "Bash(git add .golangci.yml .github/workflows/release.yml)",
-      "Bash(git add .github/workflows/release.yml)"
+      "Bash(git add .github/workflows/release.yml)",
+      "Bash(CGO_ENABLED=1 go build -tags webui -ldflags=\"-s -w -X main.Version=test\" -o modbridge-test ./main.go)",
+      "Bash(CGO_ENABLED=0 go build -tags webui -ldflags=\"-s -w -X main.Version=test\" -o modbridge-test ./main.go)",
+      "Bash(go build -tags webui -ldflags=\"-X main.Version=test\" -o modbridge-test ./main.go)",
+      "Bash(go clean)",
+      "Bash(go build -tags webui -v -ldflags=\"-X main.Version=test\" -o modbridge-test ./main.go)",
+      "Bash(ls -la /c/Users/Basti/Documents/GitHub/modbridge/web*.go)",
+      "Bash(go list -f '{{.GoFiles}}' ./...)",
+      "Bash(go list -tags webui -f '{{.GoFiles}}' .)",
+      "Bash(grep -n \"func Handler\" /c/Users/Basti/Documents/GitHub/modbridge/pkg/web/*.go)",
+      "Bash(go build -tags webui -x ./main.go)",
+      "Bash(go build -tags webui -ldflags=\"-X main.Version=test\" -o modbridge-test .)",
+      "Bash(go build -tags headless -ldflags=\"-X main.Version=test\" -o modbridge-headless .)",
+      "Bash(python3 -m py_compile .github/workflows/main.yml)",
+      "Bash(git add web.go web_headless.go .github/workflows/main.yml scripts/modbridge.sh)",
+      "Bash(go mod verify)",
+      "Bash(git add go.mod)",
+      "Bash(done)",
+      "Bash(grep \"GO_VERSION\" .github/workflows/*.yml)",
+      "Bash(git add .github/workflows/headless.yml .github/workflows/release.yml Dockerfile .golangci.yml ANALYSIS.md DEPLOYMENT.md)",
+      "Bash(git add .golangci.yml .github/workflows/main.yml)",
+      "Bash(git add .github/workflows/main.yml .github/workflows/release.yml)"
     ]
   }
 }
