@@ -12,7 +12,6 @@ import (
 	"modbridge/pkg/database"
 	"modbridge/pkg/logger"
 	"modbridge/pkg/manager"
-	"modbridge/pkg/web"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -102,8 +101,10 @@ func main() {
 	// API Routes
 	apiServer.Routes(mux)
 
-	// Web Routes
-	mux.Handle("/", web.Handler())
+	// Web Routes (only if not headless build)
+	if handler := getWebHandler(); handler != nil {
+		mux.Handle("/", handler)
+	}
 
 	// Start server
 	addr := cfgMgr.Get().WebPort
