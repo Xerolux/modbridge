@@ -42,6 +42,12 @@ jobs:
             suffix: linux-arm64-headless
             packages: gcc-aarch64-linux-gnu
             cc: aarch64-linux-gnu-gcc
+          - goos: linux
+            goarch: arm
+            goarm: '6'
+            suffix: linux-arm-headless
+            packages: gcc-arm-linux-gnueabihf
+            cc: arm-linux-gnueabihf-gcc
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -60,6 +66,7 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
           CGO_ENABLED: 1
           CC: ${{ matrix.cc }}
         run: |
@@ -143,6 +150,7 @@ jobs:
             Download the appropriate binary for your platform:
             - **linux-amd64**: Standard x86_64 servers (Intel/AMD)
             - **linux-arm64**: ARM64 devices (Raspberry Pi 4/5, ARM servers)
+            - **linux-arm**: ARMv6 (32-bit) devices (Raspberry Pi Zero/1/2/3, Pi 4/5 with 32-bit OS)
 
             ### Installation
             ```bash

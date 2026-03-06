@@ -129,6 +129,12 @@ jobs:
             suffix: linux-arm64
             packages: gcc-aarch64-linux-gnu
             cc: aarch64-linux-gnu-gcc
+          - goos: linux
+            goarch: arm
+            goarm: '6'
+            suffix: linux-arm
+            packages: gcc-arm-linux-gnueabihf
+            cc: arm-linux-gnueabihf-gcc
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -159,6 +165,7 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
           CGO_ENABLED: 1
           CC: ${{ matrix.cc }}
         run: |
@@ -272,5 +279,12 @@ jobs:
 
             ### Binary Download
             Download the appropriate binary for your platform from the assets below.
+
+            **Available Binaries:**
+            - **linux-amd64**: Standard x86_64 servers (Intel/AMD)
+            - **linux-arm64**: ARM64 devices (Raspberry Pi 4/5, 64-bit OS)
+            - **linux-arm**: ARMv6 32-bit (Raspberry Pi Zero/1/2/3, 32-bit OS)
+
+            **Note:** Headless versions (without WebUI) are also available - look for files ending in `-headless`.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
