@@ -170,7 +170,7 @@ jobs:
           CC: ${{ matrix.cc }}
         run: |
           OUTPUT="modbridge-${{ matrix.suffix }}"
-          go build \
+          go build -tags webui \
             -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
             -trimpath \
             -o "$OUTPUT" \
