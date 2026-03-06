@@ -197,7 +197,7 @@ jobs:
             -ldflags="-s -w -X main.Version=${{ needs.prepare.outputs.tag }}" \
             -trimpath \
             -o "modbridge-${{ matrix.suffix }}" \
-            ./main.go
+            .
       - uses: actions/upload-artifact@v4
         with:
           name: modbridge-${{ matrix.suffix }}
