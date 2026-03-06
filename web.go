@@ -1,4 +1,5 @@
 //go:build !headless
+// +build !headless
 
 package main
 
@@ -7,8 +8,7 @@ import (
 	"net/http"
 )
 
-// getWebHandler returns the web UI handler
-// This file is ONLY compiled when NOT building with -tags headless
+// getWebHandler returns the web UI handler (default implementation)
 func getWebHandler() http.Handler {
 	return web.Handler()
 }
