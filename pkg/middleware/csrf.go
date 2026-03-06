@@ -83,12 +83,14 @@ func (m *CSRFMiddleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 		if r.Method == "GET" {
 			// Generate and set CSRF token cookie
 			token := m.GenerateToken(sessionCookie.Value)
+			// Only set Secure flag if connection is HTTPS
+			isSecure := r.TLS != nil
 			http.SetCookie(w, &http.Cookie{
 				Name:     "csrf_token",
 				Value:    token,
 				Path:     "/",
 				HttpOnly: false,
-				Secure:   true,
+				Secure:   isSecure,
 				SameSite: http.SameSiteStrictMode,
 			})
 			next(w, r)
