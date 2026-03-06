@@ -25,8 +25,8 @@ axios.interceptors.response.use(
     error => {
         if (error.response && error.response.status === 401) {
             // Only redirect if not already on login page
-            if (window.location.pathname !== '/login') {
-                window.location.href = '/login';
+            if (window.location.hash !== '#/login') {
+                window.location.hash = '#/login';
             }
         }
         return Promise.reject(error);
