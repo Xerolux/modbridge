@@ -7,6 +7,8 @@
   import Button from 'primevue/button';
   import Sidebar from 'primevue/sidebar';
   import InputSwitch from 'primevue/inputswitch';
+  import Menu from 'primevue/menu';
+  import LanguageSelector from './LanguageSelector.vue';
 
   const router = useRouter();
   const auth = useAuthStore();
@@ -89,6 +91,7 @@
             </template>
              <template #end>
                  <div class="flex items-center gap-2">
+                     <LanguageSelector />
                      <div class="flex items-center gap-2 px-3">
                          <i :class="appStore.darkMode ? 'pi pi-moon' : 'pi pi-sun'"></i>
                          <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" />
