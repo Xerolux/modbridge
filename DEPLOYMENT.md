@@ -114,7 +114,7 @@ Die folgenden redundanten Workflows wurden entfernt:
 
 ### Voraussetzungen
 
-- Go 1.24 oder höher
+- Go 1.26 oder höher
 - Docker (optional)
 - Docker Compose (optional)
 
