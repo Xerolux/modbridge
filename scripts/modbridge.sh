@@ -163,6 +163,43 @@ is_modbridge_installed() {
     [ -f "$INSTALL_DIR/modbridge" ]
 }
 
+# Normalize version string by removing 'v' prefix and extracting base version
+normalize_version() {
+    echo "${1#v}" | cut -d'-' -f1  # Remove 'v' prefix and pre-release suffix
+}
+
+# Compare two semantic versions. Returns 0 if equal, 1 if first < second, 2 if first > second
+compare_versions() {
+    local v1=$(normalize_version "$1")
+    local v2=$(normalize_version "$2")
+
+    # If strings are equal after normalization
+    if [ "$v1" = "$v2" ]; then
+        return 0
+    fi
+
+    # Try numeric comparison with version parts
+    local IFS='.'
+    local i ver1=($v1) ver2=($v2)
+
+    for ((i=${#ver1[@]}; i<${#ver2[@]}; i++)); do
+        ver1[i]=0
+    done
+
+    for ((i=0; i<${#ver1[@]}; i++)); do
+        if [[ -z ${ver2[i]} ]]; then
+            ver2[i]=0
+        fi
+        if ((10#${ver1[i]:-0} < 10#${ver2[i]:-0})); then
+            return 1
+        elif ((10#${ver1[i]:-0} > 10#${ver2[i]:-0})); then
+            return 2
+        fi
+    done
+
+    return 0
+}
+
 get_current_version() {
     if ! is_modbridge_installed; then
         echo ""
@@ -187,12 +224,25 @@ check_updates_available() {
     local CURRENT=$(get_current_version)
     local LATEST=$(get_latest_version)
 
-    if [ "$CURRENT" = "$LATEST" ]; then
-        echo "0"  # Up to date
-    elif [ -z "$CURRENT" ] || [ "$CURRENT" = "unbekannt" ]; then
+    if [ -z "$CURRENT" ] || [ "$CURRENT" = "unbekannt" ]; then
         echo "2"  # Unknown current version
+        return
+    fi
+
+    if [ -z "$LATEST" ]; then
+        echo "0"  # Can't determine latest, assume up to date
+        return
+    fi
+
+    compare_versions "$CURRENT" "$LATEST"
+    local result=$?
+
+    if [ $result -eq 0 ]; then
+        echo "0"  # Up to date
+    elif [ $result -eq 1 ]; then
+        echo "1"  # Update available (current < latest)
     else
-        echo "1"  # Update available
+        echo "0"  # Already on newer version than release (shouldn't happen)
     fi
 }
 
