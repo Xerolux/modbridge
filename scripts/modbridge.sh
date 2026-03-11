@@ -396,6 +396,64 @@ kill_all_modbridge_processes() {
     return 0
 }
 
+get_port_process_info() {
+    local port=$1
+    lsof -i ":$port" -sTCP:LISTEN 2>/dev/null | tail -1 | awk '{print $1, $2, $3}'
+}
+
+handle_blocked_ports() {
+    local port=$1
+    local PROCESS_INFO=$(get_port_process_info "$port")
+
+    if [ -z "$PROCESS_INFO" ]; then
+        return 1
+    fi
+
+    local CMD=$(echo "$PROCESS_INFO" | awk '{print $1}')
+    local PID=$(echo "$PROCESS_INFO" | awk '{print $2}')
+    local USER=$(echo "$PROCESS_INFO" | awk '{print $3}')
+
+    log "⚠  Port $port ist belegt!"
+    log "   Prozess: $CMD (PID: $PID, Benutzer: $USER)"
+
+    # In auto-install mode, just log and continue
+    if [ $AUTO_INSTALL -eq 1 ]; then
+        log "   Auto-Install Mode: Fortfahren..."
+        return 0
+    fi
+
+    # Show dialog if whiptail is available
+    if command -v whiptail &>/dev/null; then
+        local CHOICE=$(whiptail --title "Port $port belegt" \
+            --menu "Port $port wird von folgendem Prozess verwendet:\n\nProc: $CMD\nPID: $PID\nUser: $USER\n\nWas möchtest du tun?" \
+            15 70 4 \
+            "1" "Prozess anzeigen (ps)" \
+            "2" "Prozess beenden (kill)" \
+            "3" "Fortfahren (ignorieren)" \
+            "4" "Abbrechen" 3>&1 1>&2 2>&3)
+
+        case "$CHOICE" in
+            1)
+                ps aux | grep "$PID" | grep -v grep
+                handle_blocked_ports "$port"
+                ;;
+            2)
+                log "🗑  Beende Prozess $PID..."
+                kill -9 "$PID" 2>/dev/null && log "✓ Prozess beendet" || log_error "Konnte Prozess nicht beenden"
+                sleep 1
+                ;;
+            3)
+                log "⏭  Installation fortgesetzt (Port wird ignoriert)"
+                return 0
+                ;;
+            *)
+                log_error "Installation abgebrochen"
+                return 1
+                ;;
+        esac
+    fi
+}
+
 check_and_wait_for_ports() {
     local PORTS="8080 5020 5021 5022 5023 5024 5025 5026 5027 5028 5029 5030"
     local MAX_WAIT=15
@@ -442,7 +500,18 @@ check_and_wait_for_ports() {
     done
 
     log_error "Ports werden nicht freigegeben: ${BLOCKED_PORTS[*]}"
-    return 1
+    log ""
+    log "🔧 Interaktive Port-Freigabe:"
+
+    # Handle remaining blocked ports
+    for port in "${BLOCKED_PORTS[@]}"; do
+        if ! handle_blocked_ports "$port"; then
+            log_error "Abbruch aufgrund von Port $port"
+            return 1
+        fi
+    done
+
+    return 0
 }
 
 cleanup_modbridge() {
