@@ -162,6 +162,49 @@
                     </div>
                 </template>
             </Card>
+
+            <Card class="bg-gray-800 text-white shadow-md">
+                <template #title><div class="text-lg sm:text-xl">Port Management</div></template>
+                <template #content>
+                    <div class="flex flex-col gap-3">
+                        <Button @click="checkPorts" label="Check Ports" icon="pi pi-search" severity="info" class="w-full p-3 sm:p-2" :loading="portCheckLoading" />
+
+                        <div v-if="portStatus.summary" class="grid grid-cols-3 gap-2 text-sm sm:text-base">
+                            <div class="text-center p-2 bg-gray-700 rounded">
+                                <div class="text-gray-400">Total</div>
+                                <div class="font-bold">{{ portStatus.summary.total }}</div>
+                            </div>
+                            <div class="text-center p-2 bg-green-900 rounded">
+                                <div class="text-gray-400">Free</div>
+                                <div class="font-bold text-green-400">{{ portStatus.summary.free }}</div>
+                            </div>
+                            <div class="text-center p-2 bg-red-900 rounded">
+                                <div class="text-gray-400">In Use</div>
+                                <div class="font-bold text-red-400">{{ portStatus.summary.in_use }}</div>
+                            </div>
+                        </div>
+
+                        <div v-if="blockedPorts.length > 0" class="mt-2 p-2 bg-red-900 rounded text-sm">
+                            <div class="font-bold text-red-400 mb-2">⚠️ Blocked Ports:</div>
+                            <div v-for="(port, idx) in blockedPorts" :key="idx" class="mb-2 p-2 bg-gray-700 rounded">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="font-semibold">Port {{ port.port }}</span>
+                                    <span class="text-xs text-gray-400">PID: {{ port.pid }}</span>
+                                </div>
+                                <div class="text-xs text-gray-300 mb-1">
+                                    <div>Process: {{ port.process }} (User: {{ port.user }})</div>
+                                    <div class="truncate text-gray-500">{{ port.command }}</div>
+                                </div>
+                                <Button @click="releasePort(port)" label="Release Port" icon="pi pi-trash" severity="danger" size="small" class="w-full p-2" />
+                            </div>
+                        </div>
+
+                        <div v-else-if="portStatus.summary" class="text-center p-2 bg-green-900 rounded text-green-400">
+                            ✓ All ports are free
+                        </div>
+                    </div>
+                </template>
+            </Card>
         </div>
 
         <Toast />
@@ -208,6 +251,10 @@
      ip_blacklist_enabled: false,
      email_enabled: false
  });
+
+ const portCheckLoading = ref(false);
+ const portStatus = ref({});
+ const blockedPorts = ref([]);
 
  let refreshInterval = null;
 
@@ -295,6 +342,70 @@ const restartAllProxies = async () => {
     } catch (e) {
         toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to restart proxies', life: 3000 });
     }
+};
+
+const checkPorts = async () => {
+    portCheckLoading.value = true;
+    try {
+        const res = await axios.get('/api/system/ports/check');
+        portStatus.value = res.data;
+        blockedPorts.value = Object.values(res.data.ports || {}).filter(p => !p.is_open);
+
+        if (blockedPorts.value.length > 0) {
+            toast.add({
+                severity: 'warn',
+                summary: 'Blocked Ports',
+                detail: `${blockedPorts.value.length} port(s) in use`,
+                life: 5000
+            });
+        } else {
+            toast.add({
+                severity: 'success',
+                summary: 'All Clear',
+                detail: 'All ports are free',
+                life: 3000
+            });
+        }
+    } catch (e) {
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to check ports',
+            life: 3000
+        });
+    } finally {
+        portCheckLoading.value = false;
+    }
+};
+
+const releasePort = (portInfo) => {
+    confirm.require({
+        message: `Kill process ${portInfo.process} (PID: ${portInfo.pid}) on port ${portInfo.port}?`,
+        header: 'Confirm Port Release',
+        icon: 'pi pi-exclamation-triangle',
+        accept: async () => {
+            try {
+                await axios.post('/api/system/ports/release', {
+                    port: portInfo.port,
+                    pid: portInfo.pid
+                });
+                toast.add({
+                    severity: 'success',
+                    summary: 'Success',
+                    detail: `Process ${portInfo.pid} killed, port ${portInfo.port} released`,
+                    life: 3000
+                });
+                await checkPorts();
+            } catch (e) {
+                toast.add({
+                    severity: 'error',
+                    summary: 'Error',
+                    detail: e.response?.data || 'Failed to release port',
+                    life: 3000
+                });
+            }
+        }
+    });
 };
 
  onMounted(() => {
