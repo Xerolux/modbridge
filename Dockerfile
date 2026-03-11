@@ -43,7 +43,7 @@ COPY --from=frontend-builder /frontend/dist ./pkg/web/dist
 RUN CGO_ENABLED=1 GOFLAGS=-trimpath \
     go build \
     -ldflags="-s -w -X main.Version=dev -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    -o modbridge ./main.go
+    -o modbridge .
 
 # Verify the binary
 RUN chmod +x modbridge && \
