@@ -1,8 +1,8 @@
 package api
 
 import (
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"modbridge/pkg/config"
 	"modbridge/pkg/logger"
 	"modbridge/pkg/portmanager"
@@ -236,7 +236,7 @@ func (s *Server) handlePortRelease(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{
-		"status": "ok",
+		"status":  "ok",
 		"message": "Process terminated successfully",
 	})
 }
@@ -287,8 +287,8 @@ func (s *Server) handleCheckProxyPorts(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"ports": results,
 		"summary": map[string]int{
-			"total": len(ports),
-			"free": countFreePortsInMap(results),
+			"total":  len(ports),
+			"free":   countFreePortsInMap(results),
 			"in_use": len(ports) - countFreePortsInMap(results),
 		},
 	})
