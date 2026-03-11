@@ -78,7 +78,15 @@
                                  class="text-xs sm:text-sm p-3 sm:p-2 min-h-[44px]"
                               />
                          </div>
-                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
+                             <Button
+                                 icon="pi pi-search"
+                                 severity="info"
+                                 label="Test"
+                                 @click="testConnectivity(proxy)"
+                                 :loading="testingProxy === proxy.id"
+                                 class="text-xs sm:text-sm p-3 sm:p-2 min-h-[44px]"
+                             />
                              <Button
                                  icon="pi pi-eye"
                                  severity="secondary"
@@ -93,6 +101,15 @@
                                  @click="confirmDeleteProxy(proxy.id)"
                                  class="text-xs sm:text-sm p-3 sm:p-2 min-h-[44px]"
                              />
+                         </div>
+
+                         <div v-if="connectionStatus[proxy.id]" class="mt-3 p-3 rounded" :class="connectionStatus[proxy.id].reachable ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'">
+                             <div class="flex items-center gap-2 mb-1">
+                                 <i :class="connectionStatus[proxy.id].reachable ? 'pi pi-check-circle' : 'pi pi-times-circle'"></i>
+                                 <span class="font-semibold text-sm">{{ connectionStatus[proxy.id].reachable ? '✓ Erreichbar' : '✗ Nicht erreichbar' }}</span>
+                             </div>
+                             <div class="text-xs text-gray-300">{{ connectionStatus[proxy.id].target }}</div>
+                             <div v-if="!connectionStatus[proxy.id].reachable" class="text-xs mt-1 text-yellow-300">{{ connectionStatus[proxy.id].error }}</div>
                          </div>
                      </div>
                  </template>
@@ -197,6 +214,9 @@
  const toast = useToast();
  const confirm = useConfirm();
  let disconnectFn = null;
+
+ const testingProxy = ref(null);
+ const connectionStatus = ref({});
 
  const showProxyDialog = ref(false);
  const isEditMode = ref(false);
@@ -383,6 +403,41 @@
          setTimeout(fetchProxies, 500);
      } catch (e) {
          toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.error || e.message, life: 5000 });
+     }
+ };
+
+ const testConnectivity = async (proxy) => {
+     testingProxy.value = proxy.id;
+     try {
+         const res = await axios.get('/api/system/diagnostics/connectivity');
+         const proxyConnStatus = res.data[proxy.id];
+         if (proxyConnStatus) {
+             connectionStatus.value[proxy.id] = proxyConnStatus;
+             if (proxyConnStatus.reachable) {
+                 toast.add({
+                     severity: 'success',
+                     summary: 'Connection OK',
+                     detail: `✓ ${proxy.name} can reach ${proxyConnStatus.target}`,
+                     life: 4000
+                 });
+             } else {
+                 toast.add({
+                     severity: 'error',
+                     summary: 'Connection Failed',
+                     detail: `✗ Cannot reach ${proxyConnStatus.target}: ${proxyConnStatus.error}`,
+                     life: 5000
+                 });
+             }
+         }
+     } catch (e) {
+         toast.add({
+             severity: 'error',
+             summary: 'Diagnostic Error',
+             detail: e.message,
+             life: 3000
+         });
+     } finally {
+         testingProxy.value = null;
      }
  };
 

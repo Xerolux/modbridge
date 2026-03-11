@@ -36,11 +36,13 @@
 
         <!-- Error State -->
         <div v-else-if="error" class="flex justify-center items-center min-h-[500px]">
-             <div class="text-center error-container glass-effect rounded-2xl p-8 mx-2 sm:mx-0">
+             <div class="text-center error-container glass-effect rounded-2xl p-4 sm:p-8 mx-2 sm:mx-0 max-w-[95vw] sm:max-w-lg">
                   <div class="error-icon mb-4">
                       <i class="pi pi-exclamation-triangle text-5xl text-red-500 animate-shake"></i>
                   </div>
-                  <p class="mt-4 text-red-400 font-semibold text-sm sm:text-base">Fehler beim Laden: {{ error }}</p>
+                  <p class="mt-4 text-red-400 font-semibold text-xs sm:text-base break-words whitespace-normal overflow-hidden">
+                      Fehler beim Laden: <span class="block text-gray-300 text-xs mt-2">{{ errorMessage }}</span>
+                  </p>
                   <Button @click="fetchData" label="Erneut versuchen" class="mt-6 w-full sm:w-auto p-button-sm sm:p-button-md" />
              </div>
         </div>
@@ -115,6 +117,7 @@ const selectedProxy = ref(null);
 const proxyOptions = ref([]);
 const loading = ref(true);
 const error = ref(null);
+const errorMessage = ref('');
 let sseDisconnect = null;
 let refreshInterval = null;
 
@@ -221,7 +224,8 @@ onMounted(async () => {
         }, AUTO_REFRESH_INTERVAL);
 
     } catch (err) {
-        error.value = err.message;
+        error.value = true;
+        errorMessage.value = err.message || 'Fehler beim Initialisieren des Dashboards';
         loading.value = false;
     }
 });
@@ -306,12 +310,23 @@ const fetchData = async () => {
     try {
         loading.value = true;
         error.value = null;
+        errorMessage.value = '';
         const res = await axios.get('/api/proxies');
         proxies.value = res.data;
         proxyOptions.value = res.data.map(p => ({ name: p.name, id: p.id }));
         loading.value = false;
     } catch (e) {
-        error.value = e.response?.data || e.message || 'Unbekannter Fehler';
+        const errorData = e.response?.data;
+        let msg = 'Unbekannter Fehler';
+
+        if (typeof errorData === 'string') {
+            msg = errorData;
+        } else if (e.message) {
+            msg = e.message;
+        }
+
+        error.value = true;
+        errorMessage.value = msg;
         loading.value = false;
     }
 };
