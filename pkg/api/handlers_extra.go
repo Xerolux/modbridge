@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"modbridge/pkg/config"
 	"modbridge/pkg/logger"
+	"modbridge/pkg/portmanager"
+	"net"
 	"net/http"
 	"runtime"
+	"strconv"
 	"time"
 )
 
@@ -171,4 +174,169 @@ func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(info)
+}
+
+// handlePortDiagnostics checks port availability and shows process info
+func (s *Server) handlePortDiagnostics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Ports []int `json:"ports"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	pm := portmanager.NewPortManager()
+	results := pm.CheckPorts(req.Ports)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(results)
+}
+
+// handlePortRelease forcefully releases a port
+func (s *Server) handlePortRelease(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Port int `json:"port"`
+		PID  int `json:"pid"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	pm := portmanager.NewPortManager()
+
+	// Verify the port is actually in use before killing
+	portInfo := pm.CheckPort(req.Port)
+	if portInfo.IsOpen {
+		http.Error(w, "Port is already free", http.StatusConflict)
+		return
+	}
+
+	// Kill the process
+	if err := pm.KillProcess(req.PID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	s.log.Warn("ADMIN", "Process %d on port %d killed by user", req.PID, req.Port)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status": "ok",
+		"message": "Process terminated successfully",
+	})
+}
+
+// handleCheckProxyPorts checks all configured proxy ports
+func (s *Server) handleCheckProxyPorts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	cfg := s.cfgMgr.Get()
+	var ports []int
+	portMap := make(map[int]string) // port -> proxy name
+
+	// Extract ports from config
+	for _, proxy := range cfg.Proxies {
+		// Parse port from listen_addr (format: ":502")
+		portStr := proxy.ListenAddr
+		if len(portStr) > 0 && portStr[0] == ':' {
+			if port, err := strconv.Atoi(portStr[1:]); err == nil {
+				ports = append(ports, port)
+				portMap[port] = proxy.Name
+			}
+		}
+	}
+
+	// Check web port too
+	webPortStr := cfg.WebPort
+	if len(webPortStr) > 0 && webPortStr[0] == ':' {
+		if port, err := strconv.Atoi(webPortStr[1:]); err == nil {
+			ports = append(ports, port)
+			portMap[port] = "WebUI"
+		}
+	}
+
+	pm := portmanager.NewPortManager()
+	results := pm.CheckPorts(ports)
+
+	// Enrich results with proxy names
+	for port, info := range results {
+		if name, ok := portMap[port]; ok {
+			info.State = "configured_for_" + name
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"ports": results,
+		"summary": map[string]int{
+			"total": len(ports),
+			"free": countFreePortsInMap(results),
+			"in_use": len(ports) - countFreePortsInMap(results),
+		},
+	})
+}
+
+// countFreePortsInMap counts free ports in the results map
+func countFreePortsInMap(results map[int]*portmanager.PortInfo) int {
+	count := 0
+	for _, info := range results {
+		if info.IsOpen {
+			count++
+		}
+	}
+	return count
+}
+
+// handleProxyConnectivityCheck checks if target devices are reachable
+func (s *Server) handleProxyConnectivityCheck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	cfg := s.cfgMgr.Get()
+	results := make(map[string]map[string]interface{})
+
+	for _, proxy := range cfg.Proxies {
+		testConn, err := net.DialTimeout("tcp", proxy.TargetAddr, 5*time.Second)
+		isReachable := err == nil
+		var errorMsg string
+
+		if err != nil {
+			errorMsg = err.Error()
+		}
+
+		if testConn != nil {
+			testConn.Close()
+		}
+
+		results[proxy.ID] = map[string]interface{}{
+			"name":        proxy.Name,
+			"target":      proxy.TargetAddr,
+			"reachable":   isReachable,
+			"error":       errorMsg,
+			"status":      proxy.Status,
+			"listen_addr": proxy.ListenAddr,
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(results)
 }
