@@ -91,18 +91,18 @@
             </template>
              <template #end>
                  <div class="flex items-center gap-2">
-                     <LanguageSelector />
-                     <div class="flex items-center gap-2 px-3">
+                     <LanguageSelector class="hidden sm:flex" />
+                     <div class="hidden sm:flex items-center gap-2 px-3">
                          <i :class="appStore.darkMode ? 'pi pi-moon' : 'pi pi-sun'"></i>
                          <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" />
                      </div>
-                     <Button label="Logout" icon="pi pi-power-off" severity="danger" text @click="logout" />
+                     <Button label="Logout" icon="pi pi-power-off" severity="danger" text @click="logout" class="hidden sm:flex" />
                  </div>
              </template>
         </Menubar>
 
         <Sidebar v-model:visible="mobileMenuVisible" :baseZIndex="10000">
-            <div class="flex flex-col gap-2">
+            <div class="flex flex-col gap-2 h-full">
                 <div v-for="item in items" :key="item.label">
                     <Button
                         @click="item.command"
@@ -113,7 +113,16 @@
                         size="large"
                     />
                 </div>
-                <div class="mt-4 pt-4 border-t border-gray-700">
+
+                <div class="mt-auto border-t border-gray-700 pt-4 flex flex-col gap-4">
+                     <div class="flex items-center justify-between px-3">
+                        <span class="text-gray-300 font-medium">Theme</span>
+                        <div class="flex items-center gap-2">
+                            <i :class="appStore.darkMode ? 'pi pi-moon text-gray-300' : 'pi pi-sun text-gray-300'"></i>
+                            <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" />
+                        </div>
+                     </div>
+                     <LanguageSelector class="w-full px-3" />
                     <Button
                         @click="logout"
                         label="Logout"
