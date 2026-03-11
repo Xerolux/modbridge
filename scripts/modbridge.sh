@@ -470,7 +470,6 @@ cleanup_modbridge() {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 fetch_available_versions() {
-    log "Frage verfügbare Versionen ab..."
     local RESPONSE
     local VERSIONS
 
@@ -481,13 +480,11 @@ fetch_available_versions() {
             break
         fi
         if [ $attempt -lt 3 ]; then
-            log_warn "Verbindung fehlgeschlagen, versuche erneut ($attempt/3)..."
             sleep 2
         fi
     done
 
     if [ -z "$RESPONSE" ]; then
-        log_error "Konnte API nicht erreichen"
         return 1
     fi
 
@@ -495,7 +492,6 @@ fetch_available_versions() {
     VERSIONS=$(echo "$RESPONSE" | jq -r '.[].tag_name' 2>/dev/null | head -10)
 
     if [ -z "$VERSIONS" ]; then
-        log_error "Keine Versionen gefunden"
         return 1
     fi
 
@@ -695,6 +691,7 @@ Headless = Kleinere Binary (22% weniger), nur Config-Datei" \
     log "Installationsverzeichnis: $INSTALL_DIR"
 
     # Select version
+    log "Frage verfügbare Versionen ab..."
     local VERSIONS
     if ! VERSIONS=$(fetch_available_versions); then
         log_error "Konnte verfügbare Versionen nicht abrufen"
@@ -966,6 +963,7 @@ Headless = Kleinere Binary (22% weniger), nur Config-Datei" \
     fi
 
     # Select version
+    log "Frage verfügbare Versionen ab..."
     local VERSIONS
     if ! VERSIONS=$(fetch_available_versions); then
         log_error "Konnte verfügbare Versionen nicht abrufen"
