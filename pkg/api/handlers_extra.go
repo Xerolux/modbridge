@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"encoding/json"
 	"modbridge/pkg/config"
 	"modbridge/pkg/logger"
@@ -231,7 +232,7 @@ func (s *Server) handlePortRelease(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.log.Warn("ADMIN", "Process %d on port %d killed by user", req.PID, req.Port)
+	s.log.Warn("ADMIN", fmt.Sprintf("Process %d on port %d killed by user", req.PID, req.Port))
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{
@@ -332,7 +333,7 @@ func (s *Server) handleProxyConnectivityCheck(w http.ResponseWriter, r *http.Req
 			"target":      proxy.TargetAddr,
 			"reachable":   isReachable,
 			"error":       errorMsg,
-			"status":      proxy.Status,
+			"status":      "unknown",
 			"listen_addr": proxy.ListenAddr,
 		}
 	}
