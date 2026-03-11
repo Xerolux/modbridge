@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"modbridge/pkg/config"
 	"modbridge/pkg/logger"
 	"modbridge/pkg/portmanager"
@@ -231,11 +232,11 @@ func (s *Server) handlePortRelease(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.log.Warn("ADMIN", "Process %d on port %d killed by user", req.PID, req.Port)
+	s.log.Warn("ADMIN", fmt.Sprintf("Process %d on port %d killed by user", req.PID, req.Port))
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{
-		"status": "ok",
+		"status":  "ok",
 		"message": "Process terminated successfully",
 	})
 }
@@ -286,8 +287,8 @@ func (s *Server) handleCheckProxyPorts(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"ports": results,
 		"summary": map[string]int{
-			"total": len(ports),
-			"free": countFreePortsInMap(results),
+			"total":  len(ports),
+			"free":   countFreePortsInMap(results),
 			"in_use": len(ports) - countFreePortsInMap(results),
 		},
 	})
@@ -332,7 +333,7 @@ func (s *Server) handleProxyConnectivityCheck(w http.ResponseWriter, r *http.Req
 			"target":      proxy.TargetAddr,
 			"reachable":   isReachable,
 			"error":       errorMsg,
-			"status":      proxy.Status,
+			"status":      "unknown",
 			"listen_addr": proxy.ListenAddr,
 		}
 	}
