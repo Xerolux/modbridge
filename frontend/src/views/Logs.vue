@@ -87,54 +87,58 @@
  </script>
 
  <template>
-    <div class="p-4 flex flex-col gap-4">
-      <div class="flex justify-between items-center mb-4">
-        <h1 class="text-2xl font-bold">System Logs</h1>
-        <div class="flex items-center gap-4">
-          <div class="flex items-center gap-2">
+    <div class="p-2 sm:p-4 flex flex-col gap-4 w-full">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 sm:mb-4 gap-4 sm:gap-0">
+        <h1 class="text-xl sm:text-2xl font-bold">System Logs</h1>
+        <div class="flex flex-wrap items-center gap-2 sm:gap-4 w-full sm:w-auto">
+          <div class="flex items-center gap-2 flex-1 sm:flex-none">
             <div
-              class="w-2 h-2 rounded-full"
+              class="w-2 h-2 rounded-full shrink-0"
               :class="isConnected ? 'bg-green-500' : 'bg-red-500'"
             ></div>
-            <span class="text-sm text-gray-400">
+            <span class="text-xs sm:text-sm text-gray-400 truncate">
               {{ isConnected ? 'Connected' : 'Disconnected' }}
             </span>
           </div>
-          <div class="flex items-center gap-2 px-3 py-1 bg-gray-800 rounded">
-            <i class="pi pi-arrow-down text-sm text-gray-400"></i>
-            <Checkbox v-model="autoScroll" binary @change="toggleAutoScroll" />
-            <span class="text-sm text-gray-400">Auto-Scroll</span>
+          <div class="flex items-center gap-2 px-2 sm:px-3 py-1 bg-gray-800 rounded flex-1 sm:flex-none justify-center">
+            <i class="pi pi-arrow-down text-xs sm:text-sm text-gray-400"></i>
+            <Checkbox v-model="autoScroll" binary @change="toggleAutoScroll" inputId="auto-scroll-cb" />
+            <label for="auto-scroll-cb" class="text-xs sm:text-sm text-gray-400 whitespace-nowrap cursor-pointer">Auto-Scroll</label>
           </div>
           <button
             @click="fetchInitialLogs"
-            class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+            class="px-3 py-2 sm:py-1 bg-blue-600 text-white text-xs sm:text-sm rounded hover:bg-blue-700 flex-1 sm:flex-none"
           >
             Refresh
           </button>
         </div>
       </div>
 
-      <div v-if="logs.length === 0" class="flex justify-center items-center h-[600px]">
+      <div v-if="logs.length === 0" class="flex justify-center items-center h-[60vh] sm:h-[600px]">
         <div class="text-center">
-          <i class="pi pi-spin pi-spinner text-4xl text-blue-500"></i>
-          <p class="mt-4 text-gray-400">Loading logs...</p>
+          <i class="pi pi-spin pi-spinner text-3xl sm:text-4xl text-blue-500"></i>
+          <p class="mt-4 text-sm sm:text-base text-gray-400">Loading logs...</p>
         </div>
       </div>
 
       <div
         v-else
         ref="logsContainer"
-        class="bg-gray-800 rounded-lg p-4 font-mono text-sm h-[600px] overflow-y-auto"
+        class="bg-gray-800 rounded-lg p-2 sm:p-4 font-mono text-xs sm:text-sm h-[60vh] sm:h-[600px] overflow-y-auto break-all sm:break-normal"
       >
         <div
           v-for="(log, index) in logs"
           :key="index"
-          class="mb-1 border-b border-gray-700 pb-1"
+          class="mb-1 border-b border-gray-700 pb-1 flex flex-col sm:block"
         >
-          <span class="text-gray-400">[{{ formatDate(log.timestamp) }}]</span>
-          <span :class="getLevelColor(log.level)" class="mx-2 font-bold">{{ log.level }}</span>
-          <span class="text-blue-300">{{ log.proxy_id || 'SYSTEM' }}:</span>
-          <span class="text-white ml-2">{{ log.message }}</span>
+          <div>
+              <span class="text-gray-400">[{{ formatDate(log.timestamp) }}]</span>
+              <span :class="getLevelColor(log.level)" class="mx-2 font-bold">{{ log.level }}</span>
+          </div>
+          <div>
+              <span class="text-blue-300">{{ log.proxy_id || 'SYSTEM' }}:</span>
+              <span class="text-white ml-2">{{ log.message }}</span>
+          </div>
         </div>
       </div>
     </div>

@@ -27,17 +27,17 @@ const handleLogin = async () => {
 </script>
 
 <template>
-    <div class="flex items-center justify-center min-h-screen bg-gray-900">
-        <Card class="w-full max-w-md bg-gray-800 border-gray-700 text-white">
-            <template #title>Login</template>
+    <div class="flex items-center justify-center min-h-screen bg-gray-900 px-4 py-8">
+        <Card class="w-full max-w-md bg-gray-800 border-gray-700 text-white shadow-lg">
+            <template #title><div class="text-xl sm:text-2xl font-bold">Login</div></template>
             <template #content>
                 <div class="flex flex-col gap-4">
                     <div class="flex flex-col gap-2">
-                        <label for="password">Password</label>
-                        <InputText id="password" v-model="password" type="password" @keyup.enter="handleLogin" />
+                        <label for="password" class="text-sm font-medium text-gray-300">Password</label>
+                        <InputText id="password" v-model="password" type="password" @keyup.enter="handleLogin" class="p-3 w-full" />
                     </div>
-                    <Message v-if="error" severity="error">{{ error }}</Message>
-                    <Button label="Login" @click="handleLogin" :loading="loading" />
+                    <Message v-if="error" severity="error" class="text-sm">{{ error }}</Message>
+                    <Button label="Login" @click="handleLogin" :loading="loading" class="w-full p-3 font-bold mt-2" />
                 </div>
             </template>
         </Card>

@@ -71,17 +71,27 @@ type Stats struct {
 }
 
 // NewProxyInstance creates a new proxy.
-func NewProxyInstance(id, name, listen, target string, maxReadSize int, l *logger.Logger, tracker *devices.Tracker) *ProxyInstance {
+func NewProxyInstance(id, name, listen, target string, maxReadSize, connectionTimeout, readTimeout, maxRetries int, l *logger.Logger, tracker *devices.Tracker) *ProxyInstance {
+	if connectionTimeout <= 0 {
+		connectionTimeout = 5
+	}
+	if readTimeout <= 0 {
+		readTimeout = 5
+	}
+	if maxRetries < 0 {
+		maxRetries = 3
+	}
+
 	return &ProxyInstance{
 		ID:                id,
 		Name:              name,
 		ListenAddr:        listen,
 		TargetAddr:        target,
 		MaxReadSize:       maxReadSize,
-		ConnectionTimeout: 5 * time.Second, // Default
-		ReadTimeout:       5 * time.Second, // Default
-		MaxRetries:        3,               // Default
-		MaxConns:          500,             // Default: limit concurrent connections
+		ConnectionTimeout: time.Duration(connectionTimeout) * time.Second,
+		ReadTimeout:       time.Duration(readTimeout) * time.Second,
+		MaxRetries:        maxRetries,
+		MaxConns:          500, // Default: limit concurrent connections
 		log:               l,
 		deviceTracker:     tracker,
 		Stats:             Stats{Status: "Stopped"},
@@ -166,10 +176,15 @@ func (p *ProxyInstance) Stop() {
 	}
 
 	p.log.Info(p.ID, "Stopping proxy")
-	p.cancel()
+
+	// Ensure the listener is closed first to immediately free the port
 	if p.listener != nil {
 		p.listener.Close()
 	}
+
+	// Then cancel the context to signal goroutines to exit
+	p.cancel()
+
 	if p.connPool != nil {
 		p.connPool.Close()
 	}
