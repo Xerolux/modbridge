@@ -215,7 +215,10 @@ get_current_version() {
 }
 
 get_latest_version() {
-    local VERSIONS=$(fetch_available_versions)
+    local VERSIONS
+    if ! VERSIONS=$(fetch_available_versions 2>/dev/null); then
+        return 1
+    fi
     echo "$VERSIONS" | head -n 1
 }
 
@@ -470,7 +473,6 @@ cleanup_modbridge() {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 fetch_available_versions() {
-    log "Frage verfügbare Versionen ab..."
     local RESPONSE
     local VERSIONS
 
@@ -481,13 +483,11 @@ fetch_available_versions() {
             break
         fi
         if [ $attempt -lt 3 ]; then
-            log_warn "Verbindung fehlgeschlagen, versuche erneut ($attempt/3)..."
             sleep 2
         fi
     done
 
     if [ -z "$RESPONSE" ]; then
-        log_error "Konnte API nicht erreichen"
         return 1
     fi
 
@@ -495,7 +495,6 @@ fetch_available_versions() {
     VERSIONS=$(echo "$RESPONSE" | jq -r '.[].tag_name' 2>/dev/null | head -10)
 
     if [ -z "$VERSIONS" ]; then
-        log_error "Keine Versionen gefunden"
         return 1
     fi
 
@@ -569,71 +568,75 @@ install_modbridge() {
     check_root
     check_dependencies
 
-    # Check if already installed and show status (unless --force is used)
-    if is_modbridge_installed && [ "${MODBRIDGE_FORCE:-0}" != "1" ]; then
-        local CURRENT=$(get_current_version)
-        local LATEST=$(get_latest_version)
-        local STATUS=$(check_updates_available)
+    # In auto-install mode, skip all checks and force installation
+    if [ $AUTO_INSTALL -eq 1 ]; then
+        log "Auto-Install-Modus: Überspringe alle Prüfungen"
+        export MODBRIDGE_FORCE=1
+    elif is_modbridge_installed && [ "${MODBRIDGE_FORCE:-0}" != "1" ]; then
+        # Check if already installed and show status (unless --force is used)
+        local CURRENT=$(get_current_version 2>/dev/null || echo "unbekannt")
+        local LATEST=$(get_latest_version 2>/dev/null || echo "unbekannt")
+        local STATUS=$(check_updates_available 2>/dev/null || echo "0")
 
         show_installation_status
 
         if [ "$STATUS" = "1" ] || [ "$STATUS" = "2" ]; then
-            # Update available or version unknown
-            log "${YELLOW}ModBridge ist bereits installiert (Version: $CURRENT)${NC}"
-            log "${GREEN}Neuere Version verfügbar: $LATEST${NC}"
-            echo ""
+                # Update available or version unknown
+                log "${YELLOW}ModBridge ist bereits installiert (Version: $CURRENT)${NC}"
+                log "${GREEN}Neuere Version verfügbar: $LATEST${NC}"
+                echo ""
 
-            if command -v whiptail &>/dev/null; then
-                if whiptail --title "Update verfügbar" \
-                        --yesno "ModBridge ist bereits installiert.\n\n\
+                if command -v whiptail &>/dev/null; then
+                    if whiptail --title "Update verfügbar" \
+                            --yesno "ModBridge ist bereits installiert.\n\n\
 Aktuell: $CURRENT\n\
 Verfügbar: $LATEST\n\n\
 Möchten Sie auf die neueste Version aktualisieren?" \
-                        12 80 \
-                        --yes-button "Ja, aktualisieren" --no-button "Abbrechen" \
-                        3>&1 1>&2 2>&3; then
-                    log "Starte Update-Prozess..."
-                    update_modbridge
-                    return $?
+                            12 80 \
+                            --yes-button "Ja, aktualisieren" --no-button "Abbrechen" \
+                            3>&1 1>&2 2>&3; then
+                        log "Starte Update-Prozess..."
+                        update_modbridge
+                        return $?
+                    else
+                        log_info "Update abgebrochen"
+                        log_info "Verwenden Sie 'modbridge.sh update' für ein manuelles Update"
+                        log_info "Verwenden Sie 'modbridge.sh install --force' für eine Neuinstallation"
+                        return 0
+                    fi
                 else
-                    log_info "Update abgebrochen"
-                    log_info "Verwenden Sie 'modbridge.sh update' für ein manuelles Update"
+                    log_info "Verwenden Sie 'modbridge.sh update' zum Aktualisieren"
                     log_info "Verwenden Sie 'modbridge.sh install --force' für eine Neuinstallation"
                     return 0
                 fi
             else
-                log_info "Verwenden Sie 'modbridge.sh update' zum Aktualisieren"
-                log_info "Verwenden Sie 'modbridge.sh install --force' für eine Neuinstallation"
-                return 0
-            fi
-        else
-            # Up to date
-            log "${GREEN}ModBridge ist bereits installiert und auf dem aktuellen Stand!${NC}"
-            log "Version: $CURRENT"
-            echo ""
+                # Up to date
+                log "${GREEN}ModBridge ist bereits installiert und auf dem aktuellen Stand!${NC}"
+                log "Version: $CURRENT"
+                echo ""
 
-            if command -v whiptail &>/dev/null; then
-                if whiptail --title "Bereits installiert" \
-                        --yesno "ModBridge ist bereits installiert und aktuell.\n\n\
+                if command -v whiptail &>/dev/null; then
+                    if whiptail --title "Bereits installiert" \
+                            --yesno "ModBridge ist bereits installiert und aktuell.\n\n\
 Version: $CURRENT\n\n\
 Möchten Sie die Installation wiederholen (Neuinstallation)?" \
-                        12 80 \
-                        --yes-button "Ja, neu installieren" --no-button "Abbrechen" \
-                        3>&1 1>&2 2>&3; then
-                    log "Starte Neuinstallation..."
-                    # Continue with normal installation
+                            12 80 \
+                            --yes-button "Ja, neu installieren" --no-button "Abbrechen" \
+                            3>&1 1>&2 2>&3; then
+                        log "Starte Neuinstallation..."
+                        # Continue with normal installation
+                    else
+                        log_info "Installation abgebrochen"
+                        log_info "Verwenden Sie 'modbridge.sh update' für ein Update"
+                        log_info "Verwenden Sie 'modbridge.sh install --force' für eine erzwungene Neuinstallation"
+                        return 0
+                    fi
                 else
-                    log_info "Installation abgebrochen"
                     log_info "Verwenden Sie 'modbridge.sh update' für ein Update"
                     log_info "Verwenden Sie 'modbridge.sh install --force' für eine erzwungene Neuinstallation"
                     return 0
                 fi
-            else
-                log_info "Verwenden Sie 'modbridge.sh update' für ein Update"
-                log_info "Verwenden Sie 'modbridge.sh install --force' für eine erzwungene Neuinstallation"
-                return 0
             fi
-        fi
     fi
 
     print_header
@@ -695,6 +698,7 @@ Headless = Kleinere Binary (22% weniger), nur Config-Datei" \
     log "Installationsverzeichnis: $INSTALL_DIR"
 
     # Select version
+    log "Frage verfügbare Versionen ab..."
     local VERSIONS
     if ! VERSIONS=$(fetch_available_versions); then
         log_error "Konnte verfügbare Versionen nicht abrufen"
@@ -880,10 +884,10 @@ update_modbridge() {
 
     print_header
 
-    # Show current version info
-    if is_modbridge_installed; then
-        local CURRENT=$(get_current_version)
-        local LATEST=$(get_latest_version)
+    # Show current version info (skip in auto-install mode)
+    if [ $AUTO_INSTALL -eq 0 ] && is_modbridge_installed; then
+        local CURRENT=$(get_current_version 2>/dev/null || echo "unbekannt")
+        local LATEST=$(get_latest_version 2>/dev/null || echo "unbekannt")
         log "Aktuelle Version: ${BOLD}$CURRENT${NC}"
         log "Verfügbare Version: ${BOLD}$LATEST${NC}"
         echo ""
@@ -966,6 +970,7 @@ Headless = Kleinere Binary (22% weniger), nur Config-Datei" \
     fi
 
     # Select version
+    log "Frage verfügbare Versionen ab..."
     local VERSIONS
     if ! VERSIONS=$(fetch_available_versions); then
         log_error "Konnte verfügbare Versionen nicht abrufen"
