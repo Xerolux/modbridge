@@ -5,6 +5,7 @@ import (
 	"modbridge/pkg/config"
 	"modbridge/pkg/logger"
 	"modbridge/pkg/portmanager"
+	"net"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -301,4 +302,41 @@ func countFreePortsInMap(results map[int]*portmanager.PortInfo) int {
 		}
 	}
 	return count
+}
+
+// handleProxyConnectivityCheck checks if target devices are reachable
+func (s *Server) handleProxyConnectivityCheck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	cfg := s.cfgMgr.Get()
+	results := make(map[string]map[string]interface{})
+
+	for _, proxy := range cfg.Proxies {
+		testConn, err := net.DialTimeout("tcp", proxy.TargetAddr, 5*time.Second)
+		isReachable := err == nil
+		var errorMsg string
+
+		if err != nil {
+			errorMsg = err.Error()
+		}
+
+		if testConn != nil {
+			testConn.Close()
+		}
+
+		results[proxy.ID] = map[string]interface{}{
+			"name":        proxy.Name,
+			"target":      proxy.TargetAddr,
+			"reachable":   isReachable,
+			"error":       errorMsg,
+			"status":      proxy.Status,
+			"listen_addr": proxy.ListenAddr,
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(results)
 }

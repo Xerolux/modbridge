@@ -137,6 +137,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/system/ports/diagnostics", csrfMW(s.handlePortDiagnostics))
 	mux.HandleFunc("/api/system/ports/release", csrfMW(s.handlePortRelease))
 	mux.HandleFunc("/api/system/ports/check", authMW(s.handleCheckProxyPorts))
+	mux.HandleFunc("/api/system/diagnostics/connectivity", authMW(s.handleProxyConnectivityCheck))
 }
 
 // handleHealth is a health check endpoint.
