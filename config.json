@@ -6,7 +6,7 @@
     {
       "id": "21e71152-3866-43ac-891d-c5ec85fa1e98",
       "name": "SolarEdge Proxy",
-      "listen_addr": ":502",
+      "listen_addr": ":5020",
       "target_addr": "192.168.178.198:1502",
       "enabled": true,
       "paused": false,
