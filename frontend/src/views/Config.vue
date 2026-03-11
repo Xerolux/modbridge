@@ -1,6 +1,6 @@
 <template>
-    <div class="p-4 flex flex-col gap-4">
-        <h1 class="text-2xl font-bold mb-4 text-gray-200">Configuration</h1>
+    <div class="p-2 sm:p-4 flex flex-col gap-4">
+        <h1 class="text-xl sm:text-2xl font-bold mb-2 sm:mb-4 text-gray-200">Configuration</h1>
 
         <div v-if="loading" class="flex justify-center">
             <i class="pi pi-spin pi-spinner text-4xl text-blue-500"></i>
@@ -8,16 +8,16 @@
 
         <div v-else class="flex flex-col gap-6">
             <Tabs value="0">
-                <TabList class="bg-gray-800 text-gray-200">
-                    <Tab value="0">Proxies</Tab>
-                    <Tab value="1">Logging</Tab>
-                    <Tab value="2">Security</Tab>
-                    <Tab value="3">Email</Tab>
-                    <Tab value="4">Backup</Tab>
-                    <Tab value="5">Advanced</Tab>
+                <TabList class="bg-gray-800 text-gray-200 overflow-x-auto flex-nowrap whitespace-nowrap hide-scrollbar">
+                    <Tab value="0" class="shrink-0">Proxies</Tab>
+                    <Tab value="1" class="shrink-0">Logging</Tab>
+                    <Tab value="2" class="shrink-0">Security</Tab>
+                    <Tab value="3" class="shrink-0">Email</Tab>
+                    <Tab value="4" class="shrink-0">Backup</Tab>
+                    <Tab value="5" class="shrink-0">Advanced</Tab>
                 </TabList>
 
-                <TabPanels class="bg-gray-800 text-white p-4 rounded">
+                <TabPanels class="bg-gray-800 text-white p-2 sm:p-4 rounded">
                     <TabPanel value="0">
                         <ConfigForm />
                     </TabPanel>

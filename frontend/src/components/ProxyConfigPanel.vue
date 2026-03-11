@@ -309,7 +309,8 @@ onUnmounted(() => {
 <style scoped>
 .proxy-config-panel {
   position: fixed;
-  width: 400px;
+  width: 95vw;
+  max-width: 400px;
   max-height: 80vh;
   background: rgba(31, 41, 55, 0.95);
   backdrop-filter: blur(20px);
@@ -319,6 +320,13 @@ onUnmounted(() => {
   z-index: 1000;
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (max-width: 640px) {
+  .proxy-config-panel {
+    left: 2.5vw !important;
+    top: 10vh !important;
+  }
 }
 
 .proxy-config-panel.minimized {
