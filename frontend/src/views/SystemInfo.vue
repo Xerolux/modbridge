@@ -1,107 +1,107 @@
 <template>
-    <div class="p-4 flex flex-col gap-4">
-        <h1 class="text-2xl font-bold mb-4 text-gray-200">System Information</h1>
+    <div class="p-2 sm:p-4 flex flex-col gap-4 w-full">
+        <h1 class="text-xl sm:text-2xl font-bold mb-2 sm:mb-4 text-gray-200">System Information</h1>
 
         <div v-if="loading" class="flex justify-center">
-            <i class="pi pi-spin pi-spinner text-4xl text-blue-500"></i>
+            <i class="pi pi-spin pi-spinner text-3xl sm:text-4xl text-blue-500"></i>
         </div>
 
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Card class="bg-gray-800 text-white">
-                <template #title>System</template>
+        <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            <Card class="bg-gray-800 text-white shadow-md">
+                <template #title><div class="text-lg sm:text-xl">System</div></template>
                 <template #content>
-                    <div class="space-y-2">
+                    <div class="space-y-2 text-sm sm:text-base">
                         <div class="flex justify-between">
                             <span class="text-gray-400">Uptime:</span>
-                            <span class="font-semibold">{{ systemInfo.uptime_human }}</span>
+                            <span class="font-semibold text-right pl-2">{{ systemInfo.uptime_human }}</span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-400">Go Version:</span>
-                            <span class="font-semibold">{{ systemInfo.go_version }}</span>
+                            <span class="font-semibold text-right pl-2">{{ systemInfo.go_version }}</span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-400">OS:</span>
-                            <span class="font-semibold">{{ systemInfo.os }}</span>
+                            <span class="font-semibold text-right pl-2">{{ systemInfo.os }}</span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-400">Architecture:</span>
-                            <span class="font-semibold">{{ systemInfo.arch }}</span>
+                            <span class="font-semibold text-right pl-2">{{ systemInfo.arch }}</span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-400">CPU Cores:</span>
-                            <span class="font-semibold">{{ systemInfo.num_cpu }}</span>
+                            <span class="font-semibold text-right pl-2">{{ systemInfo.num_cpu }}</span>
                         </div>
                     </div>
                 </template>
             </Card>
 
-            <Card class="bg-gray-800 text-white">
-                <template #title>Memory</template>
+            <Card class="bg-gray-800 text-white shadow-md">
+                <template #title><div class="text-lg sm:text-xl">Memory</div></template>
                 <template #content>
-                    <div class="space-y-2">
+                    <div class="space-y-2 text-sm sm:text-base">
                         <div class="flex justify-between">
                             <span class="text-gray-400">Allocated:</span>
-                            <span class="font-semibold">{{ systemInfo.memory_alloc_mb }} MB</span>
+                            <span class="font-semibold text-right pl-2">{{ systemInfo.memory_alloc_mb }} MB</span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-400">System:</span>
-                            <span class="font-semibold">{{ systemInfo.memory_sys_mb }} MB</span>
+                            <span class="font-semibold text-right pl-2">{{ systemInfo.memory_sys_mb }} MB</span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-400">Next GC:</span>
-                            <span class="font-semibold">{{ systemInfo.memory_gc_mb }} MB</span>
+                            <span class="font-semibold text-right pl-2">{{ systemInfo.memory_gc_mb }} MB</span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-400">Goroutines:</span>
-                            <span class="font-semibold">{{ systemInfo.goroutines }}</span>
+                            <span class="font-semibold text-right pl-2">{{ systemInfo.goroutines }}</span>
                         </div>
                     </div>
                 </template>
             </Card>
 
-            <Card class="bg-gray-800 text-white">
-                <template #title>Proxies</template>
+            <Card class="bg-gray-800 text-white shadow-md">
+                <template #title><div class="text-lg sm:text-xl">Proxies</div></template>
                 <template #content>
-                    <div class="space-y-2">
+                    <div class="space-y-2 text-sm sm:text-base">
                         <div class="flex justify-between">
                             <span class="text-gray-400">Total:</span>
-                            <span class="font-semibold">{{ systemInfo.total_proxies }}</span>
+                            <span class="font-semibold text-right pl-2">{{ systemInfo.total_proxies }}</span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-400">Running:</span>
-                            <span class="font-semibold text-green-400">{{ systemInfo.running_proxies }}</span>
+                            <span class="font-semibold text-green-400 text-right pl-2">{{ systemInfo.running_proxies }}</span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-400">Stopped:</span>
-                            <span class="font-semibold text-red-400">{{ systemInfo.total_proxies - systemInfo.running_proxies }}</span>
+                            <span class="font-semibold text-red-400 text-right pl-2">{{ systemInfo.total_proxies - systemInfo.running_proxies }}</span>
                         </div>
                     </div>
                 </template>
             </Card>
 
-            <Card class="bg-gray-800 text-white">
-                <template #title>Configuration</template>
+            <Card class="bg-gray-800 text-white shadow-md">
+                <template #title><div class="text-lg sm:text-xl">Configuration</div></template>
                 <template #content>
-                    <div class="space-y-2">
+                    <div class="space-y-2 text-sm sm:text-base">
                         <div class="flex justify-between">
                             <span class="text-gray-400">Log Level:</span>
-                            <span class="font-semibold">{{ config.log_level }}</span>
+                            <span class="font-semibold text-right pl-2">{{ config.log_level }}</span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-400">Debug Mode:</span>
-                            <span class="font-semibold" :class="config.debug_mode ? 'text-green-400' : 'text-red-400'">
+                            <span class="font-semibold text-right pl-2" :class="config.debug_mode ? 'text-green-400' : 'text-red-400'">
                                 {{ config.debug_mode ? 'Enabled' : 'Disabled' }}
                             </span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-400">Metrics:</span>
-                            <span class="font-semibold" :class="config.metrics_enabled ? 'text-green-400' : 'text-red-400'">
+                            <span class="font-semibold text-right pl-2" :class="config.metrics_enabled ? 'text-green-400' : 'text-red-400'">
                                 {{ config.metrics_enabled ? 'Enabled' : 'Disabled' }}
                             </span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-400">TLS:</span>
-                            <span class="font-semibold" :class="config.tls_enabled ? 'text-green-400' : 'text-red-400'">
+                            <span class="font-semibold text-right pl-2" :class="config.tls_enabled ? 'text-green-400' : 'text-red-400'">
                                 {{ config.tls_enabled ? 'Enabled' : 'Disabled' }}
                             </span>
                         </div>
@@ -109,31 +109,31 @@
                 </template>
             </Card>
 
-            <Card class="bg-gray-800 text-white">
-                <template #title>Security</template>
+            <Card class="bg-gray-800 text-white shadow-md">
+                <template #title><div class="text-lg sm:text-xl">Security</div></template>
                 <template #content>
-                    <div class="space-y-2">
+                    <div class="space-y-2 text-sm sm:text-base">
                         <div class="flex justify-between">
                             <span class="text-gray-400">Rate Limiting:</span>
-                            <span class="font-semibold" :class="config.rate_limit_enabled ? 'text-green-400' : 'text-red-400'">
+                            <span class="font-semibold text-right pl-2" :class="config.rate_limit_enabled ? 'text-green-400' : 'text-red-400'">
                                 {{ config.rate_limit_enabled ? 'Enabled' : 'Disabled' }}
                             </span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-400">IP Whitelist:</span>
-                            <span class="font-semibold" :class="config.ip_whitelist_enabled ? 'text-green-400' : 'text-red-400'">
+                            <span class="font-semibold text-right pl-2" :class="config.ip_whitelist_enabled ? 'text-green-400' : 'text-red-400'">
                                 {{ config.ip_whitelist_enabled ? 'Enabled' : 'Disabled' }}
                             </span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-400">IP Blacklist:</span>
-                            <span class="font-semibold" :class="config.ip_blacklist_enabled ? 'text-green-400' : 'text-red-400'">
+                            <span class="font-semibold text-right pl-2" :class="config.ip_blacklist_enabled ? 'text-green-400' : 'text-red-400'">
                                 {{ config.ip_blacklist_enabled ? 'Enabled' : 'Disabled' }}
                             </span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-400">Email Alerts:</span>
-                            <span class="font-semibold" :class="config.email_enabled ? 'text-green-400' : 'text-red-400'">
+                            <span class="font-semibold text-right pl-2" :class="config.email_enabled ? 'text-green-400' : 'text-red-400'">
                                 {{ config.email_enabled ? 'Enabled' : 'Disabled' }}
                             </span>
                         </div>
@@ -141,24 +141,24 @@
                 </template>
             </Card>
 
-            <Card class="bg-gray-800 text-white">
-                <template #title>Server Control</template>
+            <Card class="bg-gray-800 text-white shadow-md">
+                <template #title><div class="text-lg sm:text-xl">Server Control</div></template>
                 <template #content>
-                    <div class="flex flex-col gap-2">
-                        <Button @click="refreshInfo" label="Refresh" icon="pi pi-refresh" class="w-full" />
-                        <Button @click="restartSystem" label="Restart System" icon="pi pi-power-off" severity="warning" class="w-full" />
+                    <div class="flex flex-col gap-3">
+                        <Button @click="refreshInfo" label="Refresh" icon="pi pi-refresh" class="w-full p-3 sm:p-2" />
+                        <Button @click="restartSystem" label="Restart System" icon="pi pi-power-off" severity="warning" class="w-full p-3 sm:p-2" />
                     </div>
                 </template>
             </Card>
 
-            <Card class="bg-gray-800 text-white">
-                <template #title>Proxy Control</template>
+            <Card class="bg-gray-800 text-white shadow-md">
+                <template #title><div class="text-lg sm:text-xl">Proxy Control</div></template>
                 <template #content>
-                    <div class="flex flex-col gap-2">
-                        <Button @click="startAllProxies" label="Start All Proxies" icon="pi pi-play" severity="success" class="w-full" />
-                        <Button @click="stopAllProxies" label="Stop All Proxies" icon="pi pi-stop" severity="danger" class="w-full" />
-                        <Button @click="restartAllProxies" label="Restart All Proxies" icon="pi pi-refresh" severity="warning" class="w-full" />
-                        <Button @click="downloadLogs" label="Download Logs" icon="pi pi-download" severity="secondary" class="w-full" />
+                    <div class="flex flex-col gap-3">
+                        <Button @click="startAllProxies" label="Start All Proxies" icon="pi pi-play" severity="success" class="w-full p-3 sm:p-2" />
+                        <Button @click="stopAllProxies" label="Stop All Proxies" icon="pi pi-stop" severity="danger" class="w-full p-3 sm:p-2" />
+                        <Button @click="restartAllProxies" label="Restart All Proxies" icon="pi pi-refresh" severity="warning" class="w-full p-3 sm:p-2" />
+                        <Button @click="downloadLogs" label="Download Logs" icon="pi pi-download" severity="secondary" class="w-full p-3 sm:p-2" />
                     </div>
                 </template>
             </Card>

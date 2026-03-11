@@ -1,29 +1,26 @@
 <template>
-    <div class="dashboard-container p-4 flex flex-col gap-4">
+    <div class="dashboard-container p-2 sm:p-4 flex flex-col gap-4 w-full overflow-x-hidden">
         <!-- Header -->
-        <div class="dashboard-header flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 lg:mb-6 gap-4 lg:gap-0">
-             <div class="flex items-center gap-4">
+        <div class="dashboard-header flex flex-col lg:flex-row justify-between items-start lg:items-center mb-2 sm:mb-6 gap-4 lg:gap-0">
+             <div class="flex items-center gap-3 sm:gap-4">
                  <div class="header-icon">
-                     <i class="pi pi-th-large text-2xl"></i>
+                     <i class="pi pi-th-large text-xl sm:text-2xl"></i>
                  </div>
-                 <h1 class="text-xl sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                 <h1 class="text-lg sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
                      Dashboard
                  </h1>
              </div>
-             <div class="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full lg:w-auto">
+             <div class="flex flex-wrap sm:flex-nowrap gap-2 sm:gap-3 w-full lg:w-auto">
                   <!-- Settings Button -->
                   <Button
                     icon="pi pi-cog"
                     @click="showConfigPanel = true"
-                    class="w-full sm:w-auto animate-glow"
+                    class="flex-1 sm:flex-none animate-glow p-button-sm sm:p-button-md"
                     v-tooltip.bottom="'Proxy-Konfiguration'"
-                    rounded
                     severity="secondary"
-                  >
-                    <i class="pi pi-cog animate-spin-slow"></i>
-                  </Button>
-                  <Button label="Widget hinzufügen" icon="pi pi-plus" @click="openAddWidget" class="w-full sm:w-auto" />
-                  <Button label="Layout zurücksetzen" icon="pi pi-refresh" @click="resetLayout" severity="secondary" class="w-full sm:w-auto" />
+                  />
+                  <Button label="Hinzufügen" icon="pi pi-plus" @click="openAddWidget" class="flex-1 sm:flex-none p-button-sm sm:p-button-md" />
+                  <Button label="Reset" icon="pi pi-refresh" @click="resetLayout" severity="secondary" class="flex-1 sm:flex-none p-button-sm sm:p-button-md" />
              </div>
         </div>
 
@@ -39,19 +36,19 @@
 
         <!-- Error State -->
         <div v-else-if="error" class="flex justify-center items-center min-h-[500px]">
-             <div class="text-center error-container glass-effect rounded-2xl p-8">
+             <div class="text-center error-container glass-effect rounded-2xl p-8 mx-2 sm:mx-0">
                   <div class="error-icon mb-4">
                       <i class="pi pi-exclamation-triangle text-5xl text-red-500 animate-shake"></i>
                   </div>
-                  <p class="mt-4 text-red-400 font-semibold">Fehler beim Laden: {{ error }}</p>
-                  <Button @click="fetchData" label="Erneut versuchen" class="mt-6" />
+                  <p class="mt-4 text-red-400 font-semibold text-sm sm:text-base">Fehler beim Laden: {{ error }}</p>
+                  <Button @click="fetchData" label="Erneut versuchen" class="mt-6 w-full sm:w-auto p-button-sm sm:p-button-md" />
              </div>
         </div>
 
         <!-- Dashboard Grid -->
-        <div v-else class="grid-stack-dashboard grid-stack glass-effect rounded-2xl min-h-[500px] border border-gray-700/50 relative overflow-hidden">
+        <div v-else class="grid-stack-dashboard grid-stack glass-effect rounded-xl sm:rounded-2xl min-h-[60vh] sm:min-h-[500px] border border-gray-700/50 relative overflow-hidden">
             <Teleport v-for="widget in widgets" :key="widget.id" :to="'#mount_' + widget.id">
-                <div class="relative h-full w-full p-3 flex flex-col justify-between animate-fade-in">
+                <div class="relative h-full w-full p-2 sm:p-3 flex flex-col justify-between animate-fade-in">
                     <DashboardWidget
                         :title="widget.title"
                         :value="getWidgetValue(widget)"
@@ -71,7 +68,7 @@
             </Teleport>
         </div>
 
-        <Dialog v-model:visible="showAddWidget" header="Widget hinzufügen" :modal="true" :style="{ width: '90vw', maxWidth: '400px' }">
+        <Dialog v-model:visible="showAddWidget" header="Widget hinzufügen" :modal="true" class="w-11/12 sm:w-full max-w-[400px]">
             <div class="flex flex-col gap-4">
                 <label class="text-sm font-medium">Proxy wählen</label>
                 <Dropdown
@@ -81,9 +78,9 @@
                     optionValue="id"
                     placeholder="Wähle einen Proxy"
                     filter
-                    class="w-full"
+                    class="w-full p-inputtext-sm sm:p-inputtext-md"
                 />
-                <Button label="Hinzufügen" @click="confirmAddWidget" :disabled="!selectedProxy" class="w-full" />
+                <Button label="Hinzufügen" @click="confirmAddWidget" :disabled="!selectedProxy" class="w-full p-button-sm sm:p-button-md" />
             </div>
         </Dialog>
 
@@ -128,6 +125,8 @@ onMounted(async () => {
     try {
         await fetchData();
 
+        const isMobile = window.innerWidth <= 640;
+
         grid.value = GridStack.init({
             float: true,
             cellHeight: 80,
@@ -137,6 +136,8 @@ onMounted(async () => {
             disableOneColumnMode: false,
             oneColumnModeDomSort: true,
             oneColumnModeWidth: 640,
+            disableDrag: isMobile,
+            disableResize: isMobile,
             breakpointForNColumn: {
                 1: { width: 640, column: 1 },
                 2: { width: 768, column: 2 },
@@ -145,6 +146,9 @@ onMounted(async () => {
                 6: { width: 1536, column: 6 }
             }
         });
+
+        // Add resize listener to update drag/resize state
+        window.addEventListener('resize', handleResize);
 
         const savedLayout = localStorage.getItem('dashboard_layout');
         let layoutToLoad = [];
@@ -222,7 +226,15 @@ onMounted(async () => {
     }
 });
 
+const handleResize = () => {
+    if (grid.value) {
+        const isMobile = window.innerWidth <= 640;
+        grid.value.setStatic(isMobile);
+    }
+};
+
 onUnmounted(() => {
+    window.removeEventListener('resize', handleResize);
     if (grid.value) {
         grid.value.destroy();
     }

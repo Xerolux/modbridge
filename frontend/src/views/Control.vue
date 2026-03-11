@@ -45,14 +45,14 @@
                          <div class="text-sm">Listen: {{ proxy.listen_addr }}</div>
                          <div class="text-sm">Target: {{ proxy.target_addr }}</div>
 
-                         <div class="grid grid-cols-4 gap-2 mt-2">
+                         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
                               <Button
                                  icon="pi pi-play"
                                  severity="success"
                                  label="Start"
                                  :disabled="proxy.status === 'Running'"
                                  @click="controlProxy(proxy.id, 'start')"
-                                 class="text-xs sm:text-sm"
+                                 class="text-xs sm:text-sm p-3 sm:p-2 min-h-[44px]"
                               />
                               <Button
                                  icon="pi pi-stop"
@@ -60,7 +60,7 @@
                                  label="Stop"
                                  :disabled="proxy.status === 'Stopped' || proxy.status === 'Error'"
                                  @click="controlProxy(proxy.id, 'stop')"
-                                 class="text-xs sm:text-sm"
+                                 class="text-xs sm:text-sm p-3 sm:p-2 min-h-[44px]"
                               />
                                <Button
                                  icon="pi pi-refresh"
@@ -68,30 +68,32 @@
                                  label="Restart"
                                  :disabled="proxy.status === 'Stopped'"
                                  @click="controlProxy(proxy.id, 'restart')"
-                                 class="text-xs sm:text-sm"
+                                 class="text-xs sm:text-sm p-3 sm:p-2 min-h-[44px]"
                               />
                               <Button
                                  icon="pi pi-pencil"
                                  severity="secondary"
                                  label="Edit"
                                  @click="openEditProxyDialog(proxy)"
-                                 class="text-xs sm:text-sm"
+                                 class="text-xs sm:text-sm p-3 sm:p-2 min-h-[44px]"
                               />
                          </div>
-                         <Button
-                             icon="pi pi-eye"
-                             severity="secondary"
-                             label="View Logs"
-                             @click="openProxyLogs(proxy.id)"
-                             class="text-xs sm:text-sm mt-2"
-                         />
-                         <Button
-                             icon="pi pi-trash"
-                             severity="danger"
-                             label="Delete"
-                             @click="confirmDeleteProxy(proxy.id)"
-                             class="text-xs sm:text-sm mt-2"
-                         />
+                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                             <Button
+                                 icon="pi pi-eye"
+                                 severity="secondary"
+                                 label="View Logs"
+                                 @click="openProxyLogs(proxy.id)"
+                                 class="text-xs sm:text-sm p-3 sm:p-2 min-h-[44px]"
+                             />
+                             <Button
+                                 icon="pi pi-trash"
+                                 severity="danger"
+                                 label="Delete"
+                                 @click="confirmDeleteProxy(proxy.id)"
+                                 class="text-xs sm:text-sm p-3 sm:p-2 min-h-[44px]"
+                             />
+                         </div>
                      </div>
                  </template>
              </Card>
