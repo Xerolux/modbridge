@@ -45,7 +45,7 @@
                          <div class="text-sm">Listen: {{ proxy.listen_addr }}</div>
                          <div class="text-sm">Target: {{ proxy.target_addr }}</div>
 
-                         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
+                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-2">
                               <Button
                                  icon="pi pi-play"
                                  severity="success"

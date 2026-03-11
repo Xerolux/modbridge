@@ -61,19 +61,19 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pr-8">
             <div>
               <label class="block text-xs font-medium text-gray-400">Name</label>
-              <input v-model="proxy.name" @input="markDirty(proxy)" type="text" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white sm:text-sm p-1 border">
+              <input v-model="proxy.name" @input="markDirty(proxy)" type="text" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white sm:text-sm p-2 min-h-[44px] border">
             </div>
              <div>
               <label class="block text-xs font-medium text-gray-400">Listen Addr</label>
-              <input v-model="proxy.listen_addr" @input="markDirty(proxy)" type="text" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white sm:text-sm p-1 border" placeholder=":502">
+              <input v-model="proxy.listen_addr" @input="markDirty(proxy)" type="text" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white sm:text-sm p-2 min-h-[44px] border" placeholder=":502">
             </div>
              <div>
               <label class="block text-xs font-medium text-gray-400">Target Addr</label>
-              <input v-model="proxy.target_addr" @input="markDirty(proxy)" type="text" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white sm:text-sm p-1 border" placeholder="192.168.1.100:502">
+              <input v-model="proxy.target_addr" @input="markDirty(proxy)" type="text" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white sm:text-sm p-2 min-h-[44px] border" placeholder="192.168.1.100:502">
             </div>
              <div>
                 <label class="block text-xs font-medium text-gray-400">Description</label>
-                <input v-model="proxy.description" @input="markDirty(proxy)" type="text" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white sm:text-sm p-1 border">
+                <input v-model="proxy.description" @input="markDirty(proxy)" type="text" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white sm:text-sm p-2 min-h-[44px] border">
              </div>
               <div class="flex items-center space-x-4 mt-4">
                  <label class="inline-flex items-center">
@@ -87,7 +87,7 @@
              </div>
              <div class="mt-2">
                  <label class="block text-xs font-medium text-gray-400">Tags</label>
-                 <input v-model="proxy.tags" @input="markDirty(proxy)" type="text" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white sm:text-sm p-1 border" placeholder="comma,separated,tags">
+                 <input v-model="proxy.tags" @input="markDirty(proxy)" type="text" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white sm:text-sm p-2 min-h-[44px] border" placeholder="comma,separated,tags">
              </div>
           </div>
 
@@ -107,19 +107,19 @@
            <div v-if="proxy._showAdvanced" class="mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-gray-600 pt-2">
               <div>
                 <label class="block text-xs font-medium text-gray-400">Conn Timeout (s)</label>
-                <input v-model.number="proxy.connection_timeout" @input="markDirty(proxy)" type="number" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white sm:text-sm p-1 border">
+                <input v-model.number="proxy.connection_timeout" @input="markDirty(proxy)" type="number" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white sm:text-sm p-2 min-h-[44px] border">
               </div>
               <div>
                 <label class="block text-xs font-medium text-gray-400">Read Timeout (s)</label>
-                <input v-model.number="proxy.read_timeout" @input="markDirty(proxy)" type="number" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white sm:text-sm p-1 border">
+                <input v-model.number="proxy.read_timeout" @input="markDirty(proxy)" type="number" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white sm:text-sm p-2 min-h-[44px] border">
               </div>
               <div>
                 <label class="block text-xs font-medium text-gray-400">Max Retries</label>
-                <input v-model.number="proxy.max_retries" @input="markDirty(proxy)" type="number" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white sm:text-sm p-1 border">
+                <input v-model.number="proxy.max_retries" @input="markDirty(proxy)" type="number" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white sm:text-sm p-2 min-h-[44px] border">
               </div>
               <div>
                 <label class="block text-xs font-medium text-gray-400">Max Read Size (0=unlimited)</label>
-                <input v-model.number="proxy.max_read_size" @input="markDirty(proxy)" type="number" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white sm:text-sm p-1 border">
+                <input v-model.number="proxy.max_read_size" @input="markDirty(proxy)" type="number" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white sm:text-sm p-2 min-h-[44px] border">
               </div>
            </div>
 
