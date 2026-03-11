@@ -30,11 +30,11 @@
     </div>
 
     <div v-else class="flex flex-col gap-4">
-      <div class="flex gap-4 items-center">
+      <div class="flex flex-col sm:flex-row gap-4 items-center w-full">
         <InputText
           v-model="searchTerm"
           placeholder="Geräte durchsuchen..."
-          class="w-full max-w-md"
+          class="w-full sm:max-w-md"
         />
         <Dropdown
           v-model="selectedSort"
@@ -42,7 +42,7 @@
           optionLabel="label"
           optionValue="value"
           placeholder="Sortierung"
-          class="w-48"
+          class="w-full sm:w-48"
         />
       </div>
 

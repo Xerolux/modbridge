@@ -14,14 +14,14 @@
       <div class="header-actions">
         <button
           @click="toggleMinimize"
-          class="p-1 hover:bg-white/10 rounded transition-colors"
+          class="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center hover:bg-white/10 rounded transition-colors"
           :title="minimized ? 'Erweitern' : 'Minimieren'"
         >
           <i :class="minimized ? 'pi pi-chevron-down' : 'pi pi-chevron-up'"></i>
         </button>
         <button
           @click="close"
-          class="p-1 hover:bg-red-500/30 rounded transition-colors text-red-400"
+          class="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center hover:bg-red-500/30 rounded transition-colors text-red-400"
           title="Schließen"
         >
           <i class="pi pi-times"></i>
