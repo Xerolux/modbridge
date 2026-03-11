@@ -25,6 +25,10 @@ LOG_FILE="/var/log/modbridge-install.log"
 REPO_URL="https://github.com/Xerolux/modbridge"
 RELEASES_API="https://api.github.com/repos/Xerolux/modbridge/releases"
 
+# Auto-installation flag (skip all dialogs with defaults)
+AUTO_INSTALL=0
+DEFAULT_VARIANT="full"  # Default to WebUI (full)
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -415,12 +419,14 @@ check_and_wait_for_ports() {
         sleep 1
         WAIT_COUNT=$((WAIT_COUNT + 1))
 
-        BLOCKED_PORTS=()
+        local NEW_BLOCKED_PORTS=()
         for port in "${BLOCKED_PORTS[@]}"; do
             if lsof -i ":$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
-                BLOCKED_PORTS+=("$port")
+                NEW_BLOCKED_PORTS+=("$port")
             fi
         done
+
+        BLOCKED_PORTS=("${NEW_BLOCKED_PORTS[@]}")
 
         if [ ${#BLOCKED_PORTS[@]} -eq 0 ]; then
             log "✓ Alle Ports sind jetzt frei."
@@ -465,12 +471,36 @@ cleanup_modbridge() {
 
 fetch_available_versions() {
     log "Frage verfügbare Versionen ab..."
-    local VERSIONS=$(curl -s "$RELEASES_API" | jq -r '.[].tag_name' | head -10)
+    local RESPONSE
+    local VERSIONS
+
+    # Fetch with timeout and retry logic
+    for attempt in 1 2 3; do
+        RESPONSE=$(curl -s --connect-timeout 10 --max-time 30 "$RELEASES_API" 2>&1)
+        if [ $? -eq 0 ]; then
+            break
+        fi
+        if [ $attempt -lt 3 ]; then
+            log_warn "Verbindung fehlgeschlagen, versuche erneut ($attempt/3)..."
+            sleep 2
+        fi
+    done
+
+    if [ -z "$RESPONSE" ]; then
+        log_error "Konnte API nicht erreichen"
+        return 1
+    fi
+
+    # Parse JSON safely
+    VERSIONS=$(echo "$RESPONSE" | jq -r '.[].tag_name' 2>/dev/null | head -10)
+
     if [ -z "$VERSIONS" ]; then
         log_error "Keine Versionen gefunden"
-        exit 1
+        return 1
     fi
+
     echo "$VERSIONS"
+    return 0
 }
 
 download_modbridge_binary() {
@@ -484,25 +514,48 @@ download_modbridge_binary() {
     fi
 
     local DOWNLOAD_URL="${REPO_URL}/releases/download/${VERSION}/${BINARY_NAME}"
-    local TEMP_FILE="/tmp/${BINARY_NAME}"
+    local TEMP_FILE="/tmp/${BINARY_NAME}.$$"
 
     log "Lade herunter: $BINARY_NAME"
     log "URL: $DOWNLOAD_URL"
 
-    if curl -L -o "$TEMP_FILE" "$DOWNLOAD_URL" --progress-bar; then
-        # Verify it's a valid binary
-        if file "$TEMP_FILE" | grep -q "ELF"; then
-            mv "$TEMP_FILE" "$INSTALL_DIR/modbridge"
-            chmod +x "$INSTALL_DIR/modbridge"
-            log "✓ Binary erfolgreich heruntergeladen"
-            return 0
+    # Download with timeout and retry logic
+    local download_success=0
+    for attempt in 1 2 3; do
+        if curl -L -o "$TEMP_FILE" "$DOWNLOAD_URL" --progress-bar --connect-timeout 10 --max-time 300; then
+            download_success=1
+            break
         else
-            log_error "Heruntergeladene Datei ist keine gültige Binary"
-            rm -f "$TEMP_FILE"
-            return 1
+            if [ $attempt -lt 3 ]; then
+                log_warn "Download fehlgeschlagen, versuche erneut ($attempt/3)..."
+                sleep 3
+                rm -f "$TEMP_FILE"
+            fi
         fi
+    done
+
+    if [ $download_success -eq 0 ]; then
+        log_error "Download fehlgeschlagen nach 3 Versuchen"
+        rm -f "$TEMP_FILE"
+        return 1
+    fi
+
+    # Check if file exists and has content
+    if [ ! -f "$TEMP_FILE" ] || [ ! -s "$TEMP_FILE" ]; then
+        log_error "Heruntergeladene Datei ist leer oder existiert nicht"
+        rm -f "$TEMP_FILE"
+        return 1
+    fi
+
+    # Verify it's a valid binary
+    if file "$TEMP_FILE" | grep -q "ELF"; then
+        mv "$TEMP_FILE" "$INSTALL_DIR/modbridge"
+        chmod +x "$INSTALL_DIR/modbridge"
+        log "✓ Binary erfolgreich heruntergeladen"
+        return 0
     else
-        log_error "Download fehlgeschlagen"
+        log_error "Heruntergeladene Datei ist keine gültige Binary"
+        log_error "Dateityp: $(file "$TEMP_FILE")"
         rm -f "$TEMP_FILE"
         return 1
     fi
@@ -589,43 +642,51 @@ Möchten Sie die Installation wiederholen (Neuinstallation)?" \
     IFS='|' read -r ARCH_INFO ARCH_NAME <<< "$(detect_architecture)"
     log "Erkannte Architektur: ${BOLD}$ARCH_NAME${NC}"
 
-    # Check if whiptail is available
-    if ! command -v whiptail &>/dev/null; then
+    # Check if whiptail is available (only needed if not in auto-install mode)
+    if [ $AUTO_INSTALL -eq 0 ] && ! command -v whiptail &>/dev/null; then
         log_error "whiptail ist nicht installiert"
         log_info "Installation: apt install whiptail"
         exit 1
     fi
 
-    # Show welcome message
-    whiptail --title "ModBridge Installer" \
-            --yesno "Willkommen zum ModBridge Installer!\n\n\
+    # Choose WebUI variant
+    local WEBUI_VARIANT
+    if [ $AUTO_INSTALL -eq 1 ]; then
+        # Use default variant in auto-install mode
+        WEBUI_VARIANT="$DEFAULT_VARIANT"
+        log "✓ Verwende Standard-Variante: $([ "$WEBUI_VARIANT" = "full" ] && echo "Mit WebUI" || echo "Headless")"
+    else
+        # Show welcome message
+        whiptail --title "ModBridge Installer" \
+                --yesno "Willkommen zum ModBridge Installer!\n\n\
 Erkannte Architektur: $ARCH_NAME\n\n\
 ModBridge wird jetzt installiert.\n\n\
 Fortfahren?" \
-            15 80 \
-            --yes-button "Ja" --no-button "Nein" \
-            3>&1 1>&2 2>&3 || exit 0
+                15 80 \
+                --yes-button "Ja" --no-button "Nein" \
+                3>&1 1>&2 2>&3 || exit 0
 
-    # Choose WebUI variant
-    local WEBUI_VARIANT
-    local CHOICE=$(whiptail --title "WebUI oder Headless?" \
-               --radiolist "Wähle die Variante:\n\n\
+        local CHOICE=$(whiptail --title "WebUI oder Headless?" \
+                   --radiolist "Wähle die Variante:\n\n\
 Mit WebUI = Größere Binary, mit grafischer Oberfläche\n\
 Headless = Kleinere Binary (22% weniger), nur Config-Datei" \
-               15 80 2 \
-               "full" "Mit WebUI" "ON" \
-               "headless" "Ohne WebUI (Headless)" "OFF" \
-               3>&1 1>&2 2>&3)
+                   15 80 2 \
+                   "full" "Mit WebUI" "ON" \
+                   "headless" "Ohne WebUI (Headless)" "OFF" \
+                   3>&1 1>&2 2>&3)
 
-    if [ "$CHOICE" = "headless" ]; then
-        WEBUI_VARIANT="headless"
-    else
-        WEBUI_VARIANT="full"
+        if [ "$CHOICE" = "headless" ]; then
+            WEBUI_VARIANT="headless"
+        else
+            WEBUI_VARIANT="full"
+        fi
     fi
 
     # Cleanup
     if ! cleanup_modbridge; then
-        whiptail --title "Fehler" --msgbox "Cleanup fehlgeschlagen. Bitte manuell prüfen." 10 60
+        if [ $AUTO_INSTALL -eq 0 ] && command -v whiptail &>/dev/null; then
+            whiptail --title "Fehler" --msgbox "Cleanup fehlgeschlagen. Bitte manuell prüfen." 10 60 || true
+        fi
         exit 1
     fi
 
@@ -634,44 +695,57 @@ Headless = Kleinere Binary (22% weniger), nur Config-Datei" \
     log "Installationsverzeichnis: $INSTALL_DIR"
 
     # Select version
-    local VERSIONS=$(fetch_available_versions)
-    local VERSION_COUNT=$(echo "$VERSIONS" | wc -l)
-    local LIST_HEIGHT=$((VERSION_COUNT + 2))
-
-    local VERSION_LIST=""
-    local i=1
-    while IFS= read -r version; do
-        if [ $i -eq 1 ]; then
-            VERSION_LIST="$VERSION_LIST \"$version\" \"Version $i\" \"ON\""
-        else
-            VERSION_LIST="$VERSION_LIST \"$version\" \"Version $i\" \"OFF\""
-        fi
-        i=$((i+1))
-    done <<< "$VERSIONS"
+    local VERSIONS
+    if ! VERSIONS=$(fetch_available_versions); then
+        log_error "Konnte verfügbare Versionen nicht abrufen"
+        exit 1
+    fi
 
     local SELECTED_VERSION
-    eval "SELECTED_VERSION=\$(whiptail --title \"Version wählen\" \
-                                    --radiolist \"Wähle die zu installierende Version:\" \
-                                    20 80 $LIST_HEIGHT \
-                                    $VERSION_LIST \
-                                    3>&1 1>&2 2>&3)"
+    if [ $AUTO_INSTALL -eq 1 ]; then
+        # Use latest version (first one) in auto-install mode
+        SELECTED_VERSION=$(echo "$VERSIONS" | head -n 1)
+        log "✓ Verwende neueste Version: $SELECTED_VERSION"
+    else
+        local VERSION_COUNT=$(echo "$VERSIONS" | wc -l)
+        local LIST_HEIGHT=$((VERSION_COUNT + 2))
 
-    if [ -z "$SELECTED_VERSION" ]; then
-        log_info "Installation abgebrochen"
-        exit 0
+        local VERSION_LIST=""
+        local i=1
+        while IFS= read -r version; do
+            if [ $i -eq 1 ]; then
+                VERSION_LIST="$VERSION_LIST \"$version\" \"Version $i\" \"ON\""
+            else
+                VERSION_LIST="$VERSION_LIST \"$version\" \"Version $i\" \"OFF\""
+            fi
+            i=$((i+1))
+        done <<< "$VERSIONS"
+
+        eval "SELECTED_VERSION=\$(whiptail --title \"Version wählen\" \
+                                        --radiolist \"Wähle die zu installierende Version:\" \
+                                        20 80 $LIST_HEIGHT \
+                                        $VERSION_LIST \
+                                        3>&1 1>&2 2>&3)"
+
+        if [ -z "$SELECTED_VERSION" ]; then
+            log_info "Installation abgebrochen"
+            exit 0
+        fi
     fi
 
     log "Gewählte Version: $SELECTED_VERSION"
 
     # Download binary
     if ! download_modbridge_binary "$SELECTED_VERSION" "$WEBUI_VARIANT" "$ARCH_INFO"; then
-        whiptail --title "Download fehlgeschlagen" \
-                 --msgbox "Der Download ist fehlgeschlagen.\n\n\
+        if [ $AUTO_INSTALL -eq 0 ] && command -v whiptail &>/dev/null; then
+            whiptail --title "Download fehlgeschlagen" \
+                     --msgbox "Der Download ist fehlgeschlagen.\n\n\
 Bitte prüfen:\n\
 - Internetverbindung\n\
 - GitHub Repository verfügbar\n\
 - Version existiert" \
-                 12 60
+                     12 60 || true
+        fi
         exit 1
     fi
 
@@ -721,10 +795,40 @@ EOF
     fi
 
     # Success message
+    echo ""
+    log "${GREEN}═══════════════════════════════════════════════════════════════════${NC}"
+    log "${GREEN}✓ Installation erfolgreich!${NC}"
+    log "${GREEN}═══════════════════════════════════════════════════════════════════${NC}"
+    log ""
+    log "Version: ${BOLD}$SELECTED_VERSION${NC}"
+    log "Variante: $([ "$WEBUI_VARIANT" = "headless" ] && echo "Headless (ohne WebUI)" || echo "Full (mit WebUI)")"
+    log "Architektur: ${BOLD}$ARCH_NAME${NC}"
+    log ""
+
     if [ "$WEBUI_VARIANT" = "headless" ]; then
-        # Headless success message with configuration info
-        whiptail --title "Installation erfolgreich" \
-                 --msgbox "ModBridge $SELECTED_VERSION wurde erfolgreich installiert!\n\n\
+        log "KONFIGURATION:"
+        log "  Config-Datei: $INSTALL_DIR/config.json"
+        log "  Erstellen Sie die Konfiguration mit:"
+        log "  $ sudo $INSTALL_DIR/modbridge -config > $INSTALL_DIR/config.json"
+    else
+        local IP=$(hostname -I | awk '{print $1}')
+        log "WebUI: http://$IP:8080"
+        log "Authentifizierung: Automatisch beim ersten Start generiert"
+    fi
+
+    log ""
+    log "Service-Befehle:"
+    log "  systemctl start $SERVICE_NAME"
+    log "  systemctl stop $SERVICE_NAME"
+    log "  systemctl restart $SERVICE_NAME"
+    log "  systemctl status $SERVICE_NAME"
+    log ""
+
+    # Show GUI message if whiptail is available and not in auto-install mode
+    if [ $AUTO_INSTALL -eq 0 ] && command -v whiptail &>/dev/null; then
+        if [ "$WEBUI_VARIANT" = "headless" ]; then
+            whiptail --title "Installation erfolgreich" \
+                     --msgbox "ModBridge $SELECTED_VERSION wurde erfolgreich installiert!\n\n\
 Version: $SELECTED_VERSION\n\
 Variante: Headless (ohne WebUI)\n\
 Architektur: $ARCH_NAME\n\n\
@@ -742,20 +846,21 @@ Service: systemctl $SERVICE_NAME {start,stop,restart,status}\n\n\
 ${BOLD}DOKUMENTATION:${NC}\n\
 Ausführliche Informationen finden Sie in der README.md\n\
 im GitHub Repository oder mit: modbridge.sh help" \
-                 22 80
-    else
-        # Full success message with WebUI info
-        whiptail --title "Installation erfolgreich" \
-                 --msgbox "ModBridge $SELECTED_VERSION wurde erfolgreich installiert!\n\n\
+                     22 80 || true
+        else
+            local IP=$(hostname -I | awk '{print $1}')
+            whiptail --title "Installation erfolgreich" \
+                     --msgbox "ModBridge $SELECTED_VERSION wurde erfolgreich installiert!\n\n\
 Version: $SELECTED_VERSION\n\
 Variante: Full (mit WebUI)\n\
 Architektur: $ARCH_NAME\n\n\
 Service: systemctl $SERVICE_NAME {start,stop,restart,status}\n\
 Config: $INSTALL_DIR/config.json\n\n\
-WebUI: http://$(hostname -I | awk '{print $1}'):8080\n\n\
+WebUI: http://$IP:8080\n\n\
 Das Standard-Passwort wurde beim ersten Start\n\
 automatisch generiert und in den Logs angezeigt." \
-                 18 80
+                     18 80 || true
+        fi
     fi
 }
 
@@ -804,31 +909,42 @@ update_modbridge() {
 
     log "Aktuelle Installation: $CURRENT_VARIANT"
 
-    # Confirm update
-    whiptail --title "ModBridge Update" \
-            --yesno "ModBridge wird aktualisiert.\n\n\
+    # Choose variant
+    local WEBUI_VARIANT
+    if [ $AUTO_INSTALL -eq 1 ]; then
+        # Use default variant in auto-install mode
+        WEBUI_VARIANT="$DEFAULT_VARIANT"
+        log "✓ Verwende Standard-Variante: $([ "$WEBUI_VARIANT" = "full" ] && echo "Mit WebUI" || echo "Headless")"
+    else
+        # Confirm update with dialog
+        if command -v whiptail &>/dev/null; then
+            whiptail --title "ModBridge Update" \
+                    --yesno "ModBridge wird aktualisiert.\n\n\
 Architektur: $ARCH_NAME\n\
 Aktuell: $CURRENT_VARIANT\n\n\
 Fortfahren?" \
-            15 80 \
-            --yes-button "Ja" --no-button "Nein" \
-            3>&1 1>&2 2>&3 || exit 0
+                    15 80 \
+                    --yes-button "Ja" --no-button "Nein" \
+                    3>&1 1>&2 2>&3 || exit 0
 
-    # Choose variant
-    local WEBUI_VARIANT
-    local CHOICE=$(whiptail --title "WebUI oder Headless?" \
-               --radiolist "Wähle die Variante:\n\n\
+            local CHOICE=$(whiptail --title "WebUI oder Headless?" \
+                       --radiolist "Wähle die Variante:\n\n\
 Mit WebUI = Größere Binary, mit grafischer Oberfläche\n\
 Headless = Kleinere Binary (22% weniger), nur Config-Datei" \
-               15 80 2 \
-               "full" "Mit WebUI" "ON" \
-               "headless" "Ohne WebUI (Headless)" "OFF" \
-               3>&1 1>&2 2>&3)
+                       15 80 2 \
+                       "full" "Mit WebUI" "ON" \
+                       "headless" "Ohne WebUI (Headless)" "OFF" \
+                       3>&1 1>&2 2>&3)
 
-    if [ "$CHOICE" = "headless" ]; then
-        WEBUI_VARIANT="headless"
-    else
-        WEBUI_VARIANT="full"
+            if [ "$CHOICE" = "headless" ]; then
+                WEBUI_VARIANT="headless"
+            else
+                WEBUI_VARIANT="full"
+            fi
+        else
+            log_error "whiptail nicht verfügbar"
+            exit 1
+        fi
     fi
 
     # Cleanup
@@ -850,44 +966,57 @@ Headless = Kleinere Binary (22% weniger), nur Config-Datei" \
     fi
 
     # Select version
-    local VERSIONS=$(fetch_available_versions)
-    local VERSION_COUNT=$(echo "$VERSIONS" | wc -l)
-    local LIST_HEIGHT=$((VERSION_COUNT + 2))
-
-    local VERSION_LIST=""
-    local i=1
-    while IFS= read -r version; do
-        if [ $i -eq 1 ]; then
-            VERSION_LIST="$VERSION_LIST \"$version\" \"Version $i\" \"ON\""
-        else
-            VERSION_LIST="$VERSION_LIST \"$version\" \"Version $i\" \"OFF\""
-        fi
-        i=$((i+1))
-    done <<< "$VERSIONS"
+    local VERSIONS
+    if ! VERSIONS=$(fetch_available_versions); then
+        log_error "Konnte verfügbare Versionen nicht abrufen"
+        exit 1
+    fi
 
     local SELECTED_VERSION
-    eval "SELECTED_VERSION=\$(whiptail --title \"Version wählen\" \
-                                    --radiolist \"Wähle die zu installierende Version:\" \
-                                    20 80 $LIST_HEIGHT \
-                                    $VERSION_LIST \
-                                    3>&1 1>&2 2>&3)"
+    if [ $AUTO_INSTALL -eq 1 ]; then
+        # Use latest version (first one) in auto-install mode
+        SELECTED_VERSION=$(echo "$VERSIONS" | head -n 1)
+        log "✓ Verwende neueste Version: $SELECTED_VERSION"
+    else
+        local VERSION_COUNT=$(echo "$VERSIONS" | wc -l)
+        local LIST_HEIGHT=$((VERSION_COUNT + 2))
 
-    if [ -z "$SELECTED_VERSION" ]; then
-        log_info "Update abgebrochen"
-        exit 0
+        local VERSION_LIST=""
+        local i=1
+        while IFS= read -r version; do
+            if [ $i -eq 1 ]; then
+                VERSION_LIST="$VERSION_LIST \"$version\" \"Version $i\" \"ON\""
+            else
+                VERSION_LIST="$VERSION_LIST \"$version\" \"Version $i\" \"OFF\""
+            fi
+            i=$((i+1))
+        done <<< "$VERSIONS"
+
+        eval "SELECTED_VERSION=\$(whiptail --title \"Version wählen\" \
+                                        --radiolist \"Wähle die zu installierende Version:\" \
+                                        20 80 $LIST_HEIGHT \
+                                        $VERSION_LIST \
+                                        3>&1 1>&2 2>&3)"
+
+        if [ -z "$SELECTED_VERSION" ]; then
+            log_info "Update abgebrochen"
+            exit 0
+        fi
     fi
 
     log "Gewählte Version: $SELECTED_VERSION"
 
     # Download binary
     if ! download_modbridge_binary "$SELECTED_VERSION" "$WEBUI_VARIANT" "$ARCH_INFO"; then
-        whiptail --title "Download fehlgeschlagen" \
-                 --msgbox "Der Download ist fehlgeschlagen.\n\n\
+        if [ $AUTO_INSTALL -eq 0 ] && command -v whiptail &>/dev/null; then
+            whiptail --title "Download fehlgeschlagen" \
+                     --msgbox "Der Download ist fehlgeschlagen.\n\n\
 Bitte prüfen:\n\
 - Internetverbindung\n\
 - GitHub Repository verfügbar\n\
 - Version existiert" \
-                 12 60
+                     12 60 || true
+        fi
         exit 1
     fi
 
@@ -926,11 +1055,24 @@ Bitte prüfen:\n\
         log "✓ Alte Backups aufgeräumt (3 behalten)."
     fi
 
-    whiptail --title "Update erfolgreich" \
-             --msgbox "ModBridge wurde erfolgreich auf $SELECTED_VERSION aktualisiert!\n\n\
+    echo ""
+    log "${GREEN}═══════════════════════════════════════════════════════════════════${NC}"
+    log "${GREEN}✓ Update erfolgreich!${NC}"
+    log "${GREEN}═══════════════════════════════════════════════════════════════════${NC}"
+    log ""
+    log "Version: ${BOLD}$SELECTED_VERSION${NC}"
+    log "Variante: $([ "$WEBUI_VARIANT" = "headless" ] && echo "Headless (ohne WebUI)" || echo "Full (mit WebUI)")"
+    log "Service: ✓ läuft"
+    log ""
+
+    # Show GUI message if whiptail is available and not in auto-install mode
+    if [ $AUTO_INSTALL -eq 0 ] && command -v whiptail &>/dev/null; then
+        whiptail --title "Update erfolgreich" \
+                 --msgbox "ModBridge wurde erfolgreich auf $SELECTED_VERSION aktualisiert!\n\n\
 Variante: $([ "$WEBUI_VARIANT" = "headless" ] && echo "Headless (ohne WebUI)" || echo "Full (mit WebUI)")\n\n\
 Service läuft!" \
-             12 60
+                 12 60 || true
+    fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1229,6 +1371,8 @@ show_help() {
 
     printf "${CYAN}Optionen:${NC}\n"
     printf "  ${YELLOW}--force${NC}                    - Installation erzwingen (überschreibt vorhandene)\n"
+    printf "  ${YELLOW}--auto${NC}                     - Automatische Installation mit Defaults (WebUI + Latest)\n"
+    printf "  ${YELLOW}--headless${NC}                 - Automatische Installation ohne WebUI\n"
     printf "  ${YELLOW}NO_UPDATE=1${NC}                - Script-Auto-Update überspringen\n\n"
 
     printf "${CYAN}Features:${NC}\n"
@@ -1255,15 +1399,15 @@ show_help() {
     printf "  ob eine neuere Version im Git Repository verfügbar ist.\n"
     printf "  Falls ja, wird es automatisch aktualisiert und neu gestartet.\n\n"
 
-    printf "${CYAN}Beispiel:${NC}\n"
-    printf "  $ sudo bash modbridge.sh install\n"
-    printf "  # → Prüft auf Script-Updates\n"
-    printf "  # → Falls nötig: Aktualisiert sich selbst und startet neu\n"
-    printf "  # → Öffnet interaktives Menü\n"
-    printf "  # → Zeigt erkannte Architektur\n"
-    printf "  # → Auswahl: WebUI oder Headless\n"
-    printf "  # → Auswahl der Version\n"
-    printf "  # → Download und Installation\n\n"
+    printf "${CYAN}Beispiele:${NC}\n"
+    printf "  # Interaktive Installation (mit Dialogen)\n"
+    printf "  $ sudo bash modbridge.sh install\n\n"
+    printf "  # Automatische Installation (neueste Version, WebUI, ohne Dialoge)\n"
+    printf "  $ sudo bash modbridge.sh install --auto\n\n"
+    printf "  # Automatische Installation ohne WebUI\n"
+    printf "  $ sudo bash modbridge.sh install --headless\n\n"
+    printf "  # Update auf neueste Version\n"
+    printf "  $ sudo bash modbridge.sh update --auto\n\n"
 
     printf "${CYAN}Weitere Befehle:${NC}\n"
     printf "  sudo bash modbridge.sh ${GREEN}logs${NC} [100]       - Logs anzeigen (letzte 100 Einträge)\n"
@@ -1284,7 +1428,7 @@ show_help() {
 # Self-update before doing anything else
 self_update "$@"
 
-# Check for --force flag
+# Check for flags
 FORCE_INSTALL=0
 SKIP_STATUS=0
 
@@ -1294,6 +1438,14 @@ for arg in "$@"; do
     fi
     if [ "$arg" = "--skip-status" ]; then
         SKIP_STATUS=1
+    fi
+    if [ "$arg" = "--auto" ]; then
+        AUTO_INSTALL=1
+        DEFAULT_VARIANT="full"
+    fi
+    if [ "$arg" = "--headless" ]; then
+        AUTO_INSTALL=1
+        DEFAULT_VARIANT="headless"
     fi
 done
 
