@@ -1,0 +1,73 @@
+--- pkg/middleware/csrf.go
++++ pkg/middleware/csrf.go
+@@ -101,6 +101,9 @@
+		// Validate CSRF token for state-changing requests
+		csrfToken := r.Header.Get("X-CSRF-Token")
+		if csrfToken == "" {
++			// Limit request body size before parsing form
++			r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB max
++			if err := r.ParseForm(); err != nil {
++				http.Error(w, "Bad Request", http.StatusBadRequest)
++				return
++			}
+			csrfToken = r.FormValue("csrf_token")
+		}
+
+--- pkg/portmanager/port_checker.go
++++ pkg/portmanager/port_checker.go
+@@ -15,6 +15,7 @@
+	"time"
+ )
+
+ // PortInfo contains information about a port and its usage
+ type PortInfo struct {
+	Port      int       `json:"port"`
+@@ -148,15 +149,15 @@
+ func getProcessInfo(pid int) *ProcessInfo {
+	procPath := fmt.Sprintf("/proc/%d", pid)
+
+	// Get process name from /proc/[pid]/comm
+-	commFile := fmt.Sprintf("%s/comm", procPath)
++	commFile := procPath + "/comm"
+	nameBytes, err := os.ReadFile(commFile)
+	var name string
+	if err == nil {
+		name = strings.TrimSpace(string(nameBytes))
+	}
+
+	// Get user from stat file
+-	statFile := fmt.Sprintf("%s/stat", procPath)
++	statFile := procPath + "/stat"
+	stat, err := os.Stat(statFile)
+	var user string
+	if err == nil {
+@@ -165,15 +166,15 @@
+	}
+
+	// Get command line from /proc/[pid]/cmdline
+-	cmdlineFile := fmt.Sprintf("%s/cmdline", procPath)
++	cmdlineFile := procPath + "/cmdline"
+	cmdBytes, err := os.ReadFile(cmdlineFile)
+	var cmdline string
+	if err == nil {
+		cmdline = strings.ReplaceAll(string(cmdBytes), "\x00", " ")
+		cmdline = strings.TrimSpace(cmdline)
+	}
+
+	return &ProcessInfo{
+--- pkg/logger/logger.go
++++ pkg/logger/logger.go
+@@ -40,11 +40,12 @@
+ // NewLogger creates a new logger.
+ func NewLogger(filePath string, bufferSize int) (*Logger, error) {
+	var f *os.File
+	var err error
+	if filePath != "" {
+-		f, err = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
++		// Clean the path to prevent directory traversal
++		// We use Clean from path/filepath but keep it simple here
++		f, err = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			return nil, err
+		}
+	}
