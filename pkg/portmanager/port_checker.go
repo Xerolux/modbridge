@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"path/filepath"
 	"time"
 )
 
@@ -148,7 +149,7 @@ func getProcessInfo(pid int) *ProcessInfo {
 	procPath := fmt.Sprintf("/proc/%d", pid)
 
 	// Get process name from /proc/[pid]/comm
-	commFile := fmt.Sprintf("%s/comm", procPath)
+	commFile := filepath.Clean(fmt.Sprintf("%s/comm", procPath))
 	nameBytes, err := os.ReadFile(commFile)
 	var name string
 	if err == nil {
@@ -156,7 +157,7 @@ func getProcessInfo(pid int) *ProcessInfo {
 	}
 
 	// Get user from stat file
-	statFile := fmt.Sprintf("%s/stat", procPath)
+	statFile := filepath.Clean(fmt.Sprintf("%s/stat", procPath))
 	stat, err := os.Stat(statFile)
 	var user string
 	if err == nil {
@@ -165,7 +166,7 @@ func getProcessInfo(pid int) *ProcessInfo {
 	}
 
 	// Get command line from /proc/[pid]/cmdline
-	cmdlineFile := fmt.Sprintf("%s/cmdline", procPath)
+	cmdlineFile := filepath.Clean(fmt.Sprintf("%s/cmdline", procPath))
 	cmdBytes, err := os.ReadFile(cmdlineFile)
 	var cmdline string
 	if err == nil {
