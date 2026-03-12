@@ -10,10 +10,10 @@ import (
 type Role string
 
 const (
-	RoleAdmin     Role = "admin"
-	RoleOperator  Role = "operator"
-	RoleViewer    Role = "viewer"
-	RoleAuditor   Role = "auditor"
+	RoleAdmin    Role = "admin"
+	RoleOperator Role = "operator"
+	RoleViewer   Role = "viewer"
+	RoleAuditor  Role = "auditor"
 )
 
 // Permission represents a specific action
@@ -26,36 +26,36 @@ const (
 	PermProxyEdit    Permission = "proxy:edit"
 	PermProxyDelete  Permission = "proxy:delete"
 	PermProxyControl Permission = "proxy:control"
-	
+
 	// Device permissions
 	PermDeviceView   Permission = "device:view"
 	PermDeviceEdit   Permission = "device:edit"
 	PermDeviceDelete Permission = "device:delete"
-	
+
 	// Config permissions
 	PermConfigView   Permission = "config:view"
 	PermConfigEdit   Permission = "config:edit"
 	PermConfigExport Permission = "config:export"
 	PermConfigImport Permission = "config:import"
-	
+
 	// System permissions
-	PermSystemView   Permission = "system:view"
-	PermSystemManage Permission = "system:manage"
+	PermSystemView    Permission = "system:view"
+	PermSystemManage  Permission = "system:manage"
 	PermSystemRestart Permission = "system:restart"
-	
+
 	// User management permissions
-	PermUserView     Permission = "user:view"
-	PermUserCreate   Permission = "user:create"
-	PermUserEdit     Permission = "user:edit"
-	PermUserDelete   Permission = "user:delete"
-	
+	PermUserView   Permission = "user:view"
+	PermUserCreate Permission = "user:create"
+	PermUserEdit   Permission = "user:edit"
+	PermUserDelete Permission = "user:delete"
+
 	// Audit log permissions
-	PermAuditView    Permission = "audit:view"
-	PermAuditExport  Permission = "audit:export"
-	
+	PermAuditView   Permission = "audit:view"
+	PermAuditExport Permission = "audit:export"
+
 	// Logs permissions
-	PermLogsView     Permission = "logs:view"
-	PermLogsExport   Permission = "logs:export"
+	PermLogsView   Permission = "logs:view"
+	PermLogsExport Permission = "logs:export"
 )
 
 // RolePermissions defines the permissions for each role
@@ -99,7 +99,7 @@ func HasPermission(role Role, permission Permission) bool {
 	if !ok {
 		return false
 	}
-	
+
 	for _, p := range perms {
 		if p == permission {
 			return true
