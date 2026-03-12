@@ -1,28 +1,26 @@
 package openapi
 
 import (
-	"fmt"
-	"modbridge/pkg/openapi"
 	"net/http"
 )
 
 // GenerateForModBridge generates OpenAPI spec for ModBridge
 func GenerateForModBridge(version string) (string, error) {
-	gen := openapi.NewGenerator("ModBridge API", version)
+	gen := NewGenerator("ModBridge API", version)
 
 	// Add common schemas
 	gen.AddSchema("Proxy", Schema{
 		Type: "object",
 		Properties: map[string]*Schema{
-			"id": {Type: "string", Description: "Unique identifier"},
-			"name": {Type: "string", Description: "Proxy name"},
-			"listen_addr": {Type: "string", Description: "Listen address"},
-			"target_addr": {Type: "string", Description: "Target address"},
-			"enabled": {Type: "boolean", Description: "Whether proxy is enabled"},
-			"paused": {Type: "boolean", Description: "Whether proxy is paused"},
+			"id":                 {Type: "string", Description: "Unique identifier"},
+			"name":               {Type: "string", Description: "Proxy name"},
+			"listen_addr":        {Type: "string", Description: "Listen address"},
+			"target_addr":        {Type: "string", Description: "Target address"},
+			"enabled":            {Type: "boolean", Description: "Whether proxy is enabled"},
+			"paused":             {Type: "boolean", Description: "Whether proxy is paused"},
 			"connection_timeout": {Type: "integer", Description: "Connection timeout in seconds"},
-			"read_timeout": {Type: "integer", Description: "Read timeout in seconds"},
-			"max_retries": {Type: "integer", Description: "Maximum retries"},
+			"read_timeout":       {Type: "integer", Description: "Read timeout in seconds"},
+			"max_retries":        {Type: "integer", Description: "Maximum retries"},
 		},
 		Required: []string{"id", "name", "listen_addr", "target_addr"},
 	})
@@ -30,24 +28,24 @@ func GenerateForModBridge(version string) (string, error) {
 	gen.AddSchema("User", Schema{
 		Type: "object",
 		Properties: map[string]*Schema{
-			"id": {Type: "string"},
+			"id":       {Type: "string"},
 			"username": {Type: "string"},
-			"email": {Type: "string"},
-			"role": {Type: "string", Enum: []interface{}{"admin", "operator", "viewer", "auditor"}},
-			"enabled": {Type: "boolean"},
+			"email":    {Type: "string"},
+			"role":     {Type: "string", Enum: []interface{}{"admin", "operator", "viewer", "auditor"}},
+			"enabled":  {Type: "boolean"},
 		},
 	})
 
 	gen.AddSchema("Device", Schema{
 		Type: "object",
 		Properties: map[string]*Schema{
-			"ip": {Type: "string"},
-			"mac": {Type: "string"},
-			"name": {Type: "string"},
-			"first_seen": {Type: "string", Format: "date-time"},
-			"last_connect": {Type: "string", Format: "date-time"},
+			"ip":            {Type: "string"},
+			"mac":           {Type: "string"},
+			"name":          {Type: "string"},
+			"first_seen":    {Type: "string", Format: "date-time"},
+			"last_connect":  {Type: "string", Format: "date-time"},
 			"request_count": {Type: "integer"},
-			"proxy_id": {Type: "string"},
+			"proxy_id":      {Type: "string"},
 		},
 	})
 
@@ -120,7 +118,7 @@ func GenerateForModBridge(version string) (string, error) {
 					Description: "List of proxies",
 					Content: map[string]MediaType{
 						"application/json": {Schema: &Schema{
-							Type: "array",
+							Type:  "array",
 							Items: &Schema{Ref: "#/components/schemas/Proxy"},
 						}},
 					},
@@ -157,7 +155,7 @@ func GenerateForModBridge(version string) (string, error) {
 					Description: "List of devices",
 					Content: map[string]MediaType{
 						"application/json": {Schema: &Schema{
-							Type: "array",
+							Type:  "array",
 							Items: &Schema{Ref: "#/components/schemas/Device"},
 						}},
 					},
@@ -172,7 +170,7 @@ func GenerateForModBridge(version string) (string, error) {
 // RegisterOpenAPIHandler registers the OpenAPI spec endpoint
 func RegisterOpenAPIHandler(mux *http.ServeMux, path string) {
 	spec, _ := GenerateForModBridge("1.0.0")
-	
+
 	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(spec))

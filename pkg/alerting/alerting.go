@@ -37,14 +37,14 @@ type AlertRule struct {
 
 // WebhookConfig represents a webhook configuration
 type WebhookConfig struct {
-	ID        string              `json:"id"`
-	Name      string              `json:"name"`
-	URL       string              `json:"url"`
-	Secret    string              `json:"secret"`
-	Events    []string            `json:"events"`
-	Enabled   bool                `json:"enabled"`
-	Headers   map[string]string   `json:"headers"`
-	CreatedAt time.Time           `json:"created_at"`
+	ID        string            `json:"id"`
+	Name      string            `json:"name"`
+	URL       string            `json:"url"`
+	Secret    string            `json:"secret"`
+	Events    []string          `json:"events"`
+	Enabled   bool              `json:"enabled"`
+	Headers   map[string]string `json:"headers"`
+	CreatedAt time.Time         `json:"created_at"`
 }
 
 // Alert represents an alert
@@ -223,9 +223,9 @@ func (m *Manager) EvaluateMetric(metricName string, value float64, labels map[st
 			if shouldTrigger {
 				rule.LastTriggered = time.Now()
 				alert := &Alert{
-					RuleID:    rule.ID,
-					Severity:  rule.Severity,
-					Message:   rule.Name,
+					RuleID:   rule.ID,
+					Severity: rule.Severity,
+					Message:  rule.Name,
 					Details: map[string]interface{}{
 						"metric":    metricName,
 						"value":     value,

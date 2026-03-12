@@ -22,23 +22,23 @@ type DataPoint struct {
 
 // Manager manages time-series data
 type Manager struct {
-	mu          sync.RWMutex
-	data        map[string][]*DataPoint // key: proxyID:registerAddress
-	maxPoints   int
-	retention   time.Duration
-	filePath    string
-	autoFlush   bool
+	mu            sync.RWMutex
+	data          map[string][]*DataPoint // key: proxyID:registerAddress
+	maxPoints     int
+	retention     time.Duration
+	filePath      string
+	autoFlush     bool
 	flushInterval time.Duration
 }
 
 // NewManager creates a new time-series manager
 func NewManager(maxPoints int, retention time.Duration, filePath string) *Manager {
 	m := &Manager{
-		data:       make(map[string][]*DataPoint),
-		maxPoints:  maxPoints,
-		retention:  retention,
-		filePath:   filePath,
-		autoFlush:  true,
+		data:          make(map[string][]*DataPoint),
+		maxPoints:     maxPoints,
+		retention:     retention,
+		filePath:      filePath,
+		autoFlush:     true,
 		flushInterval: 5 * time.Minute,
 	}
 	go m.autoFlushLoop()
@@ -74,7 +74,7 @@ func (m *Manager) Query(proxyID string, registerAddress int, start, end time.Tim
 	result := make([]*DataPoint, 0)
 	for _, point := range series {
 		if (start.IsZero() || point.Timestamp.After(start)) &&
-		   (end.IsZero() || point.Timestamp.Before(end)) {
+			(end.IsZero() || point.Timestamp.Before(end)) {
 			result = append(result, point)
 		}
 	}
@@ -132,14 +132,14 @@ func (m *Manager) GetAggregatedData(proxyID string, registerAddress int, start, 
 	stdDev := math.Sqrt(variance)
 
 	return map[string]interface{}{
-		"count":    count,
-		"min":      min,
-		"max":      max,
-		"avg":      avg,
-		"stddev":   stdDev,
-		"sum":      sum,
-		"start":    start,
-		"end":      end,
+		"count":  count,
+		"min":    min,
+		"max":    max,
+		"avg":    avg,
+		"stddev": stdDev,
+		"sum":    sum,
+		"start":  start,
+		"end":    end,
 	}
 }
 

@@ -4,9 +4,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"modbridge/pkg/auth"
 	"modbridge/pkg/database"
 	"modbridge/pkg/rbac"
-	"time"
 )
 
 // Manager manages users
@@ -34,7 +34,7 @@ func (m *Manager) CreateUser(username, email, password, role, createdBy, descrip
 	}
 
 	// Hash password
-	passwordHash, err := rbac.HashPassword(password)
+	passwordHash, err := auth.HashPassword(password)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (m *Manager) AuthenticateUser(username, password string) (*database.User, e
 		return nil, errors.New("user account is disabled")
 	}
 
-	if !rbac.CheckPasswordHash(password, user.PasswordHash) {
+	if !auth.CheckPasswordHash(password, user.PasswordHash) {
 		return nil, errors.New("invalid credentials")
 	}
 
@@ -125,12 +125,12 @@ func (m *Manager) ChangePassword(userID, oldPassword, newPassword string) error 
 	}
 
 	// Verify old password
-	if !rbac.CheckPasswordHash(oldPassword, user.PasswordHash) {
+	if !auth.CheckPasswordHash(oldPassword, user.PasswordHash) {
 		return errors.New("invalid old password")
 	}
 
 	// Hash new password
-	newHash, err := rbac.HashPassword(newPassword)
+	newHash, err := auth.HashPassword(newPassword)
 	if err != nil {
 		return err
 	}
