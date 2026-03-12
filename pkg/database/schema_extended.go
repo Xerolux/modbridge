@@ -86,6 +86,27 @@ func (db *DB) CreateUser(user *User) error {
 	return err
 }
 
+// GetUser retrieves a user by ID
+func (db *DB) GetUser(id string) (*User, error) {
+	query := `SELECT id, username, email, password_hash, role, enabled, created_at, updated_at, last_login, created_by, description FROM users WHERE id = ?`
+	var user User
+	var lastLogin sql.NullTime
+	err := db.conn.QueryRow(query, id).Scan(
+		&user.ID, &user.Username, &user.Email, &user.PasswordHash,
+		&user.Role, &user.Enabled, &user.CreatedAt, &user.UpdatedAt,
+		&lastLogin, &user.CreatedBy, &user.Description)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if lastLogin.Valid {
+		user.LastLogin = &lastLogin.Time
+	}
+	return &user, nil
+}
+
 // GetUserByUsername retrieves a user by username
 func (db *DB) GetUserByUsername(username string) (*User, error) {
 	query := `SELECT id, username, email, password_hash, role, enabled, created_at, updated_at, last_login, created_by, description FROM users WHERE username = ?`
@@ -142,6 +163,13 @@ func (db *DB) UpdateUser(user *User) error {
 		WHERE id = ?
 	`
 	_, err := db.conn.Exec(query, user.Username, user.Email, user.Role, user.Enabled, user.Description, user.ID)
+	return err
+}
+
+// UpdateUserPassword updates a user's password
+func (db *DB) UpdateUserPassword(id, passwordHash string) error {
+	query := `UPDATE users SET password_hash = ? WHERE id = ?`
+	_, err := db.conn.Exec(query, passwordHash, id)
 	return err
 }
 

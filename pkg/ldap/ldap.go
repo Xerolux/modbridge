@@ -10,18 +10,18 @@ import (
 
 // Config represents LDAP configuration
 type Config struct {
-	Enabled          bool   `json:"enabled"`
-	ServerURL        string `json:"server_url"`
-	BaseDN           string `json:"base_dn"`
-	BindDN           string `json:"bind_dn"`
-	BindPassword     string `json:"bind_password"`
-	UserSearchFilter string `json:"user_search_filter"`
-	UserSearchBase   string `json:"user_search_base"`
-	GroupSearchBase  string `json:"group_search_base"`
-	Port             int    `json:"port"`
-	UseSSL           bool   `json:"use_ssl"`
-	UseStartTLS      bool   `json:"use_start_tls"`
-	SkipCertVerify   bool   `json:"skip_cert_verify"`
+	Enabled          bool              `json:"enabled"`
+	ServerURL        string            `json:"server_url"`
+	BaseDN           string            `json:"base_dn"`
+	BindDN           string            `json:"bind_dn"`
+	BindPassword     string            `json:"bind_password"`
+	UserSearchFilter string            `json:"user_search_filter"`
+	UserSearchBase   string            `json:"user_search_base"`
+	GroupSearchBase  string            `json:"group_search_base"`
+	Port             int               `json:"port"`
+	UseSSL           bool              `json:"use_ssl"`
+	UseStartTLS      bool              `json:"use_start_tls"`
+	SkipCertVerify   bool              `json:"skip_cert_verify"`
 	RoleMapping      map[string]string `json:"role_mapping"`
 }
 

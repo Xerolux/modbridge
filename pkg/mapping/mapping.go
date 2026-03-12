@@ -8,19 +8,19 @@ import (
 
 // Mapping represents a register mapping configuration
 type Mapping struct {
-	ID               string            `json:"id"`
-	ProxyID          string            `json:"proxy_id"`
-	Name             string            `json:"name"`
-	Description      string            `json:"description"`
-	RegisterAddress  int               `json:"register_address"`
-	RegisterCount    int               `json:"register_count"`
-	DataType         string            `json:"data_type"` // uint16, int16, uint32, int32, float32
-	ScaleFactor      float64           `json:"scale_factor"`
-	Offset           float64           `json:"offset"`
-	Unit             string            `json:"unit"`
-	Tags             []string          `json:"tags"`
-	Enabled          bool              `json:"enabled"`
-	Metadata         map[string]string `json:"metadata"`
+	ID              string            `json:"id"`
+	ProxyID         string            `json:"proxy_id"`
+	Name            string            `json:"name"`
+	Description     string            `json:"description"`
+	RegisterAddress int               `json:"register_address"`
+	RegisterCount   int               `json:"register_count"`
+	DataType        string            `json:"data_type"` // uint16, int16, uint32, int32, float32
+	ScaleFactor     float64           `json:"scale_factor"`
+	Offset          float64           `json:"offset"`
+	Unit            string            `json:"unit"`
+	Tags            []string          `json:"tags"`
+	Enabled         bool              `json:"enabled"`
+	Metadata        map[string]string `json:"metadata"`
 }
 
 // Manager manages register mappings
