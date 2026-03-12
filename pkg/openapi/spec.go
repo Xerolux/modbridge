@@ -6,20 +6,20 @@ import (
 
 // Spec represents the OpenAPI specification
 type Spec struct {
-	OpenAPI    string                 `json:"openapi"`
-	Info       Info                   `json:"info"`
-	Servers    []Server               `json:"servers"`
-	Paths      map[string]PathItem    `json:"paths"`
-	Components Components             `json:"components"`
+	OpenAPI    string              `json:"openapi"`
+	Info       Info                `json:"info"`
+	Servers    []Server            `json:"servers"`
+	Paths      map[string]PathItem `json:"paths"`
+	Components Components          `json:"components"`
 }
 
 // Info contains API information
 type Info struct {
-	Title          string `json:"title"`
-	Description    string `json:"description"`
-	Version        string `json:"version"`
-	Contact        *Contact `json:"contact,omitempty"`
-	License        *License `json:"license,omitempty"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Version     string   `json:"version"`
+	Contact     *Contact `json:"contact,omitempty"`
+	License     *License `json:"license,omitempty"`
 }
 
 // Contact contains contact information
@@ -51,22 +51,22 @@ type PathItem struct {
 
 // Operation represents an operation
 type Operation struct {
-	Tags        []string            `json:"tags"`
-	Summary     string              `json:"summary"`
-	Description string              `json:"description,omitempty"`
-	OperationID string              `json:"operationId"`
-	Parameters  []Parameter         `json:"parameters,omitempty"`
-	RequestBody *RequestBody        `json:"requestBody,omitempty"`
-	Responses   map[string]Response `json:"responses"`
+	Tags        []string              `json:"tags"`
+	Summary     string                `json:"summary"`
+	Description string                `json:"description,omitempty"`
+	OperationID string                `json:"operationId"`
+	Parameters  []Parameter           `json:"parameters,omitempty"`
+	RequestBody *RequestBody          `json:"requestBody,omitempty"`
+	Responses   map[string]Response   `json:"responses"`
 	Security    []map[string][]string `json:"security,omitempty"`
 }
 
 // Parameter represents a parameter
 type Parameter struct {
-	Name        string `json:"name"`
-	In          string `json:"in"`
-	Description string `json:"description,omitempty"`
-	Required    bool   `json:"required"`
+	Name        string  `json:"name"`
+	In          string  `json:"in"`
+	Description string  `json:"description,omitempty"`
+	Required    bool    `json:"required"`
 	Schema      *Schema `json:"schema,omitempty"`
 }
 
@@ -90,20 +90,21 @@ type Response struct {
 
 // Schema represents a schema
 type Schema struct {
-	Type                 string               `json:"type,omitempty"`
-	Format               string               `json:"format,omitempty"`
-	Description          string               `json:"description,omitempty"`
-	Properties           map[string]*Schema   `json:"properties,omitempty"`
-	Required             []string             `json:"required,omitempty"`
-	Items                *Schema              `json:"items,omitempty"`
-	Ref                  string               `json:"$ref,omitempty"`
-	Enum                 []interface{}        `json:"enum,omitempty"`
-	AdditionalProperties *Schema              `json:"additionalProperties,omitempty"`
+	Type                 string             `json:"type,omitempty"`
+	Format               string             `json:"format,omitempty"`
+	Description          string             `json:"description,omitempty"`
+	Properties           map[string]*Schema `json:"properties,omitempty"`
+	Required             []string           `json:"required,omitempty"`
+	Items                *Schema            `json:"items,omitempty"`
+	Ref                  string             `json:"$ref,omitempty"`
+	Enum                 []interface{}      `json:"enum,omitempty"`
+	AdditionalProperties *Schema            `json:"additionalProperties,omitempty"`
+	Example              interface{}        `json:"example,omitempty"`
 }
 
 // Components contains reusable components
 type Components struct {
-	Schemas         map[string]Schema    `json:"schemas,omitempty"`
+	Schemas         map[string]Schema         `json:"schemas,omitempty"`
 	SecuritySchemes map[string]SecurityScheme `json:"securitySchemes,omitempty"`
 }
 
@@ -145,7 +146,7 @@ func NewGenerator(title, version string) *Generator {
 				Description: "Development server",
 			},
 		},
-		Paths:      make(map[string]PathItem),
+		Paths: make(map[string]PathItem),
 		Components: Components{
 			Schemas: make(map[string]Schema),
 			SecuritySchemes: map[string]SecurityScheme{
