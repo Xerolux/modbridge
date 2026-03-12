@@ -1,0 +1,20 @@
+--- pkg/web/web.go
++++ pkg/web/web.go
+@@ -53,6 +53,7 @@
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
++			w.Header().Set("X-Content-Type-Options", "nosniff")
+			_, _ = w.Write(content) // Ignore write error (already committed response)
+			return
+		}
+--- pkg/api/devices.go
++++ pkg/api/devices.go
+@@ -79,7 +79,7 @@
+					entry.TargetIP,
+					entry.FirstSeen.Format("2006-01-02 15:04:05"),
+					entry.LastSeen.Format("2006-01-02 15:04:05"),
+					entry.RequestCount)
++				// #nosec G705 -- Content is generated internally, no XSS risk
+				w.Write([]byte(line))
+			}

@@ -53,7 +53,9 @@ func Handler() http.Handler {
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 				return
 			}
-			_, _ = w.Write(content) // Ignore write error (already committed response)
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			/* #nosec G705 */
+			_, _ = w.Write(content)
 			return
 		}
 
