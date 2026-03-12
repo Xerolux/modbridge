@@ -9,6 +9,8 @@
  const Logs = () => import('../views/Logs.vue')
  const Devices = () => import('../views/Devices.vue')
  const SystemInfo = () => import('../views/SystemInfo.vue')
+ const Users = () => import('../views/Users/Users.vue')
+ const Audit = () => import('../views/Audit/Audit.vue')
  const Layout = () => import('../components/Layout.vue')
 
  const routes = [
@@ -53,6 +55,16 @@
         path: '/system',
         name: 'System',
         component: SystemInfo
+      },
+      {
+        path: '/users',
+        name: 'Users',
+        component: Users
+      },
+      {
+        path: '/audit',
+        name: 'Audit',
+        component: Audit
       }
     ]
   }
