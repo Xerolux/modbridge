@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"sync"
 	"path/filepath"
+	"sync"
 	"time"
 )
 

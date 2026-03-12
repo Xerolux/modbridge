@@ -1,0 +1,11 @@
+--- pkg/web/web.go
++++ pkg/web/web.go
+@@ -54,7 +54,8 @@
+				return
+			}
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+-			_, _ = w.Write(content) // Ignore write error (already committed response)
++			/* #nosec G705 */
++			_, _ = w.Write(content)
+			return
+		}

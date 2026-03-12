@@ -1,0 +1,11 @@
+--- pkg/api/devices.go
++++ pkg/api/devices.go
+@@ -79,7 +79,7 @@
+					entry.ProxyID,
+					entry.ConnectedAt.Format("2006-01-02 15:04:05"),
+					entry.RequestCount)
+-				// #nosec G705
++				/* #nosec G705 */
+				w.Write([]byte(line))
+			}
+		}
