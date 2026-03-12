@@ -52,6 +52,16 @@
           label: 'Settings',
           icon: 'pi pi-cog',
           command: () => navigate('/config')
+      },
+      {
+          label: 'Users',
+          icon: 'pi pi-users',
+          command: () => navigate('/users')
+      },
+      {
+          label: 'Audit Log',
+          icon: 'pi pi-history',
+          command: () => navigate('/audit')
       }
   ]);
 
