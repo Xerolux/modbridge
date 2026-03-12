@@ -1,3 +1,18 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Ensure touch targets for PrimeVue components are adequately sized and prevent iOS zoom */
+.p-inputtext, .p-dropdown, .p-inputnumber-input, .p-password-input {
+  min-height: 44px;
+  font-size: 16px !important; /* Prevents auto-zoom on iOS Safari */
+}
+
+.p-button {
+  min-height: 44px;
+}
+
+.p-toggleswitch {
+  min-height: 24px;
+  min-width: 44px;
+}

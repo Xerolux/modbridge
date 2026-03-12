@@ -49,3 +49,4 @@ build/
 modbridge_server
 modbridge_server.pub
 node_modules/
+modbridge.db*
