@@ -1,0 +1,56 @@
+--- pkg/logger/logger.go
++++ pkg/logger/logger.go
+@@ -5,6 +5,7 @@
+	"fmt"
+	"os"
+	"sync"
++	"path/filepath"
+	"time"
+ )
+
+@@ -40,7 +41,7 @@
+	var f *os.File
+	var err error
+	if filePath != "" {
+-		f, err = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
++		f, err = os.OpenFile(filepath.Clean(filePath), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			return nil, err
+		}
+--- pkg/portmanager/port_checker.go
++++ pkg/portmanager/port_checker.go
+@@ -8,6 +8,7 @@
+	"strconv"
+	"strings"
+	"syscall"
++	"path/filepath"
+	"time"
+ )
+
+@@ -148,7 +149,7 @@
+	procPath := fmt.Sprintf("/proc/%d", pid)
+
+	// Get process name from /proc/[pid]/comm
+-	commFile := fmt.Sprintf("%s/comm", procPath)
++	commFile := filepath.Clean(fmt.Sprintf("%s/comm", procPath))
+	nameBytes, err := os.ReadFile(commFile)
+	var name string
+	if err == nil {
+@@ -156,7 +157,7 @@
+	}
+
+	// Get user from stat file
+-	statFile := fmt.Sprintf("%s/stat", procPath)
++	statFile := filepath.Clean(fmt.Sprintf("%s/stat", procPath))
+	stat, err := os.Stat(statFile)
+	var user string
+	if err == nil {
+@@ -165,7 +166,7 @@
+	}
+
+	// Get command line from /proc/[pid]/cmdline
+-	cmdlineFile := fmt.Sprintf("%s/cmdline", procPath)
++	cmdlineFile := filepath.Clean(fmt.Sprintf("%s/cmdline", procPath))
+	cmdBytes, err := os.ReadFile(cmdlineFile)
+	var cmdline string
+	if err == nil {

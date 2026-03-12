@@ -79,7 +79,6 @@ func (s *Server) handleDeviceHistory(w http.ResponseWriter, r *http.Request) {
 					entry.ProxyID,
 					entry.ConnectedAt.Format("2006-01-02 15:04:05"),
 					entry.RequestCount)
-				/* #nosec G705 */
 				w.Write([]byte(line))
 			}
 		}
