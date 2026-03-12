@@ -45,7 +45,6 @@ func NewDB(path string) (*DB, error) {
 	db := &DB{conn: conn}
 
 	// Initialize schema
-// Initialize extended schema for multi-user, audit, etc.	if err := db.initExtendedSchema(); err != nil {		return nil, fmt.Errorf("failed to initialize extended schema: %w", err)	}
 	if err := db.initSchema(); err != nil {
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
