@@ -2,70 +2,81 @@ package portmanager
 
 import (
 	"fmt"
-	"net"
-	"os"
 	"os/exec"
-	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
-	"time"
 )
 
-// PortInfo contains information about a port and its usage
-type PortInfo struct {
-	Port      int       `json:"port"`
-	IsOpen    bool      `json:"is_open"`
-	Process   string    `json:"process,omitempty"`
-	PID       int       `json:"pid,omitempty"`
-	User      string    `json:"user,omitempty"`
-	Command   string    `json:"command,omitempty"`
-	State     string    `json:"state"` // "free", "listening", "in_use"
-	Timestamp time.Time `json:"timestamp"`
+// ProcessInfo contains information about a process
+type ProcessInfo struct {
+	PID     int
+	Process string
+	User    string
+	Command string
 }
 
-// PortManager handles port checking and freeing operations
-type PortManager struct {
-	checkedPorts map[int]*PortInfo
+// PortInfo contains port information
+type PortInfo struct {
+	State      string `json:"state"`
+	IsOpen     bool   `json:"is_open"`
+	Port       int    `json:"port"`
+	ProcessPID int    `json:"process_pid,omitempty"`
+	Process    string `json:"process,omitempty"`
+	User       string `json:"user,omitempty"`
 }
+
+// PortManager manages port operations
+type PortManager struct{}
 
 // NewPortManager creates a new port manager
 func NewPortManager() *PortManager {
-	return &PortManager{
-		checkedPorts: make(map[int]*PortInfo),
-	}
+	return &PortManager{}
 }
 
-// CheckPort checks if a port is available
+// CheckPort checks if a port is in use
 func (pm *PortManager) CheckPort(port int) *PortInfo {
-	info := &PortInfo{
-		Port:      port,
-		IsOpen:    true,
-		State:     "free",
-		Timestamp: time.Now(),
+	cmd := exec.Command("netstat", "-an")
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("netstat", "-an")
+	} else {
+		cmd = exec.Command("ss", "-tlnp")
 	}
 
-	// Try to listen on the port
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		info.IsOpen = false
-		info.State = "in_use"
+	output, _ := cmd.Output()
+	portStr := fmt.Sprintf(":%d", port)
+	lines := strings.Split(string(output), "\n")
 
-		// Get process info
-		if procInfo := getProcessUsingPort(port); procInfo != nil {
-			info.Process = procInfo.Process
-			info.PID = procInfo.PID
-			info.User = procInfo.User
-			info.Command = procInfo.Command
+	for _, line := range lines {
+		if strings.Contains(line, portStr) && strings.Contains(line, "LISTEN") {
+			// Try to extract PID
+			fields := strings.Fields(line)
+			pid := 0
+			if len(fields) >= 7 {
+				if pidStr := strings.TrimPrefix(fields[6], ""); pidStr != "" {
+					if p, err := strconv.Atoi(pidStr); err == nil {
+						pid = p
+					}
+				}
+			}
+
+			info := getProcessInfo(pid)
+			return &PortInfo{
+				State:      "LISTEN",
+				IsOpen:     true,
+				Port:       port,
+				ProcessPID: pid,
+				Process:    info.Process,
+				User:       info.User,
+			}
 		}
-
-		pm.checkedPorts[port] = info
-		return info
 	}
 
-	listener.Close()
-	pm.checkedPorts[port] = info
-	return info
+	return &PortInfo{
+		State:  "FREE",
+		IsOpen: false,
+		Port:   port,
+	}
 }
 
 // CheckPorts checks multiple ports
@@ -77,108 +88,96 @@ func (pm *PortManager) CheckPorts(ports []int) map[int]*PortInfo {
 	return results
 }
 
-// KillProcess terminates a process using a port
+// KillProcess kills a process by PID
 func (pm *PortManager) KillProcess(pid int) error {
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return fmt.Errorf("process not found: %w", err)
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("taskkill", "/F", "/PID", strconv.Itoa(pid))
+	default:
+		cmd = exec.Command("kill", "-9", strconv.Itoa(pid))
 	}
 
-	err = process.Signal(syscall.SIGTERM)
-	if err != nil {
-		// Try SIGKILL if SIGTERM fails
-		return process.Signal(syscall.SIGKILL)
-	}
-
-	return nil
+	return cmd.Run()
 }
 
-// ReleasePort forcefully releases a port
-func (pm *PortManager) ReleasePort(port int) error {
-	portInfo := pm.CheckPort(port)
-	if portInfo.IsOpen {
-		return fmt.Errorf("port %d is already free", port)
+// getProcessInfo gets process information using platform-specific commands
+func getProcessInfo(pid int) *ProcessInfo {
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid), "/FO", "CSV", "/NH")
+	default:
+		// Linux/Unix use ps
+		cmd = exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "user,comm,args")
 	}
 
-	if portInfo.PID == 0 {
-		return fmt.Errorf("could not determine process using port %d", port)
-	}
-
-	return pm.KillProcess(portInfo.PID)
-}
-
-// ProcessInfo holds process information
-type ProcessInfo struct {
-	PID     int
-	Process string
-	User    string
-	Command string
-}
-
-// getProcessUsingPort gets process information for a port
-func getProcessUsingPort(port int) *ProcessInfo {
-	// Try lsof first (Linux/macOS)
-	cmd := exec.Command("lsof", "-i", fmt.Sprintf(":%d", port), "-sTCP:LISTEN", "-t")
 	output, err := cmd.Output()
-	if err == nil && len(output) > 0 {
-		pid, err := strconv.Atoi(strings.TrimSpace(string(output)))
-		if err == nil {
-			return getProcessInfo(pid)
+	if err != nil {
+		return &ProcessInfo{
+			PID:     pid,
+			Process: "unknown",
+			User:    "unknown",
+			Command: "",
 		}
 	}
 
-	// Try netstat as fallback
-	cmd = exec.Command("netstat", "-tlnp")
-	output, err = cmd.Output()
-	if err == nil {
-		return parseNetstatOutput(string(output), port)
-	}
-
-	// Try ss (newer systems)
-	cmd = exec.Command("ss", "-tlnp")
-	output, err = cmd.Output()
-	if err == nil {
-		return parseSsOutput(string(output), port)
-	}
-
-	return nil
+	return parseProcessOutput(pid, string(output))
 }
 
-// getProcessInfo gets detailed process information
-func getProcessInfo(pid int) *ProcessInfo {
-	procPath := fmt.Sprintf("/proc/%d", pid)
-
-	// Get process name from /proc/[pid]/comm
-	commFile := filepath.Clean(fmt.Sprintf("%s/comm", procPath))
-	nameBytes, err := os.ReadFile(commFile)
-	var name string
-	if err == nil {
-		name = strings.TrimSpace(string(nameBytes))
+// parseProcessOutput parses process command output
+func parseProcessOutput(pid int, output string) *ProcessInfo {
+	if runtime.GOOS == "windows" {
+		return parseWindowsProcessOutput(pid, output)
 	}
+	return parseUnixProcessOutput(pid, output)
+}
 
-	// Get user from stat file
-	statFile := filepath.Clean(fmt.Sprintf("%s/stat", procPath))
-	stat, err := os.Stat(statFile)
-	var user string
-	if err == nil {
-		sysstat := stat.Sys().(*syscall.Stat_t)
-		user = fmt.Sprintf("%d", sysstat.Uid)
-	}
-
-	// Get command line from /proc/[pid]/cmdline
-	cmdlineFile := filepath.Clean(fmt.Sprintf("%s/cmdline", procPath))
-	cmdBytes, err := os.ReadFile(cmdlineFile)
-	var cmdline string
-	if err == nil {
-		cmdline = strings.ReplaceAll(string(cmdBytes), "\x00", " ")
-		cmdline = strings.TrimSpace(cmdline)
+// parseWindowsProcessOutput parses Windows tasklist output
+func parseWindowsProcessOutput(pid int, output string) *ProcessInfo {
+	fields := strings.Split(output, ",")
+	if len(fields) >= 2 {
+		// Remove quotes from CSV output
+		processName := strings.Trim(fields[0], "\"")
+		return &ProcessInfo{
+			PID:     pid,
+			Process: processName,
+			User:    "SYSTEM", // Windows doesn't easily show user
+			Command: processName,
+		}
 	}
 
 	return &ProcessInfo{
 		PID:     pid,
-		Process: name,
-		User:    user,
-		Command: cmdline,
+		Process: "unknown",
+		User:    "unknown",
+		Command: "",
+	}
+}
+
+// parseUnixProcessOutput parses Unix ps output
+func parseUnixProcessOutput(pid int, output string) *ProcessInfo {
+	fields := strings.Fields(output)
+	if len(fields) >= 3 {
+		user := fields[0]
+		comm := fields[1]
+		args := strings.Join(fields[2:], " ")
+
+		return &ProcessInfo{
+			PID:     pid,
+			Process: comm,
+			User:    user,
+			Command: args,
+		}
+	}
+
+	return &ProcessInfo{
+		PID:     pid,
+		Process: "unknown",
+		User:    "unknown",
+		Command: "",
 	}
 }
 
@@ -192,30 +191,6 @@ func parseNetstatOutput(output string, port int) *ProcessInfo {
 				pidStr := strings.TrimPrefix(fields[6], "")
 				if pid, err := strconv.Atoi(pidStr); err == nil {
 					return getProcessInfo(pid)
-				}
-			}
-		}
-	}
-	return nil
-}
-
-// parseSsOutput parses ss output to find port usage
-func parseSsOutput(output string, port int) *ProcessInfo {
-	portStr := fmt.Sprintf(":%d", port)
-	for _, line := range strings.Split(output, "\n") {
-		if strings.Contains(line, portStr) && strings.Contains(line, "LISTEN") {
-			// ss output format is different, extract PID from the line
-			if strings.Contains(line, "pid=") {
-				start := strings.Index(line, "pid=") + 4
-				end := strings.Index(line[start:], ",")
-				if end == -1 {
-					end = strings.Index(line[start:], " ")
-				}
-				if end > 0 {
-					pidStr := line[start : start+end]
-					if pid, err := strconv.Atoi(pidStr); err == nil {
-						return getProcessInfo(pid)
-					}
 				}
 			}
 		}
