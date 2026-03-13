@@ -96,18 +96,18 @@
               class="w-2 h-2 rounded-full shrink-0"
               :class="isConnected ? 'bg-green-500' : 'bg-red-500'"
             ></div>
-            <span class="text-xs sm:text-sm text-gray-400 truncate">
+            <span class="text-base text-gray-400 truncate">
               {{ isConnected ? 'Connected' : 'Disconnected' }}
             </span>
           </div>
           <div class="flex items-center gap-2 px-2 sm:px-3 py-1 bg-gray-800 rounded flex-1 sm:flex-none justify-center">
-            <i class="pi pi-arrow-down text-xs sm:text-sm text-gray-400"></i>
+            <i class="pi pi-arrow-down text-base text-gray-400"></i>
             <Checkbox v-model="autoScroll" binary @change="toggleAutoScroll" inputId="auto-scroll-cb" />
-            <label for="auto-scroll-cb" class="text-xs sm:text-sm text-gray-400 whitespace-nowrap cursor-pointer">Auto-Scroll</label>
+            <label for="auto-scroll-cb" class="text-base text-gray-400 whitespace-nowrap cursor-pointer">Auto-Scroll</label>
           </div>
           <button
             @click="fetchInitialLogs"
-            class="px-3 py-2 sm:py-1 bg-blue-600 text-white text-xs sm:text-sm rounded hover:bg-blue-700 flex-1 sm:flex-none"
+            class="px-3 py-2 sm:py-1 bg-blue-600 text-white text-base rounded hover:bg-blue-700 flex-1 sm:flex-none"
           >
             Refresh
           </button>
@@ -124,7 +124,7 @@
       <div
         v-else
         ref="logsContainer"
-        class="bg-gray-800 rounded-lg p-2 sm:p-4 font-mono text-xs sm:text-sm h-[60vh] sm:h-[600px] overflow-y-auto break-all sm:break-normal"
+        class="bg-gray-800 rounded-lg p-2 sm:p-4 font-mono text-base h-[60vh] sm:h-[600px] overflow-y-auto break-all sm:break-normal"
       >
         <div
           v-for="(log, index) in logs"

@@ -118,6 +118,13 @@ watch(() => store.darkMode, (isDark) => {
   box-sizing: border-box;
 }
 
+/* Fix iOS auto-zoom by enforcing 16px minimum font size for all inputs */
+@media screen and (max-width: 768px) {
+  input, select, textarea, .p-inputtext, .p-dropdown, .p-inputnumber-input, .p-password-input {
+    font-size: 16px !important;
+  }
+}
+
 body {
   font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
   background-color: var(--bg-deep);
