@@ -436,7 +436,7 @@ func TestGetRolePermissions(t *testing.T) {
 
 func TestRoleDescription(t *testing.T) {
 	tests := []struct {
-		role        Role
+		role           Role
 		hasDescription bool
 	}{
 		{RoleAdmin, true},

@@ -19,9 +19,9 @@ type ModbusTCPHeader struct {
 
 // ModbusTCPFrame represents a complete Modbus TCP frame
 type ModbusTCPFrame struct {
-	Header  ModbusTCPHeader
+	Header   ModbusTCPHeader
 	Function byte
-	Data    []byte
+	Data     []byte
 }
 
 // RTUFrame represents a Modbus RTU frame
