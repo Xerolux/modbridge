@@ -72,7 +72,6 @@ type Batcher struct {
 
 	mu              sync.Mutex
 	pendingRequests []*Request
-	flushTimer      *time.Timer
 	requestChan     chan *Request
 	responseChan    chan *Response
 	ctx             context.Context
@@ -187,12 +186,53 @@ func (b *Batcher) Responses() <-chan *Response {
 func (b *Batcher) run() {
 	defer close(b.responseChan)
 
+	timer := time.NewTimer(0)
+	if !timer.Stop() {
+		<-timer.C
+	}
+	timerActive := false
+
 	for {
 		select {
 		case req := <-b.requestChan:
 			b.handleRequest(req)
 
+			b.mu.Lock()
+			pendingCount := len(b.pendingRequests)
+			b.mu.Unlock()
+
+			if pendingCount > 0 {
+				if timerActive {
+					if !timer.Stop() {
+						select {
+						case <-timer.C:
+						default:
+						}
+					}
+				}
+				timer.Reset(b.config.MaxBatchDelay)
+				timerActive = true
+			} else if timerActive {
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timerActive = false
+			}
+
+		case <-timer.C:
+			timerActive = false
+			b.flush()
+
 		case <-b.ctx.Done():
+			if timerActive && !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
 			// Flush remaining requests
 			b.flush()
 			return
@@ -213,23 +253,6 @@ func (b *Batcher) handleRequest(req *Request) {
 		b.flush()
 		return
 	}
-
-	// Reset or start flush timer
-	b.resetFlushTimer()
-}
-
-// resetFlushTimer resets the automatic flush timer
-func (b *Batcher) resetFlushTimer() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	if b.flushTimer != nil {
-		b.flushTimer.Stop()
-	}
-
-	b.flushTimer = time.AfterFunc(b.config.MaxBatchDelay, func() {
-		b.flush()
-	})
 }
 
 // flush flushes pending requests as a batch
@@ -245,12 +268,6 @@ func (b *Batcher) flush() {
 	requests := make([]*Request, len(b.pendingRequests))
 	copy(requests, b.pendingRequests)
 	b.pendingRequests = b.pendingRequests[:0]
-
-	// Stop flush timer if running
-	if b.flushTimer != nil {
-		b.flushTimer.Stop()
-		b.flushTimer = nil
-	}
 
 	// Update statistics
 	b.stats.TotalBatches++
