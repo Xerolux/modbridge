@@ -420,10 +420,10 @@ func TestRequestPool(t *testing.T) {
 	// Return to pool
 	pool.Put(req1)
 
-	// Get again
+	// Get again - sync.Pool does not guarantee same pointer (GC may clear pool)
 	req2 := pool.Get()
-	if req2 != req1 {
-		t.Error("Expected to get same request from pool")
+	if req2 == nil {
+		t.Fatal("Get() returned nil after Put")
 	}
 
 	// Should be reset
@@ -450,19 +450,22 @@ func TestResponsePool(t *testing.T) {
 	// Return to pool
 	pool.Put(resp1)
 
-	// Get again
+	// Get again - sync.Pool does not guarantee same pointer (GC may clear pool)
 	resp2 := pool.Get()
-	if resp2 != resp1 {
-		t.Error("Expected to get same response from pool")
+	if resp2 == nil {
+		t.Fatal("Get() returned nil after Put")
 	}
 
-	// Should have capacity but length 0
-	if cap(resp2.Values) != 10 {
-		t.Errorf("Expected capacity 10, got %d", cap(resp2.Values))
-	}
-
+	// Length should always be 0 (either reset by Put, or fresh allocation)
 	if len(resp2.Values) != 0 {
 		t.Errorf("Expected length 0, got %d", len(resp2.Values))
+	}
+
+	// If pool returned the same object, capacity should be preserved
+	if resp2 == resp1 {
+		if cap(resp2.Values) != 10 {
+			t.Errorf("Expected capacity 10, got %d", cap(resp2.Values))
+		}
 	}
 
 	pool.Put(resp2)
