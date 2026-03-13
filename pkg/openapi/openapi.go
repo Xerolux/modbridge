@@ -6,11 +6,11 @@ import (
 
 // Spec represents an OpenAPI 3.0 specification
 type Spec struct {
-	OpenAPI    string                 `json:"openapi"`
-	Info       Info                   `json:"info"`
-	Servers    []Server               `json:"servers"`
-	Paths      map[string]PathItem    `json:"paths"`
-	Components Components             `json:"components"`
+	OpenAPI    string              `json:"openapi"`
+	Info       Info                `json:"info"`
+	Servers    []Server            `json:"servers"`
+	Paths      map[string]PathItem `json:"paths"`
+	Components Components          `json:"components"`
 }
 
 // Info provides metadata about the API
@@ -30,16 +30,16 @@ type PathItem map[string]Operation
 
 // Operation describes a single API operation
 type Operation struct {
-	Summary     string               `json:"summary"`
-	Description string               `json:"description"`
-	OperationID string               `json:"operationId"`
-	Responses   map[string]Response  `json:"responses"`
+	Summary     string              `json:"summary"`
+	Description string              `json:"description"`
+	OperationID string              `json:"operationId"`
+	Responses   map[string]Response `json:"responses"`
 }
 
 // Response describes an API response
 type Response struct {
-	Description string                 `json:"description"`
-	Content     map[string]MediaType  `json:"content"`
+	Description string               `json:"description"`
+	Content     map[string]MediaType `json:"content"`
 }
 
 // MediaType represents a media type
@@ -54,9 +54,9 @@ type Components struct {
 
 // Schema describes a data schema
 type Schema struct {
-	Type       string                    `json:"type"`
-	Properties map[string]Schema         `json:"properties,omitempty"`
-	Required   []string                  `json:"required,omitempty"`
+	Type       string            `json:"type"`
+	Properties map[string]Schema `json:"properties,omitempty"`
+	Required   []string          `json:"required,omitempty"`
 }
 
 // Generate generates an OpenAPI spec for ModBridge

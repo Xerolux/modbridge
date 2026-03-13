@@ -181,8 +181,8 @@ func TestMockServer_ErrorHandling(t *testing.T) {
 		0x00, 0x01, // Transaction ID
 		0x00, 0x00, // Protocol ID
 		0x00, 0x02, // Length
-		0x01,       // Unit ID
-		0xFF,       // Invalid function code
+		0x01, // Unit ID
+		0xFF, // Invalid function code
 	}
 
 	_, err = conn.Write(request)

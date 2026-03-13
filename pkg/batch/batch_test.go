@@ -253,8 +253,8 @@ func TestBatcher_Stats(t *testing.T) {
 
 func TestOptimizer_Optimize(t *testing.T) {
 	config := &BatchConfig{
-		MaxBatchSize:      10,
-		MaxAddressGap:     10,
+		MaxBatchSize:       10,
+		MaxAddressGap:      10,
 		CrossSlaveBatching: false,
 		CrossTypeBatching:  false,
 	}
@@ -286,7 +286,7 @@ func TestOptimizer_Compatible(t *testing.T) {
 	r1 := &Request{Type: RequestTypeReadHoldingRegisters, SlaveID: 1, Address: 100, Quantity: 5}
 	r2 := &Request{Type: RequestTypeReadHoldingRegisters, SlaveID: 1, Address: 105, Quantity: 5}
 	r3 := &Request{Type: RequestTypeReadHoldingRegisters, SlaveID: 2, Address: 100, Quantity: 5} // Different slave
-	r4 := &Request{Type: RequestTypeWriteSingleRegister, SlaveID: 1, Address: 100, Quantity: 1} // Write operation
+	r4 := &Request{Type: RequestTypeWriteSingleRegister, SlaveID: 1, Address: 100, Quantity: 1}  // Write operation
 
 	if !optimizer.compatible(r1, r2) {
 		t.Error("Expected r1 and r2 to be compatible")
@@ -540,7 +540,7 @@ func TestOptimizer_SplitGroup(t *testing.T) {
 func TestOptimizer_SplitGroup_SortOrder(t *testing.T) {
 	config := &BatchConfig{
 		MaxBatchSize:  200, // Large enough to fit all
-		MaxAddressGap: 50, // Allow up to 50 register gap
+		MaxAddressGap: 50,  // Allow up to 50 register gap
 	}
 
 	optimizer := NewOptimizer(config)
@@ -619,7 +619,7 @@ func TestSplitResponse_ErrorHandling(t *testing.T) {
 		Request: &Request{
 			Metadata: originalRequests,
 		},
-		Error: errors.New("test error"),
+		Error:  errors.New("test error"),
 		Values: nil,
 	}
 

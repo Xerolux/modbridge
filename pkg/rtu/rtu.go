@@ -459,7 +459,7 @@ func (c *RTUClient) parseCoilData(data []byte, quantity uint16) ([]bool, error) 
 		if byteIndex >= uint16(len(data)) {
 			break // Not enough data
 		}
-		coils[i] = (data[byteIndex]&(1<<bitIndex)) != 0
+		coils[i] = (data[byteIndex] & (1 << bitIndex)) != 0
 	}
 
 	return coils, nil

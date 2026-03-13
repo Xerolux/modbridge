@@ -67,9 +67,9 @@ func TestSanitizeHTML(t *testing.T) {
 	s := New()
 
 	tests := []struct {
-		name     string
-		input    string
-		check    func(string) bool // function to verify result
+		name  string
+		input string
+		check func(string) bool // function to verify result
 	}{
 		{
 			name:  "normal text",
@@ -134,9 +134,9 @@ func TestSanitizeURL(t *testing.T) {
 	s := New()
 
 	tests := []struct {
-		name     string
-		input    string
-		check    func(string) bool
+		name  string
+		input string
+		check func(string) bool
 	}{
 		{
 			name:  "valid HTTP URL",
@@ -255,9 +255,9 @@ func TestSanitizeFilename(t *testing.T) {
 	s := New()
 
 	tests := []struct {
-		name     string
-		input    string
-		check    func(string) bool
+		name  string
+		input string
+		check func(string) bool
 	}{
 		{
 			name:  "normal filename",
@@ -532,40 +532,40 @@ func TestSanitizeInput(t *testing.T) {
 	s := New()
 
 	tests := []struct {
-		name     string
+		name      string
 		input     string
 		inputType string
 		contains  []string // strings that should NOT be in result
 	}{
 		{
-			name:     "HTML type",
-			input:    `<script>alert('XSS')</script>`,
+			name:      "HTML type",
+			input:     `<script>alert('XSS')</script>`,
 			inputType: "html",
-			contains: []string{"<script"}, // check for actual script tag
+			contains:  []string{"<script"}, // check for actual script tag
 		},
 		{
-			name:     "SQL type",
-			input:    "' OR '1'='1",
+			name:      "SQL type",
+			input:     "' OR '1'='1",
 			inputType: "sql",
-			contains: []string{"OR"}, // OR should be removed in injection context
+			contains:  []string{"OR"}, // OR should be removed in injection context
 		},
 		{
-			name:     "filename type",
-			input:    "../../../etc/passwd",
+			name:      "filename type",
+			input:     "../../../etc/passwd",
 			inputType: "filename",
-			contains: []string{"../", "/"},
+			contains:  []string{"../", "/"},
 		},
 		{
-			name:     "command type",
-			input:    "ls; rm -rf /",
+			name:      "command type",
+			input:     "ls; rm -rf /",
 			inputType: "command",
-			contains: []string{";"},
+			contains:  []string{";"},
 		},
 		{
-			name:     "unknown type",
-			input:    "  Hello World  ",
+			name:      "unknown type",
+			input:     "  Hello World  ",
 			inputType: "unknown",
-			contains: []string{},
+			contains:  []string{},
 		},
 	}
 
@@ -719,9 +719,9 @@ func TestDeepSanitize(t *testing.T) {
 	s := New()
 
 	tests := []struct {
-		name     string
-		input    interface{}
-		verify   func(interface{}) bool
+		name   string
+		input  interface{}
+		verify func(interface{}) bool
 	}{
 		{
 			name:  "string",
@@ -988,8 +988,8 @@ func TestSanitizeCommandInjection(t *testing.T) {
 			result := s.SanitizeCommandLine(attack)
 			// After sanitization, dangerous operators should be removed
 			if strings.Contains(result, ";") || strings.Contains(result, "|") ||
-			   strings.Contains(result, "$(") || strings.Contains(result, "&") ||
-			   strings.Contains(result, ">") {
+				strings.Contains(result, "$(") || strings.Contains(result, "&") ||
+				strings.Contains(result, ">") {
 				t.Errorf("Command injection not neutralized: %s -> %s", attack, result)
 			}
 		})

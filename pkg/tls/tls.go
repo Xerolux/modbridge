@@ -170,21 +170,21 @@ func (m *Manager) parseTLSVersion(version string) uint16 {
 func (m *Manager) parseCipherSuites(suites string) []uint16 {
 	// Map of cipher suite names to IDs
 	suiteMap := map[string]uint16{
-		"TLS_RSA_WITH_AES_128_CBC_SHA":                tls.TLS_RSA_WITH_AES_128_CBC_SHA,
-		"TLS_RSA_WITH_AES_256_CBC_SHA":                tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-		"TLS_RSA_WITH_AES_128_GCM_SHA256":              tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-		"TLS_RSA_WITH_AES_256_GCM_SHA384":              tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-		"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA":          tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-		"TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA":          tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-		"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA":            tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-		"TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA":            tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-		"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256":        tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-		"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384":        tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-		"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256":          tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-		"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384":          tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-		"TLS_AES_128_GCM_SHA256":                         tls.TLS_AES_128_GCM_SHA256,
-		"TLS_AES_256_GCM_SHA384":                         tls.TLS_AES_256_GCM_SHA384,
-		"TLS_CHACHA20_POLY1305_SHA256":                  tls.TLS_CHACHA20_POLY1305_SHA256,
+		"TLS_RSA_WITH_AES_128_CBC_SHA":            tls.TLS_RSA_WITH_AES_128_CBC_SHA,
+		"TLS_RSA_WITH_AES_256_CBC_SHA":            tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+		"TLS_RSA_WITH_AES_128_GCM_SHA256":         tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+		"TLS_RSA_WITH_AES_256_GCM_SHA384":         tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+		"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA":    tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+		"TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA":    tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+		"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA":      tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+		"TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA":      tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+		"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256": tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384": tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256":   tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384":   tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		"TLS_AES_128_GCM_SHA256":                  tls.TLS_AES_128_GCM_SHA256,
+		"TLS_AES_256_GCM_SHA384":                  tls.TLS_AES_256_GCM_SHA384,
+		"TLS_CHACHA20_POLY1305_SHA256":            tls.TLS_CHACHA20_POLY1305_SHA256,
 	}
 
 	var ids []uint16
@@ -368,14 +368,14 @@ func (m *Manager) GetCertificateInfo() (*CertInfo, error) {
 	}
 
 	info := &CertInfo{
-		Subject:         x509Cert.Subject.CommonName,
-		Issuer:          x509Cert.Issuer.CommonName,
-		NotBefore:       x509Cert.NotBefore,
-		NotAfter:        x509Cert.NotAfter,
-		DNSNames:        x509Cert.DNSNames,
-		IPAddresses:     x509Cert.IPAddresses,
-		IsSelfSigned:    x509Cert.IsCA,
-		SerialNumber:    x509Cert.SerialNumber.String(),
+		Subject:            x509Cert.Subject.CommonName,
+		Issuer:             x509Cert.Issuer.CommonName,
+		NotBefore:          x509Cert.NotBefore,
+		NotAfter:           x509Cert.NotAfter,
+		DNSNames:           x509Cert.DNSNames,
+		IPAddresses:        x509Cert.IPAddresses,
+		IsSelfSigned:       x509Cert.IsCA,
+		SerialNumber:       x509Cert.SerialNumber.String(),
 		SignatureAlgorithm: x509Cert.SignatureAlgorithm.String(),
 	}
 
@@ -384,15 +384,15 @@ func (m *Manager) GetCertificateInfo() (*CertInfo, error) {
 
 // CertInfo holds certificate information
 type CertInfo struct {
-	Subject            string      `json:"subject"`
-	Issuer             string      `json:"issuer"`
-	NotBefore          time.Time   `json:"not_before"`
-	NotAfter           time.Time   `json:"not_after"`
-	DNSNames           []string    `json:"dns_names"`
-	IPAddresses        []net.IP     `json:"ip_addresses"`
-	IsSelfSigned       bool        `json:"is_self_signed"`
-	SerialNumber       string      `json:"serial_number"`
-	SignatureAlgorithm string      `json:"signature_algorithm"`
+	Subject            string    `json:"subject"`
+	Issuer             string    `json:"issuer"`
+	NotBefore          time.Time `json:"not_before"`
+	NotAfter           time.Time `json:"not_after"`
+	DNSNames           []string  `json:"dns_names"`
+	IPAddresses        []net.IP  `json:"ip_addresses"`
+	IsSelfSigned       bool      `json:"is_self_signed"`
+	SerialNumber       string    `json:"serial_number"`
+	SignatureAlgorithm string    `json:"signature_algorithm"`
 }
 
 // IsValid checks if the certificate is currently valid
@@ -469,7 +469,7 @@ func MutualTLSConfig(certFile, keyFile, caFile string) (*Config, error) {
 	config := &Config{
 		CertFile:   certFile,
 		KeyFile:    keyFile,
-		ClientAuth: ClientAuthModeVerifyClient,
+		ClientAuth: "verify-cert",
 		CAFile:     caFile,
 	}
 	return config, nil

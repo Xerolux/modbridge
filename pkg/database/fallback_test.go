@@ -118,8 +118,8 @@ func TestFallbackCache_SetAndGetDevice(t *testing.T) {
 	fc := NewFallbackCache(10)
 
 	device := &Device{
-		IP:          "192.168.1.1",
-		Name:        "Test Device",
+		IP:           "192.168.1.1",
+		Name:         "Test Device",
 		RequestCount: 100,
 	}
 

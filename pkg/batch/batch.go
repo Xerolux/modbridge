@@ -60,7 +60,7 @@ func DefaultBatchConfig() *BatchConfig {
 	return &BatchConfig{
 		MaxBatchSize:       125, // Max registers per Modbus read
 		MaxBatchDelay:      10 * time.Millisecond,
-		MaxAddressGap:      0,   // No gap limit by default
+		MaxAddressGap:      0, // No gap limit by default
 		CrossSlaveBatching: false,
 		CrossTypeBatching:  false,
 	}
@@ -110,12 +110,12 @@ func NewBatcher(config *BatchConfig, handler func(ctx context.Context, requests 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	b := &Batcher{
-		config:         config,
-		requestChan:    make(chan *Request, 1000),
-		responseChan:   make(chan *Response, 1000),
-		ctx:            ctx,
-		cancel:         cancel,
-		executeHandler: handler,
+		config:          config,
+		requestChan:     make(chan *Request, 1000),
+		responseChan:    make(chan *Response, 1000),
+		ctx:             ctx,
+		cancel:          cancel,
+		executeHandler:  handler,
 		pendingRequests: make([]*Request, 0, config.MaxBatchSize),
 	}
 

@@ -398,25 +398,25 @@ func TestCertInfo_IsValid(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		name     string
+		name      string
 		notBefore time.Time
 		notAfter  time.Time
 		expected  bool
 	}{
 		{
-			name:     "valid cert",
+			name:      "valid cert",
 			notBefore: now.Add(-1 * time.Hour),
 			notAfter:  now.Add(1 * time.Hour),
 			expected:  true,
 		},
 		{
-			name:     "expired cert",
+			name:      "expired cert",
 			notBefore: now.Add(-2 * time.Hour),
 			notAfter:  now.Add(-1 * time.Hour),
 			expected:  false,
 		},
 		{
-			name:     "not yet valid",
+			name:      "not yet valid",
 			notBefore: now.Add(1 * time.Hour),
 			notAfter:  now.Add(2 * time.Hour),
 			expected:  false,
@@ -441,27 +441,27 @@ func TestCertInfo_DaysUntilExpiry(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		notAfter  time.Time
+		notAfter time.Time
 		minDays  int
 		maxDays  int
 	}{
 		{
-			name:    "expires tomorrow",
+			name:     "expires tomorrow",
 			notAfter: now.Add(24 * time.Hour),
-			minDays: 0,
-			maxDays: 1,
+			minDays:  0,
+			maxDays:  1,
 		},
 		{
-			name:    "expires in 30 days",
+			name:     "expires in 30 days",
 			notAfter: now.Add(30 * 24 * time.Hour),
-			minDays: 29,
-			maxDays: 30,
+			minDays:  29,
+			maxDays:  30,
 		},
 		{
-			name:    "expires in 365 days",
+			name:     "expires in 365 days",
 			notAfter: now.Add(365 * 24 * time.Hour),
-			minDays: 364,
-			maxDays: 365,
+			minDays:  364,
+			maxDays:  365,
 		},
 	}
 
