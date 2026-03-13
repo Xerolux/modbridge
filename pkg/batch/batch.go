@@ -226,6 +226,16 @@ func (b *Batcher) run() {
 			timerActive = false
 			b.flush()
 
+			// Check if requests arrived during flush
+			b.mu.Lock()
+			pendingCount := len(b.pendingRequests)
+			b.mu.Unlock()
+
+			if pendingCount > 0 {
+				timer.Reset(b.config.MaxBatchDelay)
+				timerActive = true
+			}
+
 		case <-b.ctx.Done():
 			if timerActive && !timer.Stop() {
 				select {
