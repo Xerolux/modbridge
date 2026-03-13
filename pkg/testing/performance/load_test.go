@@ -13,6 +13,7 @@ import (
 	"modbridge/pkg/database"
 	"modbridge/pkg/logger"
 	"modbridge/pkg/manager"
+	"modbridge/pkg/modbus"
 	"modbridge/pkg/testing/mockmodbus"
 )
 
@@ -157,13 +158,20 @@ func RunLoadTest(t *testing.T, opts BenchmarkOptions) *LoadTestResult {
 				}
 
 				// Read response
-				response := make([]byte, 256)
 				conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-				_, err = conn.Read(response)
+				_, err = modbus.ReadFrame(conn)
 				latency := time.Since(reqStart)
 
 				if err != nil {
 					atomic.AddInt64(&failureCount, 1)
+					// Connection likely broken, re-establish
+					conn.Close()
+					newConn, dialErr := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", opts.ProxyPort))
+					if dialErr == nil {
+						conn = newConn
+					} else {
+						return // Stop this goroutine if we can't reconnect
+					}
 				} else {
 					atomic.AddInt64(&successCount, 1)
 
@@ -313,8 +321,7 @@ func BenchmarkProxyRequest(b *testing.B) {
 	// Warmup
 	for i := 0; i < 100; i++ {
 		conn.Write(request)
-		response := make([]byte, 256)
-		conn.Read(response)
+		modbus.ReadFrame(conn)
 	}
 
 	b.ResetTimer()
@@ -325,8 +332,7 @@ func BenchmarkProxyRequest(b *testing.B) {
 			b.Fatalf("Failed to send request: %v", err)
 		}
 
-		response := make([]byte, 256)
-		_, err = conn.Read(response)
+		_, err = modbus.ReadFrame(conn)
 		if err != nil {
 			b.Fatalf("Failed to read response: %v", err)
 		}
@@ -390,9 +396,8 @@ func BenchmarkProxyConcurrent(b *testing.B) {
 				continue
 			}
 
-			response := make([]byte, 256)
 			conn.SetReadDeadline(time.Now().Add(1 * time.Second))
-			conn.Read(response)
+			modbus.ReadFrame(conn)
 		}
 	})
 }
@@ -423,9 +428,8 @@ func runWarmup(port int, users int, duration time.Duration) {
 					return
 				default:
 					conn.Write(request)
-					response := make([]byte, 256)
 					conn.SetReadDeadline(time.Now().Add(1 * time.Second))
-					conn.Read(response)
+					modbus.ReadFrame(conn)
 					time.Sleep(10 * time.Millisecond)
 				}
 			}
