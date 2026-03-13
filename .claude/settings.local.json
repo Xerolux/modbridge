@@ -70,7 +70,16 @@
       "Bash(grep \"GO_VERSION\" .github/workflows/*.yml)",
       "Bash(git add .github/workflows/headless.yml .github/workflows/release.yml Dockerfile .golangci.yml ANALYSIS.md DEPLOYMENT.md)",
       "Bash(git add .golangci.yml .github/workflows/main.yml)",
-      "Bash(git add .github/workflows/main.yml .github/workflows/release.yml)"
+      "Bash(git add .github/workflows/main.yml .github/workflows/release.yml)",
+      "Bash(gh run view 22756470592 --log-failed)",
+      "Bash(gh run view 22756470592 --json jobs --jq '.jobs[] | select\\(.conclusion != \"\"success\"\"\\) | {name: .name, conclusion: .conclusion}')",
+      "Bash(where gh)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" --version)",
+      "Bash(\"/c/Program Files \\(x86\\)/GitHub CLI/gh.exe\" --version)",
+      "Bash(cmd.exe /c \"gh --version\")",
+      "Bash(cmd.exe /c \"gh run view 22756470592 --repo Xerolux/modbridge --log-failed\")",
+      "Bash(git add .github/workflows/main.yml .github/workflows/release.yml .github/workflows/headless.yml)",
+      "Bash(git push)"
     ]
   }
 }
