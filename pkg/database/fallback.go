@@ -29,15 +29,15 @@ const (
 
 // CircuitBreaker implements the circuit breaker pattern for database connections
 type CircuitBreaker struct {
-	mu                    sync.RWMutex
-	state                 CircuitBreakerState
-	failureCount          int
-	successCount          int
-	failureThreshold      int
-	successThreshold      int
-	timeout               time.Duration
-	lastFailureTime       time.Time
-	halfOpenSuccessCount  int
+	mu                   sync.RWMutex
+	state                CircuitBreakerState
+	failureCount         int
+	successCount         int
+	failureThreshold     int
+	successThreshold     int
+	timeout              time.Duration
+	lastFailureTime      time.Time
+	halfOpenSuccessCount int
 }
 
 // NewCircuitBreaker creates a new circuit breaker
@@ -261,8 +261,8 @@ func NewDBWithFallback(path string) (*DBWithFallback, error) {
 
 	// Create circuit breaker with thresholds
 	cb := NewCircuitBreaker(
-		5,  // Open circuit after 5 failures
-		2,  // Close circuit after 2 successes in half-open
+		5,              // Open circuit after 5 failures
+		2,              // Close circuit after 2 successes in half-open
 		30*time.Second, // Try to recover after 30 seconds
 	)
 
@@ -398,9 +398,9 @@ func (dbw *DBWithFallback) GetStats() map[string]interface{} {
 	defer dbw.mu.RUnlock()
 
 	stats := map[string]interface{}{
-		"healthy":          dbw.IsHealthy(),
-		"circuit_state":     dbw.GetCircuitBreakerState().String(),
-		"cached_devices":   len(dbw.fallbackCache.devices),
+		"healthy":        dbw.IsHealthy(),
+		"circuit_state":  dbw.GetCircuitBreakerState().String(),
+		"cached_devices": len(dbw.fallbackCache.devices),
 	}
 
 	return stats

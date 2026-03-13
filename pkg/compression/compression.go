@@ -103,11 +103,11 @@ func (c *Compressor) ShouldCompress(data []byte, minSize int) bool {
 
 // CompressionStats holds compression statistics
 type CompressionStats struct {
-	TotalRequests     uint64
-	CompressedCount   uint64
-	TotalInputBytes   uint64
-	TotalOutputBytes  uint64
-	CompressionRatio  float64
+	TotalRequests    uint64
+	CompressedCount  uint64
+	TotalInputBytes  uint64
+	TotalOutputBytes uint64
+	CompressionRatio float64
 }
 
 // StatsTracker tracks compression statistics

@@ -65,7 +65,7 @@ func (c *Cluster) Leave() error {
 func (c *Cluster) Members() []*Node {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	members := make([]*Node, 0, len(c.nodes))
 	for _, node := range c.nodes {
 		if node.State == NodeStateReady {
@@ -80,7 +80,7 @@ func (c *Cluster) IsLeader() bool {
 	// Simplified: first node is leader
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	for _, node := range c.nodes {
 		if node.State == NodeStateReady {
 			return node.ID == c.self.ID

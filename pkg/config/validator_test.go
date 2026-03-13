@@ -7,22 +7,22 @@ import (
 // getValidBaseConfig returns a valid base configuration for testing
 func getValidBaseConfig() Config {
 	return Config{
-		WebPort:             ":8080",
-		Proxies:             []ProxyConfig{},
-		LogLevel:            "INFO",
-		LogMaxSize:          100,
-		LogMaxFiles:         10,
-		LogMaxAgeDays:       30,
-		SessionTimeout:      24,
-		RateLimitEnabled:    true,
-		RateLimitRequests:   60,
-		RateLimitBurst:      100,
-		MetricsEnabled:      true,
-		MetricsPort:         ":9090",
-		MaxConnections:      1000,
-		CORSAllowedOrigins:  []string{"http://localhost:3000"},
-		CORSAllowedMethods:  []string{"GET", "POST"},
-		CORSAllowedHeaders:  []string{"Content-Type"},
+		WebPort:            ":8080",
+		Proxies:            []ProxyConfig{},
+		LogLevel:           "INFO",
+		LogMaxSize:         100,
+		LogMaxFiles:        10,
+		LogMaxAgeDays:      30,
+		SessionTimeout:     24,
+		RateLimitEnabled:   true,
+		RateLimitRequests:  60,
+		RateLimitBurst:     100,
+		MetricsEnabled:     true,
+		MetricsPort:        ":9090",
+		MaxConnections:     1000,
+		CORSAllowedOrigins: []string{"http://localhost:3000"},
+		CORSAllowedMethods: []string{"GET", "POST"},
+		CORSAllowedHeaders: []string{"Content-Type"},
 	}
 }
 
@@ -105,9 +105,9 @@ func TestValidator_InvalidProxyConfig(t *testing.T) {
 			name: "name too long",
 			proxy: ProxyConfig{
 				ID:         "test-proxy",
-				Name:        string(make([]byte, 101)), // 101 characters
-				ListenAddr:  ":8080",
-				TargetAddr:  "localhost:502",
+				Name:       string(make([]byte, 101)), // 101 characters
+				ListenAddr: ":8080",
+				TargetAddr: "localhost:502",
 			},
 			wantErr: true,
 		},
@@ -217,9 +217,9 @@ func TestValidator_TimeoutValidation(t *testing.T) {
 
 func TestValidator_RetryValidation(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		maxRetries int
-		wantErr   bool
+		wantErr    bool
 	}{
 		{"negative retries", -1, true},
 		{"too many retries", 11, true},
@@ -252,9 +252,9 @@ func TestValidator_RetryValidation(t *testing.T) {
 
 func TestValidator_IPValidation(t *testing.T) {
 	tests := []struct {
-		name    string
-		ip      string
-		valid   bool
+		name  string
+		ip    string
+		valid bool
 	}{
 		{"valid IPv4", "192.168.1.1", true},
 		{"valid IPv4 localhost", "127.0.0.1", true},
@@ -512,14 +512,14 @@ func TestValidator_CORSValidation(t *testing.T) {
 
 func TestValidator_BackupValidation(t *testing.T) {
 	tests := []struct {
-		name        string
-		enabled     bool
-		path        string
-		interval    string
-		retention   int
-		backupDB    bool
-		backupCfg   bool
-		wantErr     bool
+		name      string
+		enabled   bool
+		path      string
+		interval  string
+		retention int
+		backupDB  bool
+		backupCfg bool
+		wantErr   bool
 	}{
 		{"valid backup config", true, "./backups", "daily", 7, true, true, false},
 		{"valid hourly", true, "./backups", "hourly", 24, true, true, false},
@@ -677,18 +677,18 @@ func TestValidationErrors_Error(t *testing.T) {
 
 func TestValidationError_Error(t *testing.T) {
 	tests := []struct {
-		name    string
-		err     ValidationError
+		name     string
+		err      ValidationError
 		contains []string
 	}{
 		{
-			name: "error without value",
-			err: ValidationError{Field: "test_field", Message: "is invalid"},
+			name:     "error without value",
+			err:      ValidationError{Field: "test_field", Message: "is invalid"},
 			contains: []string{"test_field", "is invalid"},
 		},
 		{
-			name: "error with value",
-			err: ValidationError{Field: "test_field", Message: "is invalid", Value: "bad"},
+			name:     "error with value",
+			err:      ValidationError{Field: "test_field", Message: "is invalid", Value: "bad"},
 			contains: []string{"test_field", "is invalid", "bad"},
 		},
 	}
@@ -707,8 +707,7 @@ func TestValidationError_Error(t *testing.T) {
 
 // Helper function
 func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (
-		s[:len(substr)] == substr ||
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr ||
 		s[len(s)-len(substr):] == substr ||
 		containsInMiddle(s, substr)))
 }

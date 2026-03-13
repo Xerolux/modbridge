@@ -10,15 +10,15 @@ import (
 
 // MockSerialPort implements SerialPort for testing
 type MockSerialPort struct {
-	mu            sync.Mutex
-	readBuffer    *bytes.Buffer
-	writeBuffer   *bytes.Buffer
-	readDelay     time.Duration
-	writeDelay    time.Duration
-	readError     error
-	writeError    error
-	closed        bool
-	deadlineSet   bool
+	mu          sync.Mutex
+	readBuffer  *bytes.Buffer
+	writeBuffer *bytes.Buffer
+	readDelay   time.Duration
+	writeDelay  time.Duration
+	readError   error
+	writeError  error
+	closed      bool
+	deadlineSet bool
 }
 
 func NewMockSerialPort() *MockSerialPort {

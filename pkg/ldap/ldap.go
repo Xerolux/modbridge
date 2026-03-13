@@ -17,10 +17,10 @@ type Config struct {
 
 // User represents an LDAP user
 type User struct {
-	DN       string            `json:"dn"`
-	Username string            `json:"username"`
-	Email    string            `json:"email"`
-	Groups   []string          `json:"groups"`
+	DN       string   `json:"dn"`
+	Username string   `json:"username"`
+	Email    string   `json:"email"`
+	Groups   []string `json:"groups"`
 }
 
 // Client provides LDAP authentication

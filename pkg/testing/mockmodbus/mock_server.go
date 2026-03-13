@@ -24,19 +24,19 @@ type MockServer struct {
 
 // RequestLog represents a logged Modbus request
 type RequestLog struct {
-	Timestamp   time.Time
-	RemoteAddr  string
+	Timestamp    time.Time
+	RemoteAddr   string
 	FunctionCode byte
 	Data         []byte
 }
 
 // Config holds the mock server configuration
 type Config struct {
-	Host         string
-	Port         int
-	Delay        time.Duration
-	ErrorRate    float64 // 0.0 to 1.0
-	LogRequests  bool
+	Host        string
+	Port        int
+	Delay       time.Duration
+	ErrorRate   float64 // 0.0 to 1.0
+	LogRequests bool
 }
 
 // DefaultConfig returns default mock server configuration
@@ -204,10 +204,10 @@ func (m *MockServer) logRequest(remoteAddr string, functionCode byte, data []byt
 	defer m.mu.Unlock()
 
 	m.requestLog = append(m.requestLog, RequestLog{
-		Timestamp:     time.Now(),
-		RemoteAddr:    remoteAddr,
-		FunctionCode:  functionCode,
-		Data:          data,
+		Timestamp:    time.Now(),
+		RemoteAddr:   remoteAddr,
+		FunctionCode: functionCode,
+		Data:         data,
 	})
 
 	// Keep only last 1000 requests
@@ -260,14 +260,14 @@ func (m *MockServer) generateResponse(transactionID, protocolID uint16, unitID, 
 		response[5] = 0x04
 
 	case 0x03: // Read Holding Registers
-		response = append(response, 0x04) // Byte count (2 registers = 4 bytes)
+		response = append(response, 0x04)       // Byte count (2 registers = 4 bytes)
 		response = append(response, 0x00, 0x01) // Register values
 		response = append(response, 0x00, 0x02)
 		response[4] = 0x00
 		response[5] = 0x06 // Length
 
 	case 0x04: // Read Input Registers
-		response = append(response, 0x02) // Byte count
+		response = append(response, 0x02)       // Byte count
 		response = append(response, 0x00, 0x10) // Register values
 		response = append(response, 0x00, 0x20)
 		response[4] = 0x00
