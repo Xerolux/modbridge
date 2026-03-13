@@ -31,7 +31,7 @@ func TestProxyIntegration(t *testing.T) {
 	// Create proxy manager
 	cfgMgr := config.NewManager("test_config.json")
 	log := logger.NewNullLogger(100)
-	db, _ := database.NewDB("test_db.sqlite")
+	db, _ := database.NewDB(":memory:")
 	mgr := manager.NewManager(cfgMgr, log, db)
 
 	// Create proxy configuration
@@ -122,7 +122,7 @@ func TestProxyIntegrationMultipleConnections(t *testing.T) {
 
 	cfgMgr := config.NewManager("test_config.json")
 	log := logger.NewNullLogger(100)
-	db, _ := database.NewDB("test_db.sqlite")
+	db, _ := database.NewDB(":memory:")
 	mgr := manager.NewManager(cfgMgr, log, db)
 
 	proxyCfg := config.ProxyConfig{
@@ -208,7 +208,7 @@ func TestProxyIntegrationErrorHandling(t *testing.T) {
 	// Try to connect to non-existent Modbus device
 	cfgMgr := config.NewManager("test_config.json")
 	log := logger.NewNullLogger(100)
-	db, _ := database.NewDB("test_db.sqlite")
+	db, _ := database.NewDB(":memory:")
 	mgr := manager.NewManager(cfgMgr, log, db)
 
 	proxyCfg := config.ProxyConfig{
@@ -289,7 +289,7 @@ func TestProxyIntegrationLatency(t *testing.T) {
 
 	cfgMgr := config.NewManager("test_config.json")
 	log := logger.NewNullLogger(100)
-	db, _ := database.NewDB("test_db.sqlite")
+	db, _ := database.NewDB(":memory:")
 	mgr := manager.NewManager(cfgMgr, log, db)
 
 	proxyCfg := config.ProxyConfig{
@@ -369,7 +369,7 @@ func TestProxyIntegrationWriteOperations(t *testing.T) {
 
 	cfgMgr := config.NewManager("test_config.json")
 	log := logger.NewNullLogger(100)
-	db, _ := database.NewDB("test_db.sqlite")
+	db, _ := database.NewDB(":memory:")
 	mgr := manager.NewManager(cfgMgr, log, db)
 
 	proxyCfg := config.ProxyConfig{
@@ -449,7 +449,7 @@ func TestProxyIntegrationWithRetries(t *testing.T) {
 
 	cfgMgr := config.NewManager("test_config.json")
 	log := logger.NewNullLogger(100)
-	db, _ := database.NewDB("test_db.sqlite")
+	db, _ := database.NewDB(":memory:")
 	mgr := manager.NewManager(cfgMgr, log, db)
 
 	proxyCfg := config.ProxyConfig{
