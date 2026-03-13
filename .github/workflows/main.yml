@@ -66,7 +66,9 @@ jobs:
       - name: Run tests
         env:
           CGO_ENABLED: 1
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        run: |
+          PACKAGES=$(go list -f '{{if or (len .TestGoFiles) (len .XTestGoFiles)}}{{.ImportPath}}{{end}}' ./...)
+          go test -v -race -coverprofile=coverage.txt -covermode=atomic $PACKAGES
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
