@@ -25,16 +25,16 @@ var (
 
 // User represents a system user
 type User struct {
-	ID           string    `json:"id"`
-	Username     string    `json:"username"`
-	Email        string    `json:"email"`
-	Role         Role      `json:"role"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	LastLogin    *time.Time `json:"last_login,omitempty"`
-	Active       bool      `json:"active"`
-	APITokens    []string  `json:"api_tokens,omitempty"`
-	Permissions  []Permission `json:"permissions,omitempty"`
+	ID          string       `json:"id"`
+	Username    string       `json:"username"`
+	Email       string       `json:"email"`
+	Role        Role         `json:"role"`
+	CreatedAt   time.Time    `json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
+	LastLogin   *time.Time   `json:"last_login,omitempty"`
+	Active      bool         `json:"active"`
+	APITokens   []string     `json:"api_tokens,omitempty"`
+	Permissions []Permission `json:"permissions,omitempty"`
 }
 
 // UserStore manages users
@@ -354,12 +354,12 @@ func ContextWithUser(ctx context.Context, user *User) context.Context {
 
 // PermissionCheckResult represents the result of a permission check
 type PermissionCheckResult struct {
-	Allowed   bool     `json:"allowed"`
+	Allowed    bool       `json:"allowed"`
 	Permission Permission `json:"permission"`
-	UserID    string   `json:"user_id"`
-	Username  string   `json:"username"`
-	Role      Role     `json:"role"`
-	DeniedAt  time.Time `json:"denied_at,omitempty"`
+	UserID     string     `json:"user_id"`
+	Username   string     `json:"username"`
+	Role       Role       `json:"role"`
+	DeniedAt   time.Time  `json:"denied_at,omitempty"`
 }
 
 // RequirePermission creates a permission check middleware

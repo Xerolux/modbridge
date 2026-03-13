@@ -84,10 +84,10 @@ type ResourceMetrics struct {
 // ResourceThresholds defines thresholds for degradation levels
 type ResourceThresholds struct {
 	// Low degradation thresholds
-	LowMemoryPercent      float64
-	LowCPUPercent         float64
-	LowGoroutineCount     int
-	LowDiskUsagePercent   float64
+	LowMemoryPercent    float64
+	LowCPUPercent       float64
+	LowGoroutineCount   int
+	LowDiskUsagePercent float64
 
 	// Medium degradation thresholds
 	MediumMemoryPercent    float64
@@ -105,10 +105,10 @@ type ResourceThresholds struct {
 // DefaultThresholds returns sensible default thresholds
 func DefaultThresholds() ResourceThresholds {
 	return ResourceThresholds{
-		LowMemoryPercent:      70,
-		LowCPUPercent:         70,
-		LowGoroutineCount:     1000,
-		LowDiskUsagePercent:   80,
+		LowMemoryPercent:    70,
+		LowCPUPercent:       70,
+		LowGoroutineCount:   1000,
+		LowDiskUsagePercent: 80,
 
 		MediumMemoryPercent:    80,
 		MediumCPUPercent:       85,
@@ -354,9 +354,9 @@ func (rm *ResourceManager) GetStats() map[string]interface{} {
 	defer rm.mu.RUnlock()
 
 	stats := map[string]interface{}{
-		"level":            rm.level.String(),
-		"components_total": len(rm.components),
-		"components_enabled": 0,
+		"level":               rm.level.String(),
+		"components_total":    len(rm.components),
+		"components_enabled":  0,
 		"components_disabled": 0,
 		"metrics": map[string]interface{}{
 			"memory_percent":     rm.metrics.MemoryPercent,

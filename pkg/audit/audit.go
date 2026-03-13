@@ -492,11 +492,11 @@ func (f *EventFilter) Apply(events []*Event) []*Event {
 
 // Auditor handles audit logging (legacy database-backed implementation)
 type Auditor struct {
-	db             *database.DB
-	mu             sync.Mutex
-	buf            chan *database.AuditLogEntry
-	fileLogger     *FileAuditLogger
-	enableFileLog  bool
+	db            *database.DB
+	mu            sync.Mutex
+	buf           chan *database.AuditLogEntry
+	fileLogger    *FileAuditLogger
+	enableFileLog bool
 }
 
 // NewAuditor creates a new auditor with database backing

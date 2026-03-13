@@ -23,8 +23,8 @@ func (e *Entry) IsExpired() bool {
 
 // CacheConfig holds cache configuration
 type CacheConfig struct {
-	MaxSize    int           // Maximum number of entries
-	DefaultTTL time.Duration // Default TTL for entries
+	MaxSize         int           // Maximum number of entries
+	DefaultTTL      time.Duration // Default TTL for entries
 	CleanupInterval time.Duration // How often to clean expired entries
 }
 
@@ -49,11 +49,11 @@ type Cache struct {
 
 // CacheStats holds cache statistics
 type CacheStats struct {
-	Hits     uint64
-	Misses   uint64
-	Evictions uint64
+	Hits        uint64
+	Misses      uint64
+	Evictions   uint64
 	Expirations uint64
-	Size     int
+	Size        int
 }
 
 // NewCache creates a new cache

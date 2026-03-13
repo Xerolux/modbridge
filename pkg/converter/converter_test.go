@@ -143,13 +143,13 @@ func TestRTUToTCP_ReadHoldingRegistersResponse(t *testing.T) {
 	}
 
 	// Check Transaction ID
-	transactionID := tcpFrame[0]<<8 | tcpFrame[1]
+	transactionID := uint16(tcpFrame[0])<<8 | uint16(tcpFrame[1])
 	if transactionID != 0x0001 {
 		t.Errorf("Expected TransactionID 0x0001, got 0x%04X", transactionID)
 	}
 
 	// Check Protocol ID
-	protocolID := tcpFrame[2]<<8 | tcpFrame[3]
+	protocolID := uint16(tcpFrame[2])<<8 | uint16(tcpFrame[3])
 	if protocolID != 0 {
 		t.Errorf("Expected ProtocolID 0, got 0x%04X", protocolID)
 	}
@@ -186,7 +186,7 @@ func TestRTUToTCP_WriteSingleRegisterResponse(t *testing.T) {
 	}
 
 	// Check Transaction ID
-	transactionID := tcpFrame[0]<<8 | tcpFrame[1]
+	transactionID := uint16(tcpFrame[0])<<8 | uint16(tcpFrame[1])
 	if transactionID != 0x0002 {
 		t.Errorf("Expected TransactionID 0x0002, got 0x%04X", transactionID)
 	}
@@ -286,13 +286,13 @@ func TestBuildTCPFrame(t *testing.T) {
 	}
 
 	// Check Transaction ID
-	transactionID := frame[0]<<8 | frame[1]
+	transactionID := uint16(frame[0])<<8 | uint16(frame[1])
 	if transactionID != 0x0001 {
 		t.Errorf("Expected TransactionID 0x0001, got 0x%04X", transactionID)
 	}
 
 	// Check Protocol ID
-	protocolID := frame[2]<<8 | frame[3]
+	protocolID := uint16(frame[2])<<8 | uint16(frame[3])
 	if protocolID != 0 {
 		t.Errorf("Expected ProtocolID 0, got 0x%04X", protocolID)
 	}
@@ -386,7 +386,7 @@ func TestConvertExceptionToTCP(t *testing.T) {
 	}
 
 	// Check Transaction ID
-	transactionID := tcpFrame[0]<<8 | tcpFrame[1]
+	transactionID := uint16(tcpFrame[0])<<8 | uint16(tcpFrame[1])
 	if transactionID != 0x0001 {
 		t.Errorf("Expected TransactionID 0x0001, got 0x%04X", transactionID)
 	}
