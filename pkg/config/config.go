@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -273,4 +274,66 @@ func (m *Manager) Update(fn func(*Config) error) error {
 	enc.SetIndent("", "  ")
 
 	return enc.Encode(m.cfg)
+}
+
+// Validate validates the current configuration
+func (m *Manager) Validate() error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	validator := NewValidator()
+	return validator.Validate(&m.cfg)
+}
+
+// ValidateWithErrors validates the configuration and returns detailed errors
+func (m *Manager) ValidateWithErrors() (*Validator, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	validator := NewValidator()
+	err := validator.Validate(&m.cfg)
+	return validator, err
+}
+
+// AddProxy validates and adds a new proxy configuration
+func (m *Manager) AddProxy(proxy ProxyConfig) error {
+	// Validate the proxy configuration first
+	if err := ValidateProxyConfigQuick(&proxy); err != nil {
+		return err
+	}
+
+	return m.Update(func(c *Config) error {
+		// Check for duplicate ID
+		for _, p := range c.Proxies {
+			if p.ID == proxy.ID {
+				return fmt.Errorf("proxy with ID %s already exists", proxy.ID)
+			}
+		}
+		c.Proxies = append(c.Proxies, proxy)
+		return nil
+	})
+}
+
+// UpdateProxy validates and updates an existing proxy configuration
+func (m *Manager) UpdateProxy(id string, updateFn func(*ProxyConfig) error) error {
+	return m.Update(func(c *Config) error {
+		for i, p := range c.Proxies {
+			if p.ID == id {
+				// Create a copy to validate
+				updated := p
+				if err := updateFn(&updated); err != nil {
+					return err
+				}
+
+				// Validate the updated configuration
+				if err := ValidateProxyConfigQuick(&updated); err != nil {
+					return err
+				}
+
+				c.Proxies[i] = updated
+				return nil
+			}
+		}
+		return fmt.Errorf("proxy with ID %s not found", id)
+	})
 }
