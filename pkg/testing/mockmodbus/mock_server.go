@@ -7,6 +7,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"modbridge/pkg/modbus"
 )
 
 // MockServer represents a mock Modbus TCP server for testing
@@ -150,12 +152,10 @@ func (m *MockServer) handleConnection(conn net.Conn) {
 		conn.Close()
 	}()
 
-	buf := make([]byte, 256)
-
 	for {
 		conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 
-		n, err := conn.Read(buf)
+		buf, err := modbus.ReadFrame(conn)
 		if err != nil {
 			if err != io.EOF {
 				return
@@ -163,7 +163,7 @@ func (m *MockServer) handleConnection(conn net.Conn) {
 			return
 		}
 
-		if n < 8 { // Minimum Modbus TCP frame size
+		if len(buf) < 8 { // Minimum Modbus TCP frame size
 			continue
 		}
 
@@ -175,7 +175,7 @@ func (m *MockServer) handleConnection(conn net.Conn) {
 		functionCode := buf[7]
 
 		// Log request
-		m.logRequest(conn.RemoteAddr().String(), functionCode, buf[8:n])
+		m.logRequest(conn.RemoteAddr().String(), functionCode, buf[8:])
 
 		// Apply delay if configured
 		if m.delay > 0 {
@@ -189,7 +189,7 @@ func (m *MockServer) handleConnection(conn net.Conn) {
 		}
 
 		// Generate response based on function code
-		response := m.generateResponse(transactionID, protocolID, unitID, functionCode, buf[8:n])
+		response := m.generateResponse(transactionID, protocolID, unitID, functionCode, buf[8:])
 
 		_, err = conn.Write(response)
 		if err != nil {
@@ -299,7 +299,10 @@ func (m *MockServer) generateResponse(transactionID, protocolID uint16, unitID, 
 
 	default:
 		// Return error for unsupported function codes
-		m.sendErrorToBuffer(&response, transactionID, protocolID, unitID, functionCode, 0x01)
+		response = append(response, 0x01) // Exception code (Illegal function)
+		response[4] = 0x00
+		response[5] = 0x03                // Length = 3 (unit ID + func code + exception code)
+		response[7] = functionCode | 0x80 // Error bit set
 	}
 
 	return response
@@ -320,21 +323,6 @@ func (m *MockServer) sendError(conn net.Conn, transactionID, protocolID uint16, 
 	}
 
 	conn.Write(response)
-}
-
-// sendErrorToBuffer appends an error response to the buffer
-func (m *MockServer) sendErrorToBuffer(response *[]byte, transactionID, protocolID uint16, unitID, functionCode, exceptionCode byte) {
-	*response = append(*response,
-		byte(transactionID>>8),
-		byte(transactionID),
-		byte(protocolID>>8),
-		byte(protocolID),
-		0x00,
-		0x03, // Length
-		unitID,
-		functionCode|0x80, // Error bit set
-		exceptionCode,
-	)
 }
 
 // GetRequestLog returns the request log
