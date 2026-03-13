@@ -301,7 +301,7 @@ func (m *MockServer) generateResponse(transactionID, protocolID uint16, unitID, 
 		// Return error for unsupported function codes
 		response = append(response, 0x01) // Exception code (Illegal function)
 		response[4] = 0x00
-		response[5] = 0x03 // Length = 3 (unit ID + func code + exception code)
+		response[5] = 0x03                // Length = 3 (unit ID + func code + exception code)
 		response[7] = functionCode | 0x80 // Error bit set
 	}
 
