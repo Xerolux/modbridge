@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* Ensure touch targets for PrimeVue components are adequately sized and prevent iOS zoom */
-.p-inputtext, .p-dropdown, .p-inputnumber-input, .p-password-input {
+.p-inputtext, .p-dropdown, .p-inputnumber-input, .p-password-input, input[type="text"], input[type="number"], input[type="email"], input[type="password"], select, textarea {
   min-height: 44px;
   font-size: 16px !important; /* Prevents auto-zoom on iOS Safari */
 }
