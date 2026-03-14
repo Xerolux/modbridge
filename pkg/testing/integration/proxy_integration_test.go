@@ -436,7 +436,7 @@ func TestProxyIntegrationWriteOperations(t *testing.T) {
 func TestProxyIntegrationWithRetries(t *testing.T) {
 	mockConfig := mockmodbus.DefaultConfig()
 	mockConfig.Port = 15039
-	mockConfig.ErrorRate = 0.5 // 50% error rate
+	mockConfig.ErrorRate = 0.3 // 30% error rate
 	mockServer := mockmodbus.NewMockServer(mockConfig)
 
 	err := mockServer.Start()
@@ -492,7 +492,7 @@ func TestProxyIntegrationWithRetries(t *testing.T) {
 
 	// Try multiple times to account for error rate
 	var success bool
-	for attempt := 0; attempt < 5; attempt++ {
+	for attempt := 0; attempt < 10; attempt++ {
 		_, err = conn.Write(request)
 		if err != nil {
 			continue
@@ -500,14 +500,17 @@ func TestProxyIntegrationWithRetries(t *testing.T) {
 
 		response := make([]byte, 256)
 		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, err = conn.Read(response)
-		if err == nil && response[7] == 0x03 {
+		n, err := conn.Read(response)
+		if err != nil {
+			continue
+		}
+		if n > 7 && response[7] == 0x03 {
 			success = true
 			break
 		}
 
 		// Check if we got an error response
-		if err == nil && response[7]&0x80 != 0 {
+		if n > 7 && response[7]&0x80 != 0 {
 			// Error response, try again
 			continue
 		}

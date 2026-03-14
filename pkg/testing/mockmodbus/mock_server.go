@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -21,6 +22,7 @@ type MockServer struct {
 	connections map[net.Conn]bool
 	delay       time.Duration
 	errorRate   float64
+	rng         *rand.Rand
 	requestLog  []RequestLog
 }
 
@@ -61,6 +63,7 @@ func NewMockServer(config Config) *MockServer {
 		connections: make(map[net.Conn]bool),
 		delay:       config.Delay,
 		errorRate:   config.ErrorRate,
+		rng:         rand.New(rand.NewSource(time.Now().UnixNano())),
 		requestLog:  make([]RequestLog, 0),
 	}
 }
@@ -225,8 +228,10 @@ func (m *MockServer) shouldReturnError() bool {
 		return true
 	}
 
-	// Simple random check
-	return float64(time.Now().UnixNano()%100) < (m.errorRate * 100)
+	m.mu.Lock()
+	result := m.rng.Float64() < m.errorRate
+	m.mu.Unlock()
+	return result
 }
 
 // generateResponse generates a Modbus response for the given function code
