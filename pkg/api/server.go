@@ -119,6 +119,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	}
 
 	// Protected routes
+	mux.HandleFunc("/api/users", authMW(s.handleUsers))
 	mux.HandleFunc("/api/proxies", authMW(s.handleProxies))
 	mux.HandleFunc("/api/proxies/stream", authMW(s.handleProxiesStream))
 	mux.HandleFunc("/api/proxies/control", csrfMW(s.handleProxyControl))
@@ -328,6 +329,30 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 	})
+}
+
+func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		// Mocked for now - just return the single admin user defined in config
+		w.Header().Set("Content-Type", "application/json")
+
+		users := []map[string]interface{}{
+			{
+				"id":       "1",
+				"username": "admin",
+				"email":    "admin@localhost",
+				"role":     "admin",
+				"enabled":  true,
+			},
+		}
+
+		if err := json.NewEncoder(w).Encode(users); err != nil {
+			s.log.Error("API", fmt.Sprintf("Failed to encode users response: %v", err))
+		}
+		return
+	}
+
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }
 
 // handleProxiesStream streams proxy updates via SSE
