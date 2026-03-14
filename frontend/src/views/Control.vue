@@ -8,21 +8,21 @@
                     severity="info"
                     label="Add Proxy"
                     @click="openAddProxyDialog"
-                    class="text-xs sm:text-sm"
+                    class="text-base"
                 />
                 <Button
                     icon="pi pi-play"
                     severity="success"
                     label="Start All"
                     @click="controlAllProxies('start_all')"
-                    class="text-xs sm:text-sm"
+                    class="text-base"
                 />
                 <Button
                     icon="pi pi-stop"
                     severity="danger"
                     label="Stop All"
                     @click="controlAllProxies('stop_all')"
-                    class="text-xs sm:text-sm"
+                    class="text-base"
                 />
             </div>
         </div>
@@ -52,7 +52,7 @@
                                  label="Start"
                                  :disabled="proxy.status === 'Running'"
                                  @click="controlProxy(proxy.id, 'start')"
-                                 class="text-xs sm:text-sm p-3 sm:p-2 min-h-[44px]"
+                                 class="text-base p-3 sm:p-2 min-h-[44px]"
                               />
                               <Button
                                  icon="pi pi-stop"
@@ -60,7 +60,7 @@
                                  label="Stop"
                                  :disabled="proxy.status === 'Stopped' || proxy.status === 'Error'"
                                  @click="controlProxy(proxy.id, 'stop')"
-                                 class="text-xs sm:text-sm p-3 sm:p-2 min-h-[44px]"
+                                 class="text-base p-3 sm:p-2 min-h-[44px]"
                               />
                                <Button
                                  icon="pi pi-refresh"
@@ -68,14 +68,14 @@
                                  label="Restart"
                                  :disabled="proxy.status === 'Stopped'"
                                  @click="controlProxy(proxy.id, 'restart')"
-                                 class="text-xs sm:text-sm p-3 sm:p-2 min-h-[44px]"
+                                 class="text-base p-3 sm:p-2 min-h-[44px]"
                               />
                               <Button
                                  icon="pi pi-pencil"
                                  severity="secondary"
                                  label="Edit"
                                  @click="openEditProxyDialog(proxy)"
-                                 class="text-xs sm:text-sm p-3 sm:p-2 min-h-[44px]"
+                                 class="text-base p-3 sm:p-2 min-h-[44px]"
                               />
                          </div>
                          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
@@ -85,21 +85,21 @@
                                  label="Test"
                                  @click="testConnectivity(proxy)"
                                  :loading="testingProxy === proxy.id"
-                                 class="text-xs sm:text-sm p-3 sm:p-2 min-h-[44px]"
+                                 class="text-base p-3 sm:p-2 min-h-[44px]"
                              />
                              <Button
                                  icon="pi pi-eye"
                                  severity="secondary"
                                  label="View Logs"
                                  @click="openProxyLogs(proxy.id)"
-                                 class="text-xs sm:text-sm p-3 sm:p-2 min-h-[44px]"
+                                 class="text-base p-3 sm:p-2 min-h-[44px]"
                              />
                              <Button
                                  icon="pi pi-trash"
                                  severity="danger"
                                  label="Delete"
                                  @click="confirmDeleteProxy(proxy.id)"
-                                 class="text-xs sm:text-sm p-3 sm:p-2 min-h-[44px]"
+                                 class="text-base p-3 sm:p-2 min-h-[44px]"
                              />
                          </div>
 
