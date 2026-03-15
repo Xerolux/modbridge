@@ -1,72 +1,74 @@
 <template>
-  <div class="p-6">
-    <h1 class="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
+  <div class="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
+    <h1 class="text-xl sm:text-2xl font-bold text-gray-200">Dashboard</h1>
 
     <!-- Stats Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-      <div class="bg-white rounded-lg shadow p-6">
-        <div class="text-sm font-medium text-gray-500">Total Proxies</div>
-        <div class="mt-2 text-3xl font-semibold text-gray-900">{{ stats.totalProxies }}</div>
-        <div class="mt-1 text-sm text-green-600">{{ stats.activeProxies }} active</div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6">
+      <div class="bg-gray-800 rounded-lg shadow p-4 sm:p-6 border border-gray-700">
+        <div class="text-xs sm:text-sm font-medium text-gray-400">Total Proxies</div>
+        <div class="mt-2 text-2xl sm:text-3xl font-semibold text-white">{{ stats.totalProxies }}</div>
+        <div class="mt-1 text-xs sm:text-sm text-green-400">{{ stats.activeProxies }} active</div>
       </div>
 
-      <div class="bg-white rounded-lg shadow p-6">
-        <div class="text-sm font-medium text-gray-500">Connected Devices</div>
-        <div class="mt-2 text-3xl font-semibold text-gray-900">{{ stats.totalDevices }}</div>
-        <div class="mt-1 text-sm text-blue-600">{{ stats.totalRequests }} requests</div>
+      <div class="bg-gray-800 rounded-lg shadow p-4 sm:p-6 border border-gray-700">
+        <div class="text-xs sm:text-sm font-medium text-gray-400">Connected Devices</div>
+        <div class="mt-2 text-2xl sm:text-3xl font-semibold text-white">{{ stats.totalDevices }}</div>
+        <div class="mt-1 text-xs sm:text-sm text-blue-400">{{ stats.totalRequests }} requests</div>
       </div>
 
-      <div class="bg-white rounded-lg shadow p-6">
-        <div class="text-sm font-medium text-gray-500">System Uptime</div>
-        <div class="mt-2 text-3xl font-semibold text-gray-900">{{ stats.uptime }}</div>
-        <div class="mt-1 text-sm text-gray-500">since {{ stats.startTime }}</div>
+      <div class="bg-gray-800 rounded-lg shadow p-4 sm:p-6 border border-gray-700">
+        <div class="text-xs sm:text-sm font-medium text-gray-400">System Uptime</div>
+        <div class="mt-2 text-2xl sm:text-3xl font-semibold text-white">{{ stats.uptime }}</div>
+        <div class="mt-1 text-xs sm:text-sm text-gray-500">since {{ stats.startTime }}</div>
       </div>
 
-      <div class="bg-white rounded-lg shadow p-6">
-        <div class="text-sm font-medium text-gray-500">Memory Usage</div>
-        <div class="mt-2 text-3xl font-semibold text-gray-900">{{ stats.memoryUsage }}</div>
-        <div class="mt-1 text-sm text-yellow-600">{{ stats.memoryPercent }}%</div>
+      <div class="bg-gray-800 rounded-lg shadow p-4 sm:p-6 border border-gray-700">
+        <div class="text-xs sm:text-sm font-medium text-gray-400">Memory Usage</div>
+        <div class="mt-2 text-2xl sm:text-3xl font-semibold text-white">{{ stats.memoryUsage }}</div>
+        <div class="mt-1 text-xs sm:text-sm text-yellow-400">{{ stats.memoryPercent }}%</div>
       </div>
     </div>
 
     <!-- Charts Row -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
       <!-- Throughput Chart -->
-      <div class="bg-white rounded-lg shadow p-6">
-        <h3 class="text-lg font-semibold mb-4">Requests per Second</h3>
-        <div class="h-64 bg-gray-50 rounded flex items-center justify-center text-gray-400">
+      <div class="bg-gray-800 rounded-lg shadow p-4 sm:p-6 border border-gray-700">
+        <h3 class="text-base sm:text-lg font-semibold mb-4 text-gray-200">Requests per Second</h3>
+        <div class="h-48 sm:h-64 bg-gray-900 rounded flex items-center justify-center text-gray-500 border border-gray-700">
           Chart: Real-time throughput
         </div>
       </div>
 
       <!-- Proxy Status -->
-      <div class="bg-white rounded-lg shadow p-6">
-        <h3 class="text-lg font-semibold mb-4">Proxy Status</h3>
+      <div class="bg-gray-800 rounded-lg shadow p-4 sm:p-6 border border-gray-700">
+        <h3 class="text-base sm:text-lg font-semibold mb-4 text-gray-200">Proxy Status</h3>
         <div class="space-y-3">
           <div v-for="proxy in proxies" :key="proxy.id" class="flex items-center justify-between">
-            <span class="text-sm font-medium">{{ proxy.name }}</span>
+            <span class="text-sm font-medium text-gray-300">{{ proxy.name }}</span>
             <span class="px-2 py-1 text-xs rounded" :class="getProxyStatusClass(proxy)">
               {{ proxy.enabled ? (proxy.paused ? 'Paused' : 'Running') : 'Disabled' }}
             </span>
           </div>
+          <div v-if="proxies.length === 0" class="text-sm text-gray-500 text-center py-4">No proxies configured</div>
         </div>
       </div>
     </div>
 
     <!-- Recent Activity -->
-    <div class="bg-white rounded-lg shadow p-6">
-      <h3 class="text-lg font-semibold mb-4">Recent Activity</h3>
+    <div class="bg-gray-800 rounded-lg shadow p-4 sm:p-6 border border-gray-700">
+      <h3 class="text-base sm:text-lg font-semibold mb-4 text-gray-200">Recent Activity</h3>
       <div class="space-y-3">
         <div v-for="activity in recentActivity" :key="activity.id" class="flex items-start">
           <div class="flex-shrink-0">
             <span class="text-2xl">{{ getActivityIcon(activity.type) }}</span>
           </div>
           <div class="ml-3">
-            <p class="text-sm font-medium text-gray-900">{{ activity.title }}</p>
-            <p class="text-sm text-gray-500">{{ activity.description }}</p>
-            <p class="text-xs text-gray-400 mt-1">{{ formatTimestamp(activity.timestamp) }}</p>
+            <p class="text-sm font-medium text-gray-200">{{ activity.title }}</p>
+            <p class="text-sm text-gray-400">{{ activity.description }}</p>
+            <p class="text-xs text-gray-500 mt-1">{{ formatTimestamp(activity.timestamp) }}</p>
           </div>
         </div>
+        <div v-if="recentActivity.length === 0" class="text-sm text-gray-500 text-center py-4">No recent activity</div>
       </div>
     </div>
   </div>
@@ -114,24 +116,25 @@ export default {
         const config = statusResp.data.config || {};
         this.proxies = config.proxies || [];
 
+        const sysData = statusResp.data;
         this.stats = {
           totalProxies: this.proxies.length,
           activeProxies: this.proxies.filter(p => p.enabled).length,
           totalDevices: devicesResp.data.length || 0,
           totalRequests: devicesResp.data.reduce((sum, d) => sum + (d.request_count || 0), 0),
-          uptime: this.calculateUptime(),
-          startTime: new Date().toLocaleDateString(),
-          memoryUsage: '15 MB',
-          memoryPercent: 2
+          uptime: sysData.uptime_human || sysData.uptime || '—',
+          startTime: sysData.start_time ? new Date(sysData.start_time).toLocaleDateString() : new Date().toLocaleDateString(),
+          memoryUsage: sysData.memory_alloc_mb ? sysData.memory_alloc_mb + ' MB' : '—',
+          memoryPercent: sysData.memory_percent || 0
         };
       } catch (error) {
         console.error('Failed to load dashboard data:', error);
       }
     },
     getProxyStatusClass(proxy) {
-      if (!proxy.enabled) return 'bg-gray-100 text-gray-800';
-      if (proxy.paused) return 'bg-yellow-100 text-yellow-800';
-      return 'bg-green-100 text-green-800';
+      if (!proxy.enabled) return 'bg-gray-700 text-gray-300';
+      if (proxy.paused) return 'bg-yellow-900/50 text-yellow-400';
+      return 'bg-green-900/50 text-green-400';
     },
     getActivityIcon(type) {
       const icons = {
@@ -147,8 +150,7 @@ export default {
       return new Date(ts).toLocaleString();
     },
     calculateUptime() {
-      // Simple uptime calculation
-      return Math.floor(process.uptime() / 86400) + 'd ' + Math.floor((process.uptime() % 86400) / 3600) + 'h';
+      return '—';
     }
   }
 };

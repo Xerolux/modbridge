@@ -1,6 +1,6 @@
 <script setup>
   import { ref, onMounted, onUnmounted } from "vue";
-  import { useRouter } from 'vue-router'
+  import { useRouter, useRoute } from 'vue-router'
   import { useAuthStore } from "../stores/auth";
   import { useAppStore } from "../stores/appStore";
   import Menubar from 'primevue/menubar';
@@ -11,6 +11,7 @@
   import LanguageSelector from './LanguageSelector.vue';
 
   const router = useRouter();
+  const route = useRoute();
   const auth = useAuthStore();
   const appStore = useAppStore();
 
@@ -26,41 +27,49 @@
       {
           label: 'Dashboard',
           icon: 'pi pi-home',
+          path: '/',
           command: () => navigate('/')
       },
       {
           label: 'Control',
           icon: 'pi pi-sliders-h',
+          path: '/control',
           command: () => navigate('/control')
       },
       {
           label: 'Devices',
           icon: 'pi pi-desktop',
+          path: '/devices',
           command: () => navigate('/devices')
       },
       {
           label: 'Logs',
           icon: 'pi pi-list',
+          path: '/logs',
           command: () => navigate('/logs')
       },
       {
           label: 'System',
           icon: 'pi pi-info-circle',
+          path: '/system',
           command: () => navigate('/system')
       },
       {
           label: 'Settings',
           icon: 'pi pi-cog',
+          path: '/config',
           command: () => navigate('/config')
       },
       {
           label: 'Users',
           icon: 'pi pi-users',
+          path: '/users',
           command: () => navigate('/users')
       },
       {
           label: 'Audit Log',
           icon: 'pi pi-history',
+          path: '/audit',
           command: () => navigate('/audit')
       }
   ]);
@@ -69,6 +78,11 @@
       await auth.logout();
       router.push('/login');
   }
+
+  const isActiveRoute = (path) => {
+      if (path === '/') return route.path === '/';
+      return route.path.startsWith(path);
+  };
 
   const checkMobile = () => {
       isMobile.value = window.innerWidth < 768;
@@ -112,14 +126,14 @@
         </Menubar>
 
         <Sidebar v-model:visible="mobileMenuVisible" :baseZIndex="10000">
-            <div class="flex flex-col gap-2 h-full">
+            <div class="flex flex-col gap-1 h-full">
                 <div v-for="item in items" :key="item.label">
                     <Button
                         @click="item.command"
                         :label="item.label"
                         :icon="item.icon"
                         text
-                        class="w-full text-left"
+                        :class="['w-full text-left', isActiveRoute(item.path) ? 'bg-gray-700 text-white' : '']"
                         size="large"
                     />
                 </div>
