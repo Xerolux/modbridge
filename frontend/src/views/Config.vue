@@ -193,7 +193,7 @@
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-300 mb-1">Backup Interval</label>
-                                    <Dropdown v-model="config.backup_interval" :options="backupIntervals" class="w-full" />
+                                    <Dropdown v-model="config.backup_interval" :options="backupIntervals" optionLabel="label" optionValue="value" class="w-full" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-300 mb-1">Retention (Count)</label>

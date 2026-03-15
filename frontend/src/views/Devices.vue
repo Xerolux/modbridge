@@ -112,7 +112,7 @@
     </div>
 
     <Toast />
-    <Dialog v-model:visible="deviceDetailsVisible" header="Geräte-Details" :style="{ width: '50vw' }" modal>
+    <Dialog v-model:visible="deviceDetailsVisible" header="Geräte-Details" class="w-full max-w-lg mx-4" modal>
       <div v-if="selectedDevice" class="flex flex-col gap-4">
         <div class="grid grid-cols-2 gap-4">
           <div>
@@ -143,7 +143,7 @@
       </div>
     </Dialog>
 
-    <Dialog v-model:visible="historyVisible" header="Verbindungshistorie" :style="{ width: '70vw', maxWidth: '1000px' }" modal>
+    <Dialog v-model:visible="historyVisible" header="Verbindungshistorie" class="w-full max-w-4xl mx-4" modal>
       <div class="flex flex-col gap-4">
         <div class="flex justify-between items-center">
           <h3>{{ selectedDevice?.ip }}</h3>

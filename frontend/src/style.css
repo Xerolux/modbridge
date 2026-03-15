@@ -16,3 +16,12 @@
   min-height: 24px;
   min-width: 44px;
 }
+
+/* Hide scrollbar but keep scrollability */
+.hide-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}

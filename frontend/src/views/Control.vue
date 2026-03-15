@@ -1,28 +1,28 @@
 <template>
      <div class="p-4 flex flex-col gap-4">
-        <div class="flex justify-between items-center mb-4">
-            <h1 class="text-2xl font-bold">Proxy Control</h1>
-            <div class="flex gap-2">
+        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
+            <h1 class="text-xl sm:text-2xl font-bold">Proxy Control</h1>
+            <div class="flex flex-wrap gap-2">
                 <Button
                     icon="pi pi-plus"
                     severity="info"
                     label="Add Proxy"
                     @click="openAddProxyDialog"
-                    class="text-base"
+                    class="text-sm flex-1 sm:flex-none"
                 />
                 <Button
                     icon="pi pi-play"
                     severity="success"
                     label="Start All"
                     @click="controlAllProxies('start_all')"
-                    class="text-base"
+                    class="text-sm flex-1 sm:flex-none"
                 />
                 <Button
                     icon="pi pi-stop"
                     severity="danger"
                     label="Stop All"
                     @click="controlAllProxies('stop_all')"
-                    class="text-base"
+                    class="text-sm flex-1 sm:flex-none"
                 />
             </div>
         </div>

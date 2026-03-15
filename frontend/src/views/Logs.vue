@@ -15,6 +15,26 @@
    localStorage.setItem('logsAutoScroll', autoScroll.value.toString());
  };
 
+ const formatDate = (dateStr) => {
+   const date = new Date(dateStr);
+   if (isNaN(date.getTime())) return dateStr || '';
+   return date.toLocaleString('de-DE', {
+     hour: '2-digit',
+     minute: '2-digit',
+     second: '2-digit',
+   });
+ };
+
+ const getLevelColor = (level) => {
+   switch (level) {
+     case 'INFO': return 'text-green-400';
+     case 'WARN': return 'text-yellow-400';
+     case 'ERROR': return 'text-red-400';
+     case 'FATAL': return 'text-red-600';
+     default: return 'text-gray-400';
+   }
+ };
+
  const connectLogStream = () => {
    if (eventSource.value) {
      eventSource.value.close();
@@ -144,31 +164,3 @@
     </div>
  </template>
 
- <script>
- export default {
-   methods: {
-     formatDate(dateStr) {
-       // Handle "timestamp" field from backend or "time" if key changes
-       const date = new Date(dateStr);
-       // Check if date is valid
-       if (isNaN(date.getTime())) {
-           return dateStr || '';
-       }
-       return date.toLocaleString('de-DE', {
-         hour: '2-digit',
-         minute: '2-digit',
-         second: '2-digit',
-       });
-     },
-     getLevelColor(level) {
-       switch(level) {
-         case 'INFO': return 'text-green-400';
-         case 'WARN': return 'text-yellow-400';
-         case 'ERROR': return 'text-red-400';
-         case 'FATAL': return 'text-red-600';
-         default: return 'text-gray-400';
-       }
-     },
-   },
- };
- </script>
