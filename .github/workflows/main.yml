@@ -71,7 +71,7 @@ jobs:
           go test -v -race -coverprofile=coverage.txt -covermode=atomic $PACKAGES
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.txt
         continue-on-error: true
