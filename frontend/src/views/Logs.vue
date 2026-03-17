@@ -8,16 +8,16 @@
  const isConnected = ref(false);
  const autoScroll = ref(localStorage.getItem('logsAutoScroll') !== 'false');
  const logsContainer = ref(null);
- const eventSource = ref(null);
+ let disconnectFn = null;
 
  const toggleAutoScroll = () => {
-   autoScroll.value = !autoScroll.value;
    localStorage.setItem('logsAutoScroll', autoScroll.value.toString());
  };
 
  const formatDate = (dateStr) => {
+   if (!dateStr) return '';
    const date = new Date(dateStr);
-   if (isNaN(date.getTime())) return dateStr || '';
+   if (isNaN(date.getTime())) return dateStr;
    return date.toLocaleString('de-DE', {
      hour: '2-digit',
      minute: '2-digit',
@@ -35,72 +35,51 @@
    }
  };
 
- const connectLogStream = () => {
-   if (eventSource.value) {
-     eventSource.value.close();
-   }
-
-   try {
-     eventSource.value = new EventSource('/api/logs/stream', { withCredentials: true });
-
-     eventSource.value.onopen = () => {
-       isConnected.value = true;
-     };
-
-     eventSource.value.onmessage = (event) => {
-       try {
-         const parsed = JSON.parse(event.data);
-         if (Array.isArray(parsed)) {
-           logs.value = parsed;
-         } else if (parsed) {
-           logs.value.push(parsed);
-           if (logs.value.length > 500) {
-             logs.value = logs.value.slice(-500);
-           }
-         }
-       } catch (e) {
-         console.error('Failed to parse log data', e);
-       }
-     };
-
-     eventSource.value.onerror = () => {
-       isConnected.value = false;
-       if (eventSource.value) {
-         eventSource.value.close();
-         eventSource.value = null;
-       }
-       setTimeout(connectLogStream, 5000);
-     };
-   } catch (err) {
-     console.error('Failed to connect to log stream', err);
-     isConnected.value = false;
-   }
- };
-
  const fetchInitialLogs = async () => {
    try {
      const res = await axios.get('/api/logs');
-     logs.value = res.data;
+     logs.value = res.data || [];
    } catch (e) {
      console.error('Failed to fetch initial logs', e);
    }
  };
 
- onMounted(() => {
-   fetchInitialLogs();
-   connectLogStream();
+ onMounted(async () => {
+   await fetchInitialLogs();
+
+   const { data, disconnect, isConnected: connected } = useEventSource('/api/logs/stream');
+   disconnectFn = disconnect;
+
+   watch(connected, (val) => {
+     isConnected.value = val;
+   });
+
+   watch(data, (eventData) => {
+     if (!eventData) return;
+
+     if (Array.isArray(eventData)) {
+       logs.value = eventData;
+     } else {
+       logs.value.push(eventData);
+       if (logs.value.length > 500) {
+         logs.value = logs.value.slice(-500);
+       }
+     }
+   }, { deep: true });
  });
 
  onUnmounted(() => {
-   if (eventSource.value) {
-     eventSource.value.close();
+   if (disconnectFn) {
+     disconnectFn();
    }
  });
 
  watch(logs, () => {
    if (autoScroll.value && logsContainer.value) {
      nextTick(() => {
-       logsContainer.value.scrollTop = logsContainer.value.scrollHeight;
+       if (logsContainer.value) {
+         logsContainer.value.scrollTop = logsContainer.value.scrollHeight;
+       }
      });
    }
  }, { deep: true });
@@ -113,8 +92,8 @@
         <div class="flex flex-wrap items-center gap-2 sm:gap-4 w-full sm:w-auto">
           <div class="flex items-center gap-2 flex-1 sm:flex-none">
             <div
-              class="w-2 h-2 rounded-full shrink-0"
-              :class="isConnected ? 'bg-green-500' : 'bg-red-500'"
+              class="w-2 h-2 rounded-full shrink-0 transition-colors duration-300"
+              :class="isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'"
             ></div>
             <span class="text-base text-gray-400 truncate">
               {{ isConnected ? 'Connected' : 'Disconnected' }}
@@ -127,7 +106,7 @@
           </div>
           <button
             @click="fetchInitialLogs"
-            class="px-3 py-2 sm:py-1 bg-blue-600 text-white text-base rounded hover:bg-blue-700 flex-1 sm:flex-none"
+            class="px-3 py-2 sm:py-1 bg-blue-600 text-white text-base rounded hover:bg-blue-700 transition-colors flex-1 sm:flex-none"
           >
             Refresh
           </button>
@@ -144,12 +123,12 @@
       <div
         v-else
         ref="logsContainer"
-        class="bg-gray-800 rounded-lg p-2 sm:p-4 font-mono text-base h-[60vh] sm:h-[600px] overflow-y-auto break-all sm:break-normal"
+        class="bg-gray-800 rounded-lg p-2 sm:p-4 font-mono text-base h-[60vh] sm:h-[600px] overflow-y-auto break-all sm:break-normal border border-gray-700"
       >
         <div
           v-for="(log, index) in logs"
           :key="index"
-          class="mb-1 border-b border-gray-700 pb-1 flex flex-col sm:block"
+          class="mb-1 border-b border-gray-700/50 pb-1 flex flex-col sm:block hover:bg-gray-700/30 px-1 rounded transition-colors"
         >
           <div>
               <span class="text-gray-400">[{{ formatDate(log.timestamp) }}]</span>
@@ -163,4 +142,3 @@
       </div>
     </div>
  </template>
-

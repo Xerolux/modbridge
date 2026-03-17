@@ -117,37 +117,36 @@ export const validators = {
   validateProxyConfig: (config) => {
     const errors = {};
 
-    if (!config.name) {
-      errors.name = validators.validateName(config.name);
+    const nameError = validators.validateName(config.name);
+    if (nameError) errors.name = nameError;
+
+    const listenError = validators.validatePort(config.listen_addr);
+    if (listenError) errors.listen_addr = listenError;
+
+    const targetError = validators.validatePort(config.target_addr);
+    if (targetError) errors.target_addr = targetError;
+
+    if (config.connection_timeout !== undefined && config.connection_timeout !== '') {
+      const timeoutError = validators.validateTimeout(config.connection_timeout.toString());
+      if (timeoutError) errors.connection_timeout = timeoutError;
     }
 
-    if (!config.listen_addr) {
-      errors.listen_addr = validators.validatePort(config.listen_addr);
+    if (config.read_timeout !== undefined && config.read_timeout !== '') {
+      const readError = validators.validateTimeout(config.read_timeout.toString());
+      if (readError) errors.read_timeout = readError;
     }
 
-    if (!config.target_addr) {
-      errors.target_addr = validators.validatePort(config.target_addr);
+    if (config.max_retries !== undefined && config.max_retries !== '') {
+      const retryError = validators.validateMaxRetries(config.max_retries.toString());
+      if (retryError) errors.max_retries = retryError;
     }
 
-    if (config.connection_timeout !== undefined) {
-      errors.connection_timeout = validators.validateTimeout(config.connection_timeout.toString());
+    if (config.max_read_size !== undefined && config.max_read_size !== '') {
+      const sizeError = validators.validateMaxReadSize(config.max_read_size.toString());
+      if (sizeError) errors.max_read_size = sizeError;
     }
 
-    if (config.read_timeout !== undefined) {
-      errors.read_timeout = validators.validateTimeout(config.read_timeout.toString());
-    }
-
-    if (config.max_retries !== undefined) {
-      errors.max_retries = validators.validateMaxRetries(config.max_retries.toString());
-    }
-
-    if (config.max_read_size !== undefined) {
-      errors.max_read_size = validators.validateMaxReadSize(config.max_read_size.toString());
-    }
-
-    // Check if any errors
-    const hasErrors = Object.values(errors).some(error => error !== null);
-    return hasErrors ? errors : null;
+    return Object.keys(errors).length > 0 ? errors : null;
   }
 };
 
