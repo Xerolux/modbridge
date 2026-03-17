@@ -126,7 +126,7 @@ const AUTO_REFRESH_INTERVAL = 10000;
 
 onMounted(async () => {
     try {
-        await fetchData();
+        await fetchData(true);
 
         const isMobile = window.innerWidth <= 640;
 
@@ -136,17 +136,16 @@ onMounted(async () => {
             minRow: 1,
             margin: 3,
             column: 6,
-            disableOneColumnMode: false,
-            oneColumnModeDomSort: true,
-            oneColumnModeWidth: 640,
             disableDrag: isMobile,
             disableResize: isMobile,
-            breakpointForNColumn: {
-                1: { width: 640, column: 1 },
-                2: { width: 768, column: 2 },
-                3: { width: 1024, column: 3 },
-                4: { width: 1280, column: 4 },
-                6: { width: 1536, column: 6 }
+            columnOpts: {
+                breakpoints: [
+                    { w: 640, c: 1 },
+                    { w: 768, c: 2 },
+                    { w: 1024, c: 3 },
+                    { w: 1280, c: 4 },
+                    { w: 1536, c: 6 }
+                ]
             }
         });
 
@@ -220,7 +219,7 @@ onMounted(async () => {
 
         // Set up auto-refresh interval as fallback
         refreshInterval = setInterval(async () => {
-            await fetchData();
+            await fetchData(false);
         }, AUTO_REFRESH_INTERVAL);
 
     } catch (err) {
@@ -306,15 +305,19 @@ const saveLayout = () => {
     localStorage.setItem('dashboard_layout', JSON.stringify(layout));
 };
 
-const fetchData = async () => {
+const fetchData = async (isInitial = false) => {
     try {
-        loading.value = true;
+        if (isInitial) {
+            loading.value = true;
+        }
         error.value = null;
         errorMessage.value = '';
         const res = await axios.get('/api/proxies');
         proxies.value = res.data;
         proxyOptions.value = res.data.map(p => ({ name: p.name, id: p.id }));
-        loading.value = false;
+        if (isInitial) {
+            loading.value = false;
+        }
     } catch (e) {
         const errorData = e.response?.data;
         let msg = 'Unbekannter Fehler';
@@ -327,7 +330,9 @@ const fetchData = async () => {
 
         error.value = true;
         errorMessage.value = msg;
-        loading.value = false;
+        if (isInitial) {
+            loading.value = false;
+        }
     }
 };
 
