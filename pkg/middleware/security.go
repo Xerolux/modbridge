@@ -36,7 +36,9 @@ func (m *SecurityMiddleware) Middleware(next http.HandlerFunc) http.HandlerFunc 
 		w.Header().Set("X-XSS-Protection", "1; mode=block")
 
 		// Content-Security-Policy
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws: wss:;")
+		// unsafe-eval removed from script-src; a pre-built Vue 3/Vite SPA does not need it.
+		// unsafe-inline is kept for style-src only (PrimeVue/TailwindCSS inject inline styles).
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws: wss:;")
 
 		// Referrer-Policy
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")

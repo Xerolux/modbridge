@@ -25,10 +25,11 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       await axios.post('/api/login', { password })
       isAuthenticated.value = true
-      return true
+      return { success: true }
     } catch (e) {
       isAuthenticated.value = false
-      return false
+      const message = e.response?.data?.trim() || e.message || 'Login failed'
+      return { success: false, message }
     }
   }
 

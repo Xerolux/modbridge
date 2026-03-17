@@ -27,13 +27,19 @@ var (
 	BuildTime = "unknown"
 )
 
-// generateSecurePassword generates a cryptographically secure random password
+// generateSecurePassword generates a cryptographically secure random password.
+// It produces exactly `length` URL-safe base64 characters without truncating entropy:
+// (length+3)/4*3 bytes → base64 → at least `length` characters, no wasted randomness.
 func generateSecurePassword(length int) string {
-	bytes := make([]byte, length)
-	if _, err := rand.Read(bytes); err != nil {
+	// Calculate the minimum bytes needed so base64 output is >= length chars.
+	// base64: 3 bytes → 4 chars, so ceil(length/4)*3 bytes.
+	byteCount := (length + 3) / 4 * 3
+	b := make([]byte, byteCount)
+	if _, err := rand.Read(b); err != nil {
 		panic("failed to generate random password: " + err.Error())
 	}
-	return base64.URLEncoding.EncodeToString(bytes)[:length]
+	encoded := base64.RawURLEncoding.EncodeToString(b) // no padding
+	return encoded[:length]
 }
 
 func main() {
