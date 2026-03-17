@@ -130,6 +130,7 @@
 </template>
 
 <script setup>
+ import { ref } from 'vue';
  import { useAppStore } from '../stores/appStore';
  import { VueDraggable } from 'vue-draggable-plus';
  import { TrashIcon, GripVerticalIcon } from 'lucide-vue-next';

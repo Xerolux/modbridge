@@ -1,4 +1,4 @@
- import { createRouter, createWebHashHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
  import { useAuthStore } from '../stores/auth'
 
  // Lazy load components for better performance

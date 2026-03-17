@@ -2,160 +2,268 @@
   <div class="p-4 sm:p-6 flex flex-col gap-4">
     <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
       <h1 class="text-xl sm:text-2xl font-bold text-gray-200">User Management</h1>
-      <button @click="showCreateModal = true" class="w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 min-h-[44px] text-sm font-medium">
-        Add User
-      </button>
+      <Button @click="openCreateModal" icon="pi pi-plus" label="Add User" class="w-full sm:w-auto" />
     </div>
 
-    <div class="bg-gray-800 rounded-lg shadow overflow-x-auto border border-gray-700">
-      <table class="min-w-full">
-        <thead class="bg-gray-900">
-          <tr>
-            <th class="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Username</th>
-            <th class="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase hidden sm:table-cell">Email</th>
-            <th class="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Role</th>
-            <th class="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
-            <th class="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-700">
-          <tr v-for="user in users" :key="user.id" class="hover:bg-gray-700/50 transition-colors">
-            <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-gray-200">{{ user.username }}</td>
-            <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-gray-300 hidden sm:table-cell">{{ user.email }}</td>
-            <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
-              <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
-                :class="getRoleBadgeClass(user.role)">
-                {{ user.role }}
-              </span>
-            </td>
-            <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
-              <span v-if="user.enabled" class="text-green-400">Enabled</span>
-              <span v-else class="text-red-400">Disabled</span>
-            </td>
-            <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-sm">
-              <button @click="editUser(user)" class="text-blue-400 hover:text-blue-300 mr-3 min-h-[44px] px-1">Edit</button>
-              <button @click="deleteUser(user)" class="text-red-400 hover:text-red-300 min-h-[44px] px-1">Delete</button>
-            </td>
-          </tr>
-          <tr v-if="users.length === 0">
-            <td colspan="5" class="px-6 py-8 text-center text-gray-500">No users found</td>
-          </tr>
-        </tbody>
-      </table>
+    <div v-if="loading" class="flex justify-center py-12">
+      <i class="pi pi-spin pi-spinner text-4xl text-blue-500"></i>
     </div>
 
-    <!-- Create/Edit Modal -->
-    <div v-if="showCreateModal || showEditModal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 px-4">
-      <div class="bg-gray-800 p-6 rounded-lg w-full max-w-md border border-gray-700 shadow-xl">
-        <h2 class="text-xl font-bold mb-4 text-gray-200">{{ showEditModal ? 'Edit User' : 'Create User' }}</h2>
-        <form @submit.prevent="saveUser">
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-300 mb-1">Username</label>
-            <input v-model="formData.username" type="text" required class="mt-1 block w-full border border-gray-600 bg-gray-700 text-white rounded-md p-2 min-h-[44px]">
+    <div v-else-if="error" class="flex flex-col items-center justify-center py-12">
+      <i class="pi pi-exclamation-triangle text-4xl text-red-500 mb-4"></i>
+      <p class="text-red-400">{{ error }}</p>
+      <Button @click="loadUsers" label="Retry" class="mt-4" />
+    </div>
+
+    <DataTable
+      v-else
+      :value="users"
+      :paginator="users.length > 10"
+      :rows="10"
+      :rowsPerPageOptions="[10, 25, 50]"
+      stripedRows
+      responsiveLayout="scroll"
+      class="p-datatable-sm"
+    >
+      <Column field="username" header="Username" sortable>
+        <template #body="{ data }">
+          <div class="flex items-center gap-2">
+            <i class="pi pi-user text-gray-400"></i>
+            <span class="text-gray-200">{{ data.username }}</span>
           </div>
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-300 mb-1">Email</label>
-            <input v-model="formData.email" type="email" class="mt-1 block w-full border border-gray-600 bg-gray-700 text-white rounded-md p-2 min-h-[44px]">
+        </template>
+      </Column>
+      <Column field="email" header="Email" sortable class="hidden sm:table-cell">
+        <template #body="{ data }">
+          <span class="text-gray-300">{{ data.email || '-' }}</span>
+        </template>
+      </Column>
+      <Column field="role" header="Role" sortable>
+        <template #body="{ data }">
+          <Tag :value="data.role" :severity="getRoleSeverity(data.role)" />
+        </template>
+      </Column>
+      <Column field="enabled" header="Status" sortable>
+        <template #body="{ data }">
+          <Tag
+            :value="data.enabled ? 'Enabled' : 'Disabled'"
+            :severity="data.enabled ? 'success' : 'danger'"
+          />
+        </template>
+      </Column>
+      <Column header="Actions" :exportable="false">
+        <template #body="{ data }">
+          <div class="flex gap-2">
+            <Button
+              icon="pi pi-pencil"
+              size="small"
+              text
+              @click="editUser(data)"
+              v-tooltip="'Edit user'"
+            />
+            <Button
+              icon="pi pi-trash"
+              size="small"
+              text
+              severity="danger"
+              @click="confirmDeleteUser(data)"
+              v-tooltip="'Delete user'"
+            />
           </div>
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-300 mb-1">Role</label>
-            <select v-model="formData.role" class="mt-1 block w-full border border-gray-600 bg-gray-700 text-white rounded-md p-2 min-h-[44px]">
-              <option value="admin">Admin</option>
-              <option value="operator">Operator</option>
-              <option value="viewer">Viewer</option>
-              <option value="auditor">Auditor</option>
-            </select>
-          </div>
-          <div class="mb-4" v-if="!showEditModal">
-            <label class="block text-sm font-medium text-gray-300 mb-1">Password</label>
-            <input v-model="formData.password" type="password" required class="mt-1 block w-full border border-gray-600 bg-gray-700 text-white rounded-md p-2 min-h-[44px]">
-          </div>
-          <div class="flex justify-end space-x-2">
-            <button type="button" @click="closeModal" class="px-4 py-2 border border-gray-600 text-gray-300 rounded hover:bg-gray-700 min-h-[44px]">Cancel</button>
-            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 min-h-[44px]">Save</button>
-          </div>
-        </form>
+        </template>
+      </Column>
+      <template #empty>
+        <div class="text-center py-8 text-gray-500">
+          <i class="pi pi-users text-4xl mb-2 block"></i>
+          <p>No users found</p>
+        </div>
+      </template>
+    </DataTable>
+
+    <Dialog
+      v-model:visible="showModal"
+      :header="isEditMode ? 'Edit User' : 'Create User'"
+      modal
+      class="w-full max-w-md mx-4"
+    >
+      <div class="flex flex-col gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-1">Username</label>
+          <InputText v-model="formData.username" class="w-full" :disabled="isEditMode" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-1">Email</label>
+          <InputText v-model="formData.email" type="email" class="w-full" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-1">Role</label>
+          <Dropdown
+            v-model="formData.role"
+            :options="roles"
+            optionLabel="label"
+            optionValue="value"
+            class="w-full"
+          />
+        </div>
+        <div v-if="!isEditMode">
+          <label class="block text-sm font-medium text-gray-300 mb-1">Password</label>
+          <Password v-model="formData.password" :feedback="true" toggleMask class="w-full" />
+        </div>
+        <div class="flex items-center gap-2">
+          <Checkbox v-model="formData.enabled" binary inputId="enabled-cb" />
+          <label for="enabled-cb" class="text-sm text-gray-300">Enabled</label>
+        </div>
       </div>
-    </div>
+      <template #footer>
+        <Button label="Cancel" severity="secondary" @click="closeModal" />
+        <Button :label="isEditMode ? 'Update' : 'Create'" @click="saveUser" :loading="saving" />
+      </template>
+    </Dialog>
+
+    <Toast />
+    <ConfirmDialog />
   </div>
 </template>
 
-<script>
+<script setup>
+import { ref, onMounted } from 'vue';
 import axios from '../../axios.js';
+import DataTable from 'primevue/datatable';
+import Column from 'primevue/column';
+import Button from 'primevue/button';
+import Dialog from 'primevue/dialog';
+import InputText from 'primevue/inputtext';
+import Dropdown from 'primevue/dropdown';
+import Password from 'primevue/password';
+import Checkbox from 'primevue/checkbox';
+import Tag from 'primevue/tag';
+import Toast from 'primevue/toast';
+import ConfirmDialog from 'primevue/confirmdialog';
+import { useToast } from 'primevue/usetoast';
+import { useConfirm } from 'primevue/useconfirm';
 
-export default {
-  name: 'Users',
-  data() {
-    return {
-      users: [],
-      showCreateModal: false,
-      showEditModal: false,
-      formData: {
-        username: '',
-        email: '',
-        role: 'viewer',
-        password: ''
-      }
-    };
-  },
-  async mounted() {
-    await this.loadUsers();
-  },
-  methods: {
-    async loadUsers() {
-      try {
-        const response = await axios.get('/api/users');
-        this.users = response.data;
-      } catch (error) {
-        console.error('Failed to load users:', error);
-      }
-    },
-    async saveUser() {
-      try {
-        if (this.showEditModal) {
-          await axios.put(`/api/users/${this.formData.id}`, this.formData);
-        } else {
-          await axios.post('/api/users', this.formData);
-        }
-        this.closeModal();
-        await this.loadUsers();
-      } catch (error) {
-        console.error('Failed to save user:', error);
-      }
-    },
-    editUser(user) {
-      this.formData = { ...user };
-      this.showEditModal = true;
-    },
-    async deleteUser(user) {
-      if (confirm(`Are you sure you want to delete user ${user.username}?`)) {
-        try {
-          await axios.delete(`/api/users/${user.id}`);
-          await this.loadUsers();
-        } catch (error) {
-          console.error('Failed to delete user:', error);
-        }
-      }
-    },
-    closeModal() {
-      this.showCreateModal = false;
-      this.showEditModal = false;
-      this.formData = {
-        username: '',
-        email: '',
-        role: 'viewer',
-        password: ''
-      };
-    },
-    getRoleBadgeClass(role) {
-      const classes = {
-        admin: 'bg-purple-900/50 text-purple-300',
-        operator: 'bg-blue-900/50 text-blue-300',
-        viewer: 'bg-green-900/50 text-green-300',
-        auditor: 'bg-yellow-900/50 text-yellow-300'
-      };
-      return classes[role] || 'bg-gray-700 text-gray-300';
-    }
+const users = ref([]);
+const loading = ref(true);
+const error = ref(null);
+const saving = ref(false);
+const showModal = ref(false);
+const isEditMode = ref(false);
+const toast = useToast();
+const confirm = useConfirm();
+
+const formData = ref({
+  id: null,
+  username: '',
+  email: '',
+  role: 'viewer',
+  password: '',
+  enabled: true
+});
+
+const roles = [
+  { label: 'Admin', value: 'admin' },
+  { label: 'Operator', value: 'operator' },
+  { label: 'Viewer', value: 'viewer' },
+  { label: 'Auditor', value: 'auditor' }
+];
+
+const loadUsers = async () => {
+  loading.value = true;
+  error.value = null;
+  try {
+    const response = await axios.get('/api/users');
+    users.value = response.data || [];
+  } catch (e) {
+    error.value = e.response?.data || 'Failed to load users';
+    console.error('Failed to load users:', e);
+  } finally {
+    loading.value = false;
   }
 };
+
+const openCreateModal = () => {
+  isEditMode.value = false;
+  formData.value = {
+    id: null,
+    username: '',
+    email: '',
+    role: 'viewer',
+    password: '',
+    enabled: true
+  };
+  showModal.value = true;
+};
+
+const editUser = (user) => {
+  isEditMode.value = true;
+  formData.value = { ...user, password: '' };
+  showModal.value = true;
+};
+
+const saveUser = async () => {
+  saving.value = true;
+  try {
+    if (isEditMode.value) {
+      const updateData = { ...formData.value };
+      delete updateData.password;
+      await axios.put(`/api/users/${formData.value.id}`, updateData);
+      toast.add({ severity: 'success', summary: 'Success', detail: 'User updated', life: 3000 });
+    } else {
+      await axios.post('/api/users', formData.value);
+      toast.add({ severity: 'success', summary: 'Success', detail: 'User created', life: 3000 });
+    }
+    closeModal();
+    await loadUsers();
+  } catch (e) {
+    const msg = e.response?.data || 'Failed to save user';
+    toast.add({ severity: 'error', summary: 'Error', detail: msg, life: 5000 });
+  } finally {
+    saving.value = false;
+  }
+};
+
+const confirmDeleteUser = (user) => {
+  confirm.require({
+    message: `Are you sure you want to delete user "${user.username}"?`,
+    header: 'Confirm Delete',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Delete',
+    rejectLabel: 'Cancel',
+    accept: async () => {
+      try {
+        await axios.delete(`/api/users/${user.id}`);
+        toast.add({ severity: 'success', summary: 'Success', detail: 'User deleted', life: 3000 });
+        await loadUsers();
+      } catch (e) {
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to delete user', life: 5000 });
+      }
+    }
+  });
+};
+
+const closeModal = () => {
+  showModal.value = false;
+  formData.value = {
+    id: null,
+    username: '',
+    email: '',
+    role: 'viewer',
+    password: '',
+    enabled: true
+  };
+};
+
+const getRoleSeverity = (role) => {
+  const severities = {
+    admin: 'danger',
+    operator: 'info',
+    viewer: 'success',
+    auditor: 'warn'
+  };
+  return severities[role] || 'secondary';
+};
+
+onMounted(() => {
+  loadUsers();
+});
 </script>

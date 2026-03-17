@@ -1,100 +1,169 @@
 <template>
-  <div class="p-6">
-    <div class="flex justify-between items-center mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Audit Log</h1>
-      <button @click="exportLogs" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
-        Export JSON
-      </button>
+  <div class="p-2 sm:p-4 flex flex-col gap-4 w-full">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-2 sm:mb-4">
+      <h1 class="text-xl sm:text-2xl font-bold text-gray-200">Audit Log</h1>
+      <div class="flex gap-2 w-full sm:w-auto">
+        <Button
+          label="Export JSON"
+          icon="pi pi-download"
+          severity="success"
+          @click="exportLogs"
+          class="flex-1 sm:flex-none"
+        />
+        <Button
+          label="Refresh"
+          icon="pi pi-refresh"
+          @click="loadLogs"
+          class="flex-1 sm:flex-none"
+        />
+      </div>
     </div>
 
-    <div class="bg-white rounded-lg shadow overflow-x-auto">
-      <table class="min-w-full">
-        <thead class="bg-gray-50">
-          <tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Resource</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th>
-          </tr>
-        </thead>
-        <tbody class="bg-white divide-y divide-gray-200">
-          <tr v-for="log in auditLogs" :key="log.id">
-            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ formatTimestamp(log.timestamp) }}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ log.username || log.user_id }}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">{{ log.action }}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm">
-              {{ log.resource_type }}{{ log.resource_id ? ':' + log.resource_id : '' }}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm">
-              <span v-if="log.success" class="text-green-600">✓ Success</span>
-              <span v-else class="text-red-600">✗ Failed</span>
-            </td>
-            <td class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">{{ log.details }}</td>
-          </tr>
-        </tbody>
-      </table>
+    <div v-if="loading" class="flex justify-center py-12">
+      <i class="pi pi-spin pi-spinner text-4xl text-blue-500"></i>
     </div>
 
-    <div class="mt-4 flex justify-center space-x-2">
-      <button @click="prevPage" :disabled="offset === 0" class="px-4 py-2 border rounded disabled:opacity-50">Previous</button>
-      <span class="px-4 py-2">Page {{ Math.floor(offset / limit) + 1 }}</span>
-      <button @click="nextPage" class="px-4 py-2 border rounded">Next</button>
+    <div v-else-if="error" class="flex flex-col items-center justify-center py-12">
+      <i class="pi pi-exclamation-triangle text-4xl text-red-500 mb-4"></i>
+      <p class="text-red-400">{{ error }}</p>
+      <Button @click="loadLogs" label="Retry" class="mt-4" />
     </div>
+
+    <div v-else class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+      <DataTable
+        :value="auditLogs"
+        :paginator="auditLogs.length >= limit"
+        :rows="limit"
+        :rowsPerPageOptions="[25, 50, 100]"
+        stripedRows
+        responsiveLayout="scroll"
+        class="p-datatable-sm"
+        :globalFilterFields="['action', 'username', 'resource_type']"
+      >
+        <Column field="timestamp" header="Timestamp" sortable>
+          <template #body="{ data }">
+            <span class="text-gray-300 text-sm">{{ formatTimestamp(data.timestamp) }}</span>
+          </template>
+        </Column>
+        <Column field="username" header="User" sortable>
+          <template #body="{ data }">
+            <div class="flex items-center gap-2">
+              <i class="pi pi-user text-gray-400 text-sm"></i>
+              <span class="text-gray-200">{{ data.username || data.user_id || 'System' }}</span>
+            </div>
+          </template>
+        </Column>
+        <Column field="action" header="Action" sortable>
+          <template #body="{ data }">
+            <Tag :value="data.action" :severity="getActionSeverity(data.action)" />
+          </template>
+        </Column>
+        <Column field="resource" header="Resource">
+          <template #body="{ data }">
+            <span class="text-gray-300">
+              {{ data.resource_type }}{{ data.resource_id ? ':' + data.resource_id : '' }}
+            </span>
+          </template>
+        </Column>
+        <Column field="success" header="Status" sortable>
+          <template #body="{ data }">
+            <Tag
+              :value="data.success ? 'Success' : 'Failed'"
+              :severity="data.success ? 'success' : 'danger'"
+            />
+          </template>
+        </Column>
+        <Column field="details" header="Details">
+          <template #body="{ data }">
+            <span class="text-gray-400 text-sm truncate block max-w-[200px]" :title="data.details">
+              {{ data.details || '-' }}
+            </span>
+          </template>
+        </Column>
+        <template #empty>
+          <div class="text-center py-8 text-gray-500">
+            <i class="pi pi-history text-4xl mb-2 block"></i>
+            <p>No audit logs found</p>
+          </div>
+        </template>
+      </DataTable>
+    </div>
+
+    <Toast />
   </div>
 </template>
 
-<script>
+<script setup>
+import { ref, onMounted } from 'vue';
 import axios from '../../axios.js';
+import DataTable from 'primevue/datatable';
+import Column from 'primevue/column';
+import Button from 'primevue/button';
+import Tag from 'primevue/tag';
+import Toast from 'primevue/toast';
+import { useToast } from 'primevue/usetoast';
 
-export default {
-  name: 'Audit',
-  data() {
-    return {
-      auditLogs: [],
-      limit: 50,
-      offset: 0
-    };
-  },
-  async mounted() {
-    await this.loadLogs();
-  },
-  methods: {
-    async loadLogs() {
-      try {
-        const response = await axios.get(`/api/audit/logs?limit=${this.limit}&offset=${this.offset}`);
-        this.auditLogs = response.data;
-      } catch (error) {
-        console.error('Failed to load audit logs:', error);
-      }
-    },
-    async exportLogs() {
-      try {
-        const response = await axios.get('/api/audit/logs/export');
-        const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'audit_logs_' + new Date().toISOString() + '.json';
-        a.click();
-      } catch (error) {
-        console.error('Failed to export logs:', error);
-      }
-    },
-    prevPage() {
-      if (this.offset >= this.limit) {
-        this.offset -= this.limit;
-        this.loadLogs();
-      }
-    },
-    nextPage() {
-      this.offset += this.limit;
-      this.loadLogs();
-    },
-    formatTimestamp(ts) {
-      return new Date(ts).toLocaleString();
-    }
+const auditLogs = ref([]);
+const loading = ref(true);
+const error = ref(null);
+const limit = ref(50);
+const toast = useToast();
+
+const loadLogs = async () => {
+  loading.value = true;
+  error.value = null;
+  try {
+    const response = await axios.get(`/api/audit/logs?limit=${limit.value}&offset=0`);
+    auditLogs.value = response.data || [];
+  } catch (e) {
+    error.value = e.response?.data || 'Failed to load audit logs';
+    console.error('Failed to load audit logs:', e);
+  } finally {
+    loading.value = false;
   }
 };
+
+const exportLogs = async () => {
+  try {
+    const response = await axios.get('/api/audit/logs/export');
+    const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `audit_logs_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Audit logs exported', life: 3000 });
+  } catch (e) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to export logs', life: 5000 });
+  }
+};
+
+const formatTimestamp = (ts) => {
+  if (!ts) return '-';
+  return new Date(ts).toLocaleString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+};
+
+const getActionSeverity = (action) => {
+  if (!action) return 'secondary';
+  const actionLower = action.toLowerCase();
+  if (actionLower.includes('delete') || actionLower.includes('remove')) return 'danger';
+  if (actionLower.includes('create') || actionLower.includes('add')) return 'success';
+  if (actionLower.includes('update') || actionLower.includes('edit')) return 'info';
+  if (actionLower.includes('login') || actionLower.includes('logout')) return 'warn';
+  return 'secondary';
+};
+
+onMounted(() => {
+  loadLogs();
+});
 </script>

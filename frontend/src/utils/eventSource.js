@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { ref, onScopeDispose } from 'vue';
 
 export function useEventSource(url, options = {}) {
   const data = ref(null);
@@ -10,10 +10,14 @@ export function useEventSource(url, options = {}) {
   let reconnectTimeout = null;
 
   const connect = () => {
-    // Clear any existing timeout
     if (reconnectTimeout) {
       clearTimeout(reconnectTimeout);
       reconnectTimeout = null;
+    }
+
+    if (eventSource.value) {
+      eventSource.value.close();
+      eventSource.value = null;
     }
 
     try {
@@ -25,27 +29,25 @@ export function useEventSource(url, options = {}) {
       eventSource.value.onopen = () => {
         isConnected.value = true;
         error.value = null;
-        reconnectAttempts = 0; // Reset on successful connection
+        reconnectAttempts = 0;
       };
 
       eventSource.value.onmessage = (event) => {
         try {
           const parsed = JSON.parse(event.data);
           data.value = parsed;
-        } catch (e) {
+        } catch {
           data.value = event.data;
         }
       };
 
-      eventSource.value.onerror = (err) => {
+      eventSource.value.onerror = () => {
         isConnected.value = false;
-        error.value = err;
 
-        if (eventSource.value.readyState === EventSource.CLOSED) {
+        if (eventSource.value?.readyState === EventSource.CLOSED) {
           return;
         }
 
-        // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
         const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
         reconnectAttempts++;
 
@@ -67,12 +69,18 @@ export function useEventSource(url, options = {}) {
     if (eventSource.value) {
       eventSource.value.close();
       eventSource.value = null;
-      isConnected.value = false;
-      reconnectAttempts = 0;
     }
+    isConnected.value = false;
+    reconnectAttempts = 0;
   };
 
   connect();
+
+  if (typeof onScopeDispose === 'function') {
+    onScopeDispose(() => {
+      disconnect();
+    });
+  }
 
   return {
     data,
