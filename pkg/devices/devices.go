@@ -5,6 +5,7 @@ import (
 	"modbridge/pkg/database"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -29,13 +30,14 @@ type dbWrite struct {
 
 // Tracker tracks connected devices with persistent storage.
 type Tracker struct {
-	mu       sync.RWMutex
-	devices  map[string]*Device // key: IP address (cache)
-	db       *database.DB       // persistent storage
-	dbWrites chan dbWrite       // channel for async database writes
-	wg       sync.WaitGroup     // wait group for graceful shutdown
-	stopOnce sync.Once          // ensures stop is called only once
-	stopped  chan struct{}      // signals when writer is stopped
+	mu        sync.RWMutex
+	devices   map[string]*Device // key: IP address (cache)
+	db        *database.DB       // persistent storage
+	dbWrites  chan dbWrite        // channel for async database writes
+	wg        sync.WaitGroup     // wait group for graceful shutdown
+	stopOnce  sync.Once          // ensures stop is called only once
+	stopped   chan struct{}       // signals when writer is stopped
+	isStopped atomic.Bool        // fast check to skip sends after Stop()
 }
 
 // NewTracker creates a new device tracker with database support.
@@ -103,9 +105,11 @@ func (t *Tracker) processWrite(write dbWrite) {
 func (t *Tracker) Stop() {
 	t.stopOnce.Do(func() {
 		if t.db != nil {
-			// Signal the writer to start draining
+			// Mark as stopped so TrackConnection skips further enqueues.
+			t.isStopped.Store(true)
+			// Signal the writer to start draining.
 			close(t.stopped)
-			// Wait for writer to finish draining
+			// Wait for the writer goroutine to finish draining.
 			t.wg.Wait()
 		}
 	})
@@ -171,7 +175,7 @@ func (t *Tracker) TrackConnection(conn net.Conn, proxyID string) {
 	device.ProxyID = proxyID
 
 	// Queue database writes if available (non-blocking)
-	if t.db != nil {
+	if t.db != nil && !t.isStopped.Load() {
 		dbDevice := &database.Device{
 			IP:           device.IP,
 			MAC:          device.MAC,
@@ -232,7 +236,7 @@ func (t *Tracker) SetDeviceName(ip, name string) error {
 	}
 
 	// Save to database if available (non-blocking)
-	if t.db != nil {
+	if t.db != nil && !t.isStopped.Load() {
 		dbDevice := &database.Device{
 			IP:           device.IP,
 			MAC:          device.MAC,

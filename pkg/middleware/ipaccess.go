@@ -61,8 +61,11 @@ func (ctl *IPAccessControl) Check(ip string) bool {
 		return true
 	}
 
-	ctl.mu.RLock()
-	defer ctl.mu.RUnlock()
+	// Use write lock: we may delete expired bans and update stats counters.
+	ctl.mu.Lock()
+	defer ctl.mu.Unlock()
+
+	ctl.stats.TotalRequests++
 
 	// Check blacklist first
 	if banTime, blocked := ctl.banned[ip]; blocked {
@@ -74,7 +77,8 @@ func (ctl *IPAccessControl) Check(ip string) bool {
 		}
 	}
 
-	// Check whitelist if specified
+	// Check whitelist only if entries are configured.
+	// An empty whitelist means "no whitelist restriction" — allow all non-banned IPs.
 	if len(ctl.config.Whitelist) > 0 {
 		for _, allowed := range ctl.config.Whitelist {
 			if ip == allowed || isSubnet(ip, allowed) {
@@ -82,9 +86,13 @@ func (ctl *IPAccessControl) Check(ip string) bool {
 				return true
 			}
 		}
+		// IP not in whitelist → block
+		ctl.stats.BlockedRequests++
+		return false
 	}
 
-	return false
+	ctl.stats.AllowedRequests++
+	return true
 }
 
 // Ban adds an IP to the blacklist temporarily.
@@ -163,12 +171,17 @@ func (ctl *IPAccessControl) ClearExpiredBans() {
 	}
 }
 
-// isSubnet checks if an IP is in a subnet.
+// isSubnet checks if an IP is contained within a CIDR subnet.
 func isSubnet(ip, cidr string) bool {
-	if len(cidr) < 10 {
-		return ip[:len(cidr)] == cidr
+	_, network, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return false
 	}
-	return false
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return false
+	}
+	return network.Contains(parsedIP)
 }
 
 // Middleware creates a middleware for IP access control.

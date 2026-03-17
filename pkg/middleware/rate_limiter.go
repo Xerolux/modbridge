@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// maxClients limits the number of tracked IPs to prevent unbounded memory growth.
+const maxClients = 10000
+
 // RateLimiter implements a token bucket rate limiter
 type RateLimiter struct {
 	clients map[string]*clientLimiter
@@ -51,6 +54,11 @@ func (rl *RateLimiter) allow(ip string) bool {
 	rl.mu.Lock()
 	limiter, exists := rl.clients[ip]
 	if !exists {
+		// Reject new clients when the map is at capacity to prevent memory exhaustion.
+		if len(rl.clients) >= maxClients {
+			rl.mu.Unlock()
+			return false
+		}
 		limiter = &clientLimiter{
 			tokens:     rl.burst,
 			lastRefill: time.Now(),
@@ -109,13 +117,26 @@ func (rl *RateLimiter) cleanup() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		rl.mu.Lock()
 		now := time.Now()
+		// Collect stale IPs first (under limiter lock), then delete them.
+		var stale []string
+		rl.mu.RLock()
 		for ip, limiter := range rl.clients {
-			if now.Sub(limiter.lastRefill) > 10*time.Minute {
-				delete(rl.clients, ip)
+			limiter.mu.Lock()
+			idle := now.Sub(limiter.lastRefill)
+			limiter.mu.Unlock()
+			if idle > 10*time.Minute {
+				stale = append(stale, ip)
 			}
 		}
-		rl.mu.Unlock()
+		rl.mu.RUnlock()
+
+		if len(stale) > 0 {
+			rl.mu.Lock()
+			for _, ip := range stale {
+				delete(rl.clients, ip)
+			}
+			rl.mu.Unlock()
+		}
 	}
 }

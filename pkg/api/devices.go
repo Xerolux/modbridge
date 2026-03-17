@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"modbridge/pkg/database"
@@ -70,19 +71,26 @@ func (s *Server) handleDeviceHistory(w http.ResponseWriter, r *http.Request) {
 	if format == "csv" {
 		w.Header().Set("Content-Type", "text/csv")
 		w.Header().Set("Content-Disposition", "attachment; filename=device_history.csv")
-		_, _ = w.Write([]byte("IP,Proxy ID,Connected At,Request Count\n"))
 
+		csvWriter := csv.NewWriter(w)
+		if err := csvWriter.Write([]string{"IP", "Proxy ID", "Connected At", "Request Count"}); err != nil {
+			http.Error(w, "Failed to write CSV header", http.StatusInternalServerError)
+			return
+		}
 		if entries, ok := history.([]*database.ConnectionHistoryEntry); ok {
 			for _, entry := range entries {
-				line := fmt.Sprintf("%s,%s,%s,%d\n",
+				if err := csvWriter.Write([]string{
 					entry.DeviceIP,
 					entry.ProxyID,
 					entry.ConnectedAt.Format("2006-01-02 15:04:05"),
-					entry.RequestCount)
-				/* #nosec G705 */
-				w.Write([]byte(line))
+					fmt.Sprintf("%d", entry.RequestCount),
+				}); err != nil {
+					s.log.Error("API", fmt.Sprintf("Failed to write CSV row: %v", err))
+					break
+				}
 			}
 		}
+		csvWriter.Flush()
 		return
 	}
 

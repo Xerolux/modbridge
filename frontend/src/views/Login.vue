@@ -16,12 +16,12 @@ const loading = ref(false);
 const handleLogin = async () => {
     loading.value = true;
     error.value = '';
-    const success = await auth.login(password.value);
+    const result = await auth.login(password.value);
     loading.value = false;
-    if (success) {
+    if (result.success) {
         router.push('/');
     } else {
-        error.value = 'Invalid password';
+        error.value = result.message || 'Invalid password';
     }
 };
 </script>

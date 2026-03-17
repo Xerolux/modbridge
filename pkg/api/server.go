@@ -188,6 +188,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"setup_required": cfg.AdminPassHash == "",
 		"proxies":        s.mgr.GetProxies(),
 	}
+	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(status); err != nil {
 		s.log.Error("API", fmt.Sprintf("Failed to encode status response: %v", err))
 	}
@@ -280,10 +281,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Return login status including force_password_change flag
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":               true,
 		"force_password_change": cfg.ForcePasswordChange,
-	})
+	}); err != nil {
+		s.log.Error("API", fmt.Sprintf("Failed to encode login response: %v", err))
+	}
 }
 
 func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
@@ -326,9 +329,11 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-	})
+	}); err != nil {
+		s.log.Error("API", fmt.Sprintf("Failed to encode change-password response: %v", err))
+	}
 }
 
 func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
@@ -387,7 +392,9 @@ func (s *Server) handleProxiesStream(w http.ResponseWriter, r *http.Request) {
 				s.log.Error("API", fmt.Sprintf("Failed to marshal SSE event: %v", err))
 				continue
 			}
-			fmt.Fprintf(w, "data: %s\n\n", data)
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+				return // Client disconnected
+			}
 			flusher.Flush()
 			timeout.Reset(30 * time.Minute)
 		}
@@ -398,7 +405,10 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 	s.log.Info("API", fmt.Sprintf("handleProxies called: %s %s", r.Method, r.URL.Path))
 
 	if r.Method == http.MethodGet {
-		_ = json.NewEncoder(w).Encode(s.mgr.GetProxies())
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(s.mgr.GetProxies()); err != nil {
+			s.log.Error("API", fmt.Sprintf("Failed to encode proxies response: %v", err))
+		}
 		return
 	}
 
@@ -626,8 +636,14 @@ func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
 		case <-timeout.C:
 			return
 		case entry := <-ch:
-			data, _ := json.Marshal(entry)
-			fmt.Fprintf(w, "data: %s\n\n", data)
+			data, err := json.Marshal(entry)
+			if err != nil {
+				s.log.Error("API", fmt.Sprintf("Failed to marshal log entry: %v", err))
+				continue
+			}
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+				return // Client disconnected
+			}
 			flusher.Flush()
 			timeout.Reset(30 * time.Minute)
 		}
