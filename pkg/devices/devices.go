@@ -33,10 +33,10 @@ type Tracker struct {
 	mu        sync.RWMutex
 	devices   map[string]*Device // key: IP address (cache)
 	db        *database.DB       // persistent storage
-	dbWrites  chan dbWrite        // channel for async database writes
+	dbWrites  chan dbWrite       // channel for async database writes
 	wg        sync.WaitGroup     // wait group for graceful shutdown
 	stopOnce  sync.Once          // ensures stop is called only once
-	stopped   chan struct{}       // signals when writer is stopped
+	stopped   chan struct{}      // signals when writer is stopped
 	isStopped atomic.Bool        // fast check to skip sends after Stop()
 }
 
