@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -578,8 +579,17 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 	case "stop":
 		err = s.mgr.StopProxy(req.ID)
 	case "restart":
-		_ = s.mgr.StopProxy(req.ID)
-		time.Sleep(100 * time.Millisecond)
+		// Stop and wait for confirmation before restarting
+		err = s.mgr.StopProxy(req.ID)
+		if err != nil {
+			break // Don't attempt to start if stop failed
+		}
+		// Wait for proxy to fully stop (max 5 seconds)
+		stopped := s.waitForProxyStopped(req.ID, 5*time.Second)
+		if !stopped {
+			err = fmt.Errorf("timeout waiting for proxy to stop")
+			break
+		}
 		err = s.mgr.StartProxy(req.ID)
 	case "pause":
 		err = s.mgr.PauseProxy(req.ID)
@@ -591,7 +601,12 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 		s.mgr.StopAll()
 	case "restart_all":
 		s.mgr.StopAll()
-		time.Sleep(100 * time.Millisecond)
+		// Wait for all proxies to fully stop (max 5 seconds)
+		time.Sleep(500 * time.Millisecond) // Initial delay for first wave
+		stopped := s.waitForAllProxiesStopped(5 * time.Second)
+		if !stopped {
+			s.log.Error("API", "Timeout waiting for all proxies to stop during restart_all")
+		}
 		s.mgr.StartAll()
 	default:
 		err = fmt.Errorf("unknown action")
@@ -720,4 +735,62 @@ func (s *Server) handleWebPort(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+// waitForProxyStopped waits for a proxy to fully stop before proceeding
+func (s *Server) waitForProxyStopped(id string, timeout time.Duration) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-ticker.C:
+			// Check if proxy has stopped
+			proxies := s.mgr.GetProxies()
+			stopped := true
+			for _, p := range proxies {
+				if p["id"] == id && p["status"] == "Running" {
+					stopped = false
+					break
+				}
+			}
+			if stopped {
+				return true
+			}
+		}
+	}
+}
+
+// waitForAllProxiesStopped waits for all proxies to fully stop before proceeding
+func (s *Server) waitForAllProxiesStopped(timeout time.Duration) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-ticker.C:
+			// Check if all proxies have stopped
+			proxies := s.mgr.GetProxies()
+			allStopped := true
+			for _, p := range proxies {
+				if p["status"] == "Running" {
+					allStopped = false
+					break
+				}
+			}
+			if allStopped {
+				return true
+			}
+		}
+	}
 }
