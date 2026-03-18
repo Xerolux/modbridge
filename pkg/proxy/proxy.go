@@ -15,6 +15,24 @@ import (
 	"time"
 )
 
+// Global connection tracking to prevent system-wide socket exhaustion
+var (
+	// globalActiveConnections tracks total connections across ALL proxies
+	globalActiveConnections int64
+	// globalMaxConnections is the system-wide limit (0 = unlimited)
+	globalMaxConnections int64 = 10000 // Default: 10K connections across all proxies
+)
+
+// setGlobalMaxConnections updates the global connection limit
+func SetGlobalMaxConnections(max int64) {
+	atomic.StoreInt64(&globalMaxConnections, max)
+}
+
+// getGlobalMaxConnections returns the current global connection limit
+func GetGlobalMaxConnections() int64 {
+	return atomic.LoadInt64(&globalMaxConnections)
+}
+
 // getNextRequestID generates a unique request ID
 func (p *ProxyInstance) getNextRequestID() int64 {
 	return atomic.AddInt64(&p.requestID, 1)
@@ -115,6 +133,13 @@ func (p *ProxyInstance) Start() error {
 		return fmt.Errorf("invalid target address: %w", err)
 	}
 
+	// Check if port is available (quick bind test)
+	if err := checkPortAvailable(p.ListenAddr); err != nil {
+		p.Stats.Status = "Error"
+		p.log.Error(p.ID, fmt.Sprintf("Port %s is already in use: %v", p.ListenAddr, err))
+		return fmt.Errorf("port %s already in use: check if another proxy is using this port", p.ListenAddr)
+	}
+
 	l, err := net.Listen("tcp", p.ListenAddr)
 	if err != nil {
 		p.Stats.Status = "Error"
@@ -212,6 +237,24 @@ func (p *ProxyInstance) acceptLoop() {
 			}
 		}
 
+		// Check GLOBAL connection limit first (system-wide across all proxies)
+		maxConns := atomic.LoadInt64(&globalMaxConnections)
+		if maxConns > 0 {
+			currentConns := atomic.LoadInt64(&globalActiveConnections)
+			if currentConns >= maxConns {
+				conn.Close()
+				p.log.Warn(p.ID, fmt.Sprintf("Global connection limit reached (%d), dropping connection", maxConns))
+				continue
+			}
+			// Try to increment global counter
+			if !atomic.CompareAndSwapInt64(&globalActiveConnections, currentConns, currentConns+1) {
+				// Counter changed, retry
+				conn.Close()
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+		}
+
 		// Check connection limit (if configured)
 		p.connSemMu.Lock()
 		sem := p.connSem
@@ -224,6 +267,7 @@ func (p *ProxyInstance) acceptLoop() {
 			case <-time.After(5 * time.Second):
 				// Connection limit reached, drop this connection
 				conn.Close()
+				atomic.AddInt64(&globalActiveConnections, -1) // Release global counter
 				p.log.Info(p.ID, "Connection limit reached, dropping connection")
 				continue
 			}
@@ -237,6 +281,9 @@ func (p *ProxyInstance) acceptLoop() {
 func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 	defer p.wg.Done()
 	defer clientConn.Close()
+
+	// Release global connection counter when done
+	defer atomic.AddInt64(&globalActiveConnections, -1)
 
 	// Release semaphore slot when done
 	if sem != nil {
@@ -439,4 +486,16 @@ func (p *ProxyInstance) forwardRequest(req []byte) ([]byte, error) {
 	}
 
 	return nil, fmt.Errorf("failed after %d retries: %w", p.MaxRetries, lastErr)
+}
+
+// checkPortAvailable quickly tests if a port is available for binding
+func checkPortAvailable(addr string) error {
+	// Try to create a listener on the port
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("port not available: %w", err)
+	}
+	// Immediately close the listener - this is just a test
+	ln.Close()
+	return nil
 }
