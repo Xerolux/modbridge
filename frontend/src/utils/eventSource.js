@@ -1,4 +1,5 @@
 import { ref, onScopeDispose } from 'vue';
+import { EVENT_SOURCE_CONFIG } from './constants';
 
 export function useEventSource(url, options = {}) {
   const data = ref(null);
@@ -48,7 +49,10 @@ export function useEventSource(url, options = {}) {
           return;
         }
 
-        const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+        const backoffDelay = Math.min(
+          EVENT_SOURCE_CONFIG.INITIAL_DELAY * Math.pow(2, reconnectAttempts),
+          EVENT_SOURCE_CONFIG.MAX_DELAY
+        );
         reconnectAttempts++;
 
         reconnectTimeout = setTimeout(() => {
