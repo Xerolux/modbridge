@@ -107,6 +107,7 @@ import Dropdown from 'primevue/dropdown';
 import DashboardWidget from '../components/DashboardWidget.vue';
 import ProxyConfigPanel from '../components/ProxyConfigPanel.vue';
 import { useEventSource } from '../utils/eventSource';
+import { DASHBOARD_CONFIG, BREAKPOINTS, GRID_CONFIG } from '../utils/constants';
 
 const grid = ref(null);
 const proxies = ref([]);
@@ -121,20 +122,17 @@ const errorMessage = ref('');
 let sseDisconnect = null;
 let refreshInterval = null;
 
-// Auto-refresh every 10 seconds
-const AUTO_REFRESH_INTERVAL = 10000;
-
 onMounted(async () => {
     try {
         await fetchData(true);
 
-        const isMobile = window.innerWidth <= 640;
+        const isMobile = window.innerWidth <= BREAKPOINTS.MOBILE;
 
         grid.value = GridStack.init({
-            float: true,
-            cellHeight: 80,
-            minRow: 1,
-            margin: 3,
+            float: DASHBOARD_CONFIG.FLOATING,
+            cellHeight: DASHBOARD_CONFIG.MIN_WIDGET_WIDTH,
+            minRow: GRID_CONFIG.MIN_ROW,
+            margin: GRID_CONFIG.MARGIN,
             column: 6,
             disableDrag: isMobile,
             disableResize: isMobile,
@@ -220,7 +218,7 @@ onMounted(async () => {
         // Set up auto-refresh interval as fallback
         refreshInterval = setInterval(async () => {
             await fetchData(false);
-        }, AUTO_REFRESH_INTERVAL);
+        }, DASHBOARD_CONFIG.AUTO_REFRESH_INTERVAL);
 
     } catch (err) {
         error.value = true;
