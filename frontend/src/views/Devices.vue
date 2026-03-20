@@ -59,7 +59,7 @@
         class="p-datatable-sm"
       >
         <Column field="ip" header="IP-Adresse" sortable></Column>
-        <Column field="name" header="Name" sortable :filterMatchMode="FilterMatchMode.CONTAINS">
+         <Column field="name" header="Name" sortable filterMatchMode="contains">
           <template #body="{ data }">
             <InputText
               v-model="data.name"
@@ -189,24 +189,11 @@ import Dropdown from 'primevue/dropdown';
 import Badge from 'primevue/badge';
 import Dialog from 'primevue/dialog';
 import Toast from 'primevue/toast';
-import { useToast } from 'primevue/usetoast';
-import { useAppStore } from '../stores/appStore';
+ import { useToast } from 'primevue/usetoast';
+ import { useAppStore } from '../stores/appStore';
+ import { formatDate, formatDateTime } from '../utils/helpers';
 
-const FilterMatchMode = {
-  STARTS_WITH: 'startsWith',
-  CONTAINS: 'contains',
-  NOT_CONTAINS: 'notContains',
-  ENDS_WITH: 'endsWith',
-  EQUALS: 'equals',
-  NOT_EQUALS: 'notEquals',
-  IN: 'in',
-  DATE_IS: 'dateIs',
-  DATE_IS_NOT: 'dateIsNot',
-  DATE_BEFORE: 'dateBefore',
-  DATE_AFTER: 'dateAfter'
-};
-
-const store = useAppStore();
+ const store = useAppStore();
 const toast = useToast();
 
 const devices = ref([]);
@@ -337,30 +324,7 @@ const exportDevices = async () => {
   }
 };
 
-const formatDate = (dateStr) => {
-  if (!dateStr) return 'N/A';
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('de-DE', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
-  });
-};
-
-const formatDateTime = (dateStr) => {
-  if (!dateStr) return 'N/A';
-  const date = new Date(dateStr);
-  return date.toLocaleString('de-DE', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
-};
-
-const getConnectionSeverity = (count) => {
+ const getConnectionSeverity = (count) => {
   if (count > 100) return 'danger';
   if (count > 50) return 'warning';
   return 'success';

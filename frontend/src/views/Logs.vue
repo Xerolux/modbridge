@@ -3,6 +3,7 @@
  import { useEventSource } from '../utils/eventSource';
  import Checkbox from 'primevue/checkbox';
  import axios from '../axios.js';
+ import { formatDate, getLogLevelColor } from '../utils/helpers';
 
  const logs = ref([]);
  const isConnected = ref(false);
@@ -12,27 +13,6 @@
 
  const toggleAutoScroll = () => {
    localStorage.setItem('logsAutoScroll', autoScroll.value.toString());
- };
-
- const formatDate = (dateStr) => {
-   if (!dateStr) return '';
-   const date = new Date(dateStr);
-   if (isNaN(date.getTime())) return dateStr;
-   return date.toLocaleString('de-DE', {
-     hour: '2-digit',
-     minute: '2-digit',
-     second: '2-digit',
-   });
- };
-
- const getLevelColor = (level) => {
-   switch (level) {
-     case 'INFO': return 'text-green-400';
-     case 'WARN': return 'text-yellow-400';
-     case 'ERROR': return 'text-red-400';
-     case 'FATAL': return 'text-red-600';
-     default: return 'text-gray-400';
-   }
  };
 
  const fetchInitialLogs = async () => {
@@ -54,18 +34,18 @@
      isConnected.value = val;
    });
 
-   watch(data, (eventData) => {
-     if (!eventData) return;
+    watch(data, (eventData) => {
+      if (!eventData) return;
 
-     if (Array.isArray(eventData)) {
-       logs.value = eventData;
-     } else {
-       logs.value.push(eventData);
-       if (logs.value.length > 500) {
-         logs.value = logs.value.slice(-500);
-       }
-     }
-   }, { deep: true });
+      if (Array.isArray(eventData)) {
+        logs.value = eventData;
+      } else {
+        logs.value.push(eventData);
+        if (logs.value.length > 500) {
+          logs.value = logs.value.slice(-500);
+        }
+      }
+    });
  });
 
  onUnmounted(() => {
@@ -74,15 +54,15 @@
    }
  });
 
- watch(logs, () => {
-   if (autoScroll.value && logsContainer.value) {
-     nextTick(() => {
-       if (logsContainer.value) {
-         logsContainer.value.scrollTop = logsContainer.value.scrollHeight;
-       }
-     });
-   }
- }, { deep: true });
+  watch(logs, (newVal) => {
+    if (autoScroll.value && logsContainer.value && newVal.length > 0) {
+      nextTick(() => {
+        if (logsContainer.value) {
+          logsContainer.value.scrollTop = logsContainer.value.scrollHeight;
+        }
+      });
+    }
+  });
  </script>
 
  <template>
@@ -132,7 +112,7 @@
         >
           <div>
               <span class="text-gray-400">[{{ formatDate(log.timestamp) }}]</span>
-              <span :class="getLevelColor(log.level)" class="mx-2 font-bold">{{ log.level }}</span>
+              <span :class="getLogLevelColor(log.level)" class="mx-2 font-bold">{{ log.level }}</span>
           </div>
           <div>
               <span class="text-blue-300">{{ log.proxy_id || 'SYSTEM' }}:</span>

@@ -9,42 +9,41 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { debounce } from '../utils/helpers';
 
 const props = defineProps({
   data: {
     type: Array,
-    required: true
+    required: true,
   },
   title: {
     type: String,
-    default: 'Chart'
+    default: 'Chart',
   },
   type: {
     type: String,
-    default: 'line' // line, bar
+    default: 'line',
   },
   dataKey: {
     type: String,
-    default: 'value'
+    default: 'value',
   },
   labelKey: {
     type: String,
-    default: 'label'
+    default: 'label',
   },
   color: {
     type: String,
-    default: '#3b82f6'
-  }
+    default: '#3b82f6',
+  },
 });
 
 const loading = ref(true);
 const chartContainer = ref(null);
-let chart = null;
 
 const initChart = () => {
   if (!chartContainer.value) return;
 
-  // Simple canvas-based chart (no external dependencies)
   const canvas = document.createElement('canvas');
   canvas.style.width = '100%';
   canvas.style.height = '100%';
@@ -68,7 +67,6 @@ const initChart = () => {
     return;
   }
 
-  // Draw chart
   ctx.clearRect(0, 0, width, height);
 
   if (props.type === 'bar') {
@@ -80,18 +78,21 @@ const initChart = () => {
   loading.value = false;
 };
 
+const debouncedResize = debounce(() => {
+  initChart();
+}, 200);
+
 const drawLineChart = (ctx, width, height) => {
   const padding = 40;
   const chartWidth = width - padding * 2;
   const chartHeight = height - padding * 2;
 
-  const values = props.data.map(d => d[props.dataKey]);
-  const labels = props.data.map(d => d[props.labelKey]);
+  const values = props.data.map((d) => d[props.dataKey]);
+  const labels = props.data.map((d) => d[props.labelKey]);
 
   const maxValue = Math.max(...values, 1);
   const minValue = Math.min(...values, 0);
 
-  // Draw grid
   ctx.strokeStyle = 'rgba(156, 163, 175, 0.2)';
   ctx.lineWidth = 1;
   for (let i = 0; i <= 5; i++) {
@@ -101,7 +102,6 @@ const drawLineChart = (ctx, width, height) => {
     ctx.lineTo(width - padding, y);
     ctx.stroke();
 
-    // Y-axis labels
     const value = minValue + ((maxValue - minValue) / 5) * i;
     ctx.fillStyle = '#6b7280';
     ctx.font = '10px sans-serif';
@@ -109,14 +109,16 @@ const drawLineChart = (ctx, width, height) => {
     ctx.fillText(value.toFixed(1), padding - 5, y + 4);
   }
 
-  // Draw line
   ctx.strokeStyle = props.color;
   ctx.lineWidth = 2;
   ctx.beginPath();
 
   values.forEach((value, index) => {
     const x = padding + (chartWidth / (values.length - 1)) * index;
-    const y = padding + chartHeight - ((value - minValue) / (maxValue - minValue)) * chartHeight;
+    const y =
+      padding +
+      chartHeight -
+      ((value - minValue) / (maxValue - minValue)) * chartHeight;
 
     if (index === 0) {
       ctx.moveTo(x, y);
@@ -124,7 +126,6 @@ const drawLineChart = (ctx, width, height) => {
       ctx.lineTo(x, y);
     }
 
-    // X-axis labels
     ctx.fillStyle = '#6b7280';
     ctx.font = '10px sans-serif';
     ctx.textAlign = 'center';
@@ -133,10 +134,12 @@ const drawLineChart = (ctx, width, height) => {
 
   ctx.stroke();
 
-  // Draw points
   values.forEach((value, index) => {
     const x = padding + (chartWidth / (values.length - 1)) * index;
-    const y = padding + chartHeight - ((value - minValue) / (maxValue - minValue)) * chartHeight;
+    const y =
+      padding +
+      chartHeight -
+      ((value - minValue) / (maxValue - minValue)) * chartHeight;
 
     ctx.fillStyle = props.color;
     ctx.beginPath();
@@ -150,14 +153,13 @@ const drawBarChart = (ctx, width, height) => {
   const chartWidth = width - padding * 2;
   const chartHeight = height - padding * 2;
 
-  const values = props.data.map(d => d[props.dataKey]);
-  const labels = props.data.map(d => d[props.labelKey]);
+  const values = props.data.map((d) => d[props.dataKey]);
+  const labels = props.data.map((d) => d[props.labelKey]);
 
   const maxValue = Math.max(...values, 1);
   const barWidth = (chartWidth / values.length) * 0.7;
   const gap = (chartWidth / values.length) * 0.3;
 
-  // Draw grid
   ctx.strokeStyle = 'rgba(156, 163, 175, 0.2)';
   ctx.lineWidth = 1;
   for (let i = 0; i <= 5; i++) {
@@ -167,7 +169,6 @@ const drawBarChart = (ctx, width, height) => {
     ctx.lineTo(width - padding, y);
     ctx.stroke();
 
-    // Y-axis labels
     const value = (maxValue / 5) * i;
     ctx.fillStyle = '#6b7280';
     ctx.font = '10px sans-serif';
@@ -175,7 +176,6 @@ const drawBarChart = (ctx, width, height) => {
     ctx.fillText(value.toFixed(0), padding - 5, y + 4);
   }
 
-  // Draw bars
   values.forEach((value, index) => {
     const x = padding + (barWidth + gap) * index + gap / 2;
     const barHeight = (value / maxValue) * chartHeight;
@@ -184,7 +184,6 @@ const drawBarChart = (ctx, width, height) => {
     ctx.fillStyle = props.color;
     ctx.fillRect(x, y, barWidth, barHeight);
 
-    // X-axis labels
     ctx.fillStyle = '#6b7280';
     ctx.font = '10px sans-serif';
     ctx.textAlign = 'center';
@@ -192,19 +191,20 @@ const drawBarChart = (ctx, width, height) => {
   });
 };
 
-watch(() => props.data, () => {
-  initChart();
-}, { deep: true });
+watch(
+  () => props.data,
+  () => {
+    initChart();
+  },
+  { deep: true },
+);
 
 onMounted(() => {
   initChart();
-  window.addEventListener('resize', initChart);
+  window.addEventListener('resize', debouncedResize);
 });
 
 onUnmounted(() => {
-  window.removeEventListener('resize', initChart);
-  if (chart) {
-    chart.destroy();
-  }
+  window.removeEventListener('resize', debouncedResize);
 });
 </script>

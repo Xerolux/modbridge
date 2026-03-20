@@ -467,4 +467,23 @@ h3 {
     font-size: 1.25rem;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .cyber-grid,
+  .scanlines,
+  .ambient-glow {
+    display: none;
+  }
+
+  .animate-fade-in,
+  .animate-fade-in-up,
+  .animate-slide-in-right,
+  .animate-neon-flicker,
+  .animate-pulse,
+  .animate-glow,
+  .animate-shake,
+  .animate-spin-slow {
+    animation: none !important;
+  }
+}
 </style>

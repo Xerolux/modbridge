@@ -37,9 +37,14 @@ func NewManager(cfgMgr *config.Manager, log *logger.Logger, db *database.DB) *Ma
 func (m *Manager) Initialize() {
 	cfg := m.cfgMgr.Get()
 	for _, pCfg := range cfg.Proxies {
-		m.AddProxy(pCfg, false) // Add but don't save to config again
+		if err := m.AddProxy(pCfg, false); err != nil {
+			m.log.Error(pCfg.ID, fmt.Sprintf("Failed to add proxy: %v", err))
+			continue
+		}
 		if pCfg.Enabled {
-			m.StartProxy(pCfg.ID)
+			if err := m.StartProxy(pCfg.ID); err != nil {
+				m.log.Error(pCfg.ID, fmt.Sprintf("Failed to start proxy: %v", err))
+			}
 		}
 	}
 }
@@ -284,7 +289,7 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 	for _, p := range m.proxies {
 		status := &p.Stats
 		uptime := time.Duration(0)
-		if status.Status == "Running" {
+		if status.GetStatus() == "Running" {
 			uptime = time.Since(status.LastStart)
 		}
 
@@ -295,7 +300,7 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 			"name":               p.Name,
 			"listen_addr":        p.ListenAddr,
 			"target_addr":        p.TargetAddr,
-			"status":             status.Status,
+			"status":             status.GetStatus(),
 			"paused":             pCfg.Paused,
 			"enabled":            pCfg.Enabled,
 			"uptime_s":           uptime.Seconds(),
@@ -313,30 +318,33 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 // StopAll stops all running proxies and cleans up resources.
 func (m *Manager) StopAll() {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	var wg sync.WaitGroup
 	for _, p := range m.proxies {
-		if p.Stats.Status == "Running" {
+		if p.Stats.GetStatus() == "Running" {
 			wg.Add(1)
-			go func(proxy *proxy.ProxyInstance) {
+			go func(px *proxy.ProxyInstance) {
 				defer wg.Done()
-				proxy.Stop()
+				px.Stop()
 			}(p)
 		}
 	}
+	m.mu.Unlock()
 
-	// Wait for all proxies to stop
 	wg.Wait()
 
-	// Stop device tracker and flush pending database writes
+	m.mu.Lock()
 	m.deviceTracker.Stop()
+	m.mu.Unlock()
 }
 
 // StartAll starts all enabled proxies.
 func (m *Manager) StartAll() {
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	proxies := make([]*proxy.ProxyInstance, 0, len(m.proxies))
+	for _, p := range m.proxies {
+		proxies = append(proxies, p)
+	}
+	m.mu.Unlock()
 
 	cfg := m.cfgMgr.Get()
 	cfgMap := make(map[string]config.ProxyConfig)
@@ -344,9 +352,9 @@ func (m *Manager) StartAll() {
 		cfgMap[pc.ID] = pc
 	}
 
-	for _, p := range m.proxies {
+	for _, p := range proxies {
 		pCfg := cfgMap[p.ID]
-		if pCfg.Enabled && !pCfg.Paused && p.Stats.Status != "Running" {
+		if pCfg.Enabled && !pCfg.Paused && p.Stats.GetStatus() != "Running" {
 			if err := p.Start(); err != nil {
 				m.log.Error(p.ID, fmt.Sprintf("Failed to start: %v", err))
 			}
@@ -401,7 +409,7 @@ func (m *Manager) getProxyStatus(id string) map[string]interface{} {
 
 	status := &p.Stats
 	uptime := time.Duration(0)
-	if status.Status == "Running" {
+	if status.GetStatus() == "Running" {
 		uptime = time.Since(status.LastStart)
 	}
 
@@ -412,7 +420,7 @@ func (m *Manager) getProxyStatus(id string) map[string]interface{} {
 		"name":               p.Name,
 		"listen_addr":        p.ListenAddr,
 		"target_addr":        p.TargetAddr,
-		"status":             status.Status,
+		"status":             status.GetStatus(),
 		"paused":             pCfg.Paused,
 		"enabled":            pCfg.Enabled,
 		"uptime_s":           uptime.Seconds(),
