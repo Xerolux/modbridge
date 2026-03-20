@@ -140,7 +140,7 @@ func (p *Pool) Get(ctx context.Context) (net.Conn, error) {
 			}
 
 			pc.inUse = true
-			return &wrappedConn{
+			return &WrappedConn{
 				Conn: pc.conn,
 				pool: p,
 				pc:   pc,
@@ -167,7 +167,7 @@ func (p *Pool) Get(ctx context.Context) (net.Conn, error) {
 					inUse:    true,
 				}
 
-				return &wrappedConn{
+				return &WrappedConn{
 					Conn: conn,
 					pool: p,
 					pc:   pc,
@@ -282,16 +282,29 @@ func (p *Pool) cleanup() {
 	}
 }
 
-// wrappedConn wraps a connection to return it to the pool on close.
-type wrappedConn struct {
+// WrappedConn wraps a connection to return it to the pool on close.
+type WrappedConn struct {
 	net.Conn
-	pool *Pool
-	pc   *poolConn
-	once sync.Once
+	pool   *Pool
+	pc     *poolConn
+	once   sync.Once
+	broken bool
 }
 
-func (w *wrappedConn) Close() error {
+// MarkBroken marks the connection as broken so it will be discarded instead of returned to the pool.
+func (w *WrappedConn) MarkBroken() {
+	w.broken = true
+}
+
+func (w *WrappedConn) Close() error {
 	w.once.Do(func() {
+		if w.broken {
+			w.pool.mu.Lock()
+			w.pc.conn.Close()
+			w.pool.size--
+			w.pool.mu.Unlock()
+			return
+		}
 		w.pool.put(w.pc)
 	})
 	return nil
@@ -301,18 +314,10 @@ func isConnHealthy(conn net.Conn) bool {
 	if conn == nil {
 		return false
 	}
-
-	conn.SetReadDeadline(time.Now().Add(1 * time.Millisecond))
-	oneByte := make([]byte, 1)
-	_, err := conn.Read(oneByte)
-	conn.SetReadDeadline(time.Time{})
-
+	err := conn.SetReadDeadline(time.Now().Add(time.Millisecond))
 	if err != nil {
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			return true
-		}
 		return false
 	}
-
-	return false
+	conn.SetReadDeadline(time.Time{})
+	return true
 }

@@ -9,6 +9,7 @@
   import InputSwitch from 'primevue/inputswitch';
   import Menu from 'primevue/menu';
   import LanguageSelector from './LanguageSelector.vue';
+  import { debounce } from '../utils/helpers';
 
   const router = useRouter();
   const route = useRoute();
@@ -84,9 +85,9 @@
       return route.path.startsWith(path);
   };
 
-  const checkMobile = () => {
+  const checkMobile = debounce(() => {
       isMobile.value = window.innerWidth < 768;
-  };
+  }, 150);
 
   onMounted(() => {
       checkMobile();
@@ -166,19 +167,13 @@
     </div>
 </template>
 
-<style>
-.p-menubar {
+<style scoped>
+:deep(.p-menubar) {
     padding: 0.5rem;
 }
 
-.p-sidebar {
+:deep(.p-sidebar) {
     background-color: #1f2937;
     color: white;
-}
-
-@media (max-width: 768px) {
-    .p-menubar {
-        padding: 0.5rem;
-    }
 }
 </style>

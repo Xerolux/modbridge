@@ -1,36 +1,86 @@
 export function debounce(func, wait) {
   let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
+  return function (...args) {
     clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
+    timeout = setTimeout(() => func(...args), wait);
   };
 }
 
 export function throttle(func, limit) {
   let inThrottle;
-  return function executedFunction(...args) {
+  return function (...args) {
     if (!inThrottle) {
       func(...args);
       inThrottle = true;
-      setTimeout(() => inThrottle = false, limit);
+      setTimeout(() => (inThrottle = false), limit);
     }
   };
 }
 
 export function formatDate(dateStr) {
+  if (!dateStr) return 'N/A';
   const date = new Date(dateStr);
-  return date.toLocaleString('de-DE', {
-    year: 'numeric',
-    month: '2-digit',
+  if (isNaN(date.getTime())) return dateStr;
+  return date.toLocaleDateString('de-DE', {
     day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+export function formatDateTime(dateStr) {
+  if (!dateStr) return 'N/A';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
+  return date.toLocaleString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
   });
+}
+
+export function formatTime(dateStr) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
+  return date.toLocaleString('de-DE', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+export function getSeverity(status) {
+  switch (status) {
+    case 'Running': return 'success';
+    case 'Stopped': return 'secondary';
+    case 'Error': return 'danger';
+    default: return 'info';
+  }
+}
+
+export function getLogLevelColor(level) {
+  switch (level) {
+    case 'INFO': return 'text-green-400';
+    case 'WARN': return 'text-yellow-400';
+    case 'ERROR': return 'text-red-400';
+    case 'FATAL': return 'text-red-600';
+    default: return 'text-gray-400';
+  }
+}
+
+export function downloadBlob(data, filename) {
+  const url = window.URL.createObjectURL(new Blob([data]));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 export function formatUptime(seconds) {

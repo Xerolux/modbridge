@@ -85,7 +85,19 @@ type Stats struct {
 	LastStart time.Time
 	Requests  atomic.Int64
 	Errors    atomic.Int64
-	Status    string // "Running", "Stopped", "Error"
+	status    atomic.Value // stores string
+}
+
+func (s *Stats) GetStatus() string {
+	v := s.status.Load()
+	if v == nil {
+		return "Stopped"
+	}
+	return v.(string)
+}
+
+func (s *Stats) setStatus(status string) {
+	s.status.Store(status)
 }
 
 // NewProxyInstance creates a new proxy.
@@ -109,42 +121,33 @@ func NewProxyInstance(id, name, listen, target string, maxReadSize, connectionTi
 		ConnectionTimeout: time.Duration(connectionTimeout) * time.Second,
 		ReadTimeout:       time.Duration(readTimeout) * time.Second,
 		MaxRetries:        maxRetries,
-		MaxConns:          500, // Default: limit concurrent connections
+		MaxConns:          500,
 		log:               l,
 		deviceTracker:     tracker,
-		Stats:             Stats{Status: "Stopped"},
 	}
 }
 
 // Start starts the proxy.
 func (p *ProxyInstance) Start() error {
-	if p.Stats.Status == "Running" {
+	if p.Stats.GetStatus() == "Running" {
 		return nil
 	}
 
-	// Validate addresses before starting
 	validator := middleware.NewValidator()
 	if err := validator.ValidatePort(p.ListenAddr); err != nil {
-		p.Stats.Status = "Error"
+		p.Stats.setStatus("Error")
 		return fmt.Errorf("invalid listen address: %w", err)
 	}
 	if err := validator.ValidatePort(p.TargetAddr); err != nil {
-		p.Stats.Status = "Error"
+		p.Stats.setStatus("Error")
 		return fmt.Errorf("invalid target address: %w", err)
-	}
-
-	// Check if port is available (quick bind test)
-	if err := checkPortAvailable(p.ListenAddr); err != nil {
-		p.Stats.Status = "Error"
-		p.log.Error(p.ID, fmt.Sprintf("Port %s is already in use: %v", p.ListenAddr, err))
-		return fmt.Errorf("port %s already in use: check if another proxy is using this port", p.ListenAddr)
 	}
 
 	l, err := net.Listen("tcp", p.ListenAddr)
 	if err != nil {
-		p.Stats.Status = "Error"
-		p.log.Error(p.ID, fmt.Sprintf("Failed to listen: %v", err))
-		return err
+		p.Stats.setStatus("Error")
+		p.log.Error(p.ID, fmt.Sprintf("Port %s already in use or invalid: %v", p.ListenAddr, err))
+		return fmt.Errorf("port %s already in use: %w", p.ListenAddr, err)
 	}
 	p.listener = l
 
@@ -166,7 +169,7 @@ func (p *ProxyInstance) Start() error {
 	p.connPool, err = pool.NewPool(poolCfg)
 	if err != nil {
 		p.listener.Close()
-		p.Stats.Status = "Error"
+		p.Stats.setStatus("Error")
 		p.log.Error(p.ID, fmt.Sprintf("Failed to create connection pool: %v", err))
 		return err
 	}
@@ -184,7 +187,7 @@ func (p *ProxyInstance) Start() error {
 	p.requestID = 0
 
 	p.ctx, p.cancel = context.WithCancel(context.Background())
-	p.Stats.Status = "Running"
+	p.Stats.setStatus("Running")
 	p.Stats.LastStart = time.Now()
 
 	p.log.Info(p.ID, fmt.Sprintf("Started proxy listening on %s -> %s (max conns: %d)", p.ListenAddr, p.TargetAddr, p.MaxConns))
@@ -196,7 +199,7 @@ func (p *ProxyInstance) Start() error {
 
 // Stop stops the proxy.
 func (p *ProxyInstance) Stop() {
-	if p.Stats.Status != "Running" {
+	if p.Stats.GetStatus() != "Running" {
 		return
 	}
 
@@ -217,7 +220,7 @@ func (p *ProxyInstance) Stop() {
 	// Wait for all goroutines to finish
 	p.wg.Wait()
 
-	p.Stats.Status = "Stopped"
+	p.Stats.setStatus("Stopped")
 }
 
 func (p *ProxyInstance) acceptLoop() {
@@ -447,55 +450,54 @@ func (p *ProxyInstance) forwardRequest(req []byte) ([]byte, error) {
 		}
 
 		// Get connection from pool
-		conn, err := p.connPool.Get(p.ctx)
+		rawConn, err := p.connPool.Get(p.ctx)
 		if err != nil {
 			lastErr = err
 			continue
 		}
 
+		var markBroken func()
+		if wc, ok := rawConn.(*pool.WrappedConn); ok {
+			markBroken = wc.MarkBroken
+		} else {
+			markBroken = func() {}
+		}
+
 		// Try write
-		if err := conn.SetWriteDeadline(time.Now().Add(p.ConnectionTimeout)); err != nil {
-			conn.Close()
+		if err := rawConn.SetWriteDeadline(time.Now().Add(p.ConnectionTimeout)); err != nil {
+			markBroken()
+			rawConn.Close()
 			lastErr = err
 			continue
 		}
 
-		if _, err := conn.Write(req); err != nil {
-			conn.Close()
+		if _, err := rawConn.Write(req); err != nil {
+			markBroken()
+			rawConn.Close()
 			lastErr = err
 			continue
 		}
 
 		// Try read
-		if err := conn.SetReadDeadline(time.Now().Add(p.ReadTimeout)); err != nil {
-			conn.Close()
+		if err := rawConn.SetReadDeadline(time.Now().Add(p.ReadTimeout)); err != nil {
+			markBroken()
+			rawConn.Close()
 			lastErr = err
 			continue
 		}
 
-		resp, err := modbus.ReadFrame(conn)
+		resp, err := modbus.ReadFrame(rawConn)
 		if err != nil {
-			conn.Close()
+			markBroken()
+			rawConn.Close()
 			lastErr = err
 			continue
 		}
 
 		// Return connection to pool
-		conn.Close()
+		rawConn.Close()
 		return resp, nil
 	}
 
 	return nil, fmt.Errorf("failed after %d retries: %w", p.MaxRetries, lastErr)
-}
-
-// checkPortAvailable quickly tests if a port is available for binding
-func checkPortAvailable(addr string) error {
-	// Try to create a listener on the port
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		return fmt.Errorf("port not available: %w", err)
-	}
-	// Immediately close the listener - this is just a test
-	ln.Close()
-	return nil
 }

@@ -221,6 +221,7 @@
  import ConfirmDialog from 'primevue/confirmdialog';
  import { useToast } from 'primevue/usetoast';
  import { useConfirm } from 'primevue/useconfirm';
+ import { downloadBlob } from '../utils/helpers';
 
  const loading = ref(true);
  const toast = useToast();
@@ -275,21 +276,15 @@
      fetchInfo();
  };
 
- const downloadLogs = async () => {
-     try {
-         const res = await axios.get('/api/logs/download', { responseType: 'blob' });
-         const url = window.URL.createObjectURL(new Blob([res.data]));
-         const link = document.createElement('a');
-         link.href = url;
-         link.setAttribute('download', 'proxy.log');
-         document.body.appendChild(link);
-         link.click();
-         link.remove();
-         toast.add({ severity: 'success', summary: 'Success', detail: 'Logs downloaded', life: 3000 });
-     } catch (e) {
-         toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to download logs', life: 5000 });
-     }
- };
+  const downloadLogs = async () => {
+      try {
+          const res = await axios.get('/api/logs/download', { responseType: 'blob' });
+          downloadBlob(res.data, 'proxy.log');
+          toast.add({ severity: 'success', summary: 'Success', detail: 'Logs downloaded', life: 3000 });
+      } catch (e) {
+          toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to download logs', life: 5000 });
+      }
+  };
 
  const restartSystem = () => {
      confirm.require({
@@ -408,11 +403,11 @@ const releasePort = (portInfo) => {
     });
 };
 
- onMounted(() => {
-     fetchInfo();
-     loading.value = false;
-     refreshInterval = setInterval(fetchInfo, 5000);
- });
+  onMounted(async () => {
+      await fetchInfo();
+      loading.value = false;
+      refreshInterval = setInterval(fetchInfo, 15000);
+  });
 
  onUnmounted(() => {
      if (refreshInterval) {

@@ -68,6 +68,9 @@ func (v *Validator) Validate(cfg *Config) error {
 		v.validateProxyConfig(&proxy, i)
 	}
 
+	// Check for duplicate listen addresses across proxies
+	v.validateDuplicateListenAddrs(cfg.Proxies)
+
 	// Validate TLS configuration
 	if cfg.TLSEnabled {
 		v.validateTLSConfig(cfg)
@@ -251,6 +254,23 @@ func (v *Validator) validateProxyConfig(cfg *ProxyConfig, index int) {
 		}
 		if !v.IsValidTag(tag) {
 			v.AddError(fmt.Sprintf("%s.tags[%d]", prefix, i), "must contain only alphanumeric characters, hyphens, and underscores", tag)
+		}
+	}
+}
+
+// validateDuplicateListenAddrs checks for duplicate listen addresses across proxies
+func (v *Validator) validateDuplicateListenAddrs(proxies []ProxyConfig) {
+	seen := make(map[string]int)
+	for i, p := range proxies {
+		if p.ListenAddr == "" {
+			continue
+		}
+		if prevIdx, exists := seen[p.ListenAddr]; exists {
+			v.AddError(fmt.Sprintf("proxies[%d].listen_addr", i),
+				fmt.Sprintf("duplicate listen address (conflicts with proxies[%d])", prevIdx),
+				p.ListenAddr)
+		} else {
+			seen[p.ListenAddr] = i
 		}
 	}
 }

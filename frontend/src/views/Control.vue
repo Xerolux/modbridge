@@ -180,7 +180,7 @@
                  <div v-if="proxyLogs.length === 0" class="text-gray-500">No logs available</div>
                  <div v-else class="space-y-1">
                      <div v-for="(log, index) in proxyLogs" :key="index" class="border-b border-gray-700 pb-1">
-                         <span class="text-gray-400">[{{ formatLogTime(log.timestamp) }}]</span>
+                          <span class="text-gray-400">[{{ formatTime(log.timestamp) }}]</span>
                          <span :class="getLogLevelColor(log.level)" class="mx-2 font-bold">{{ log.level }}</span>
                          <span class="text-white">{{ log.message }}</span>
                      </div>
@@ -208,6 +208,7 @@
  import { useToast } from 'primevue/usetoast';
  import { useConfirm } from 'primevue/useconfirm';
  import { useEventSource } from '../utils/eventSource';
+ import { getSeverity, getLogLevelColor, formatTime } from '../utils/helpers';
 
  const proxies = ref([]);
  const loading = ref(true);
@@ -218,22 +219,24 @@
  const testingProxy = ref(null);
  const connectionStatus = ref({});
 
- const showProxyDialog = ref(false);
- const isEditMode = ref(false);
- const proxyForm = ref({
-     id: '',
-     name: 'New Proxy',
-     listen_addr: ':5020',
-     target_addr: '127.0.0.1:502',
-     description: '',
-     connection_timeout: 10,
-     read_timeout: 30,
-     max_retries: 3,
-     max_read_size: 0,
-     enabled: true,
-     paused: false,
-     tags: []
- });
+  const defaultProxyForm = () => ({
+      id: '',
+      name: 'New Proxy',
+      listen_addr: ':5020',
+      target_addr: '127.0.0.1:502',
+      description: '',
+      connection_timeout: 10,
+      read_timeout: 30,
+      max_retries: 3,
+      max_read_size: 0,
+      enabled: true,
+      paused: false,
+      tags: []
+  });
+
+  const showProxyDialog = ref(false);
+  const isEditMode = ref(false);
+  const proxyForm = ref(defaultProxyForm());
 
  const showLogsDialog = ref(false);
  const currentProxy = ref(null);
@@ -296,24 +299,11 @@
      }
  });
 
- const openAddProxyDialog = () => {
-     isEditMode.value = false;
-     proxyForm.value = {
-         id: '',
-         name: 'New Proxy',
-         listen_addr: ':5020',
-         target_addr: '127.0.0.1:502',
-         description: '',
-         connection_timeout: 10,
-         read_timeout: 30,
-         max_retries: 3,
-         max_read_size: 0,
-         enabled: true,
-         paused: false,
-         tags: []
-     };
-     showProxyDialog.value = true;
- };
+  const openAddProxyDialog = () => {
+      isEditMode.value = false;
+      proxyForm.value = defaultProxyForm();
+      showProxyDialog.value = true;
+  };
 
  const openEditProxyDialog = (proxy) => {
      isEditMode.value = true;
@@ -354,39 +344,20 @@
      });
  };
 
- const openProxyLogs = async (id) => {
-     currentProxy.value = proxies.value.find(p => p.id === id);
-     try {
-         const res = await axios.get('/api/logs');
-         const allLogs = res.data;
-         proxyLogs.value = allLogs.filter(log => log.proxy_id === id);
-     } catch (e) {
-         console.error("Failed to fetch logs", e);
-         proxyLogs.value = [];
-     }
-     showLogsDialog.value = true;
- };
+  const openProxyLogs = async (id) => {
+      currentProxy.value = proxies.value.find(p => p.id === id);
+      try {
+          const res = await axios.get('/api/logs');
+          const allLogs = res.data;
+          proxyLogs.value = allLogs.filter(log => log.proxy_id === id);
+      } catch (e) {
+          console.error("Failed to fetch logs", e);
+          proxyLogs.value = [];
+      }
+      showLogsDialog.value = true;
+  };
 
- const formatLogTime = (dateStr) => {
-     const date = new Date(dateStr);
-     return date.toLocaleString('de-DE', {
-         hour: '2-digit',
-         minute: '2-digit',
-         second: '2-digit',
-     });
- };
-
- const getLogLevelColor = (level) => {
-     switch(level) {
-         case 'INFO': return 'text-green-400';
-         case 'WARN': return 'text-yellow-400';
-         case 'ERROR': return 'text-red-400';
-         case 'FATAL': return 'text-red-600';
-         default: return 'text-gray-400';
-     }
- };
-
- const controlProxy = async (id, action) => {
+  const controlProxy = async (id, action) => {
      try {
          await axios.post('/api/proxies/control', { id, action });
          toast.add({ severity: 'success', summary: 'Success', detail: `Proxy ${action} command sent`, life: 3000 });
@@ -436,17 +407,8 @@
              detail: e.message,
              life: 3000
          });
-     } finally {
-         testingProxy.value = null;
-     }
- };
-
- const getSeverity = (status) => {
-     switch(status) {
-         case 'Running': return 'success';
-         case 'Stopped': return 'secondary';
-         case 'Error': return 'danger';
-         default: return 'info';
-     }
- };
- </script>
+      } finally {
+          testingProxy.value = null;
+      }
+  };
+</script>

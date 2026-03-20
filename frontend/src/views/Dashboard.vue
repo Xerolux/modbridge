@@ -108,6 +108,7 @@ import DashboardWidget from '../components/DashboardWidget.vue';
 import ProxyConfigPanel from '../components/ProxyConfigPanel.vue';
 import { useEventSource } from '../utils/eventSource';
 import { DASHBOARD_CONFIG, BREAKPOINTS, GRID_CONFIG } from '../utils/constants';
+import { debounce } from '../utils/helpers';
 
 const grid = ref(null);
 const proxies = ref([]);
@@ -120,7 +121,6 @@ const loading = ref(true);
 const error = ref(null);
 const errorMessage = ref('');
 let sseDisconnect = null;
-let refreshInterval = null;
 
 onMounted(async () => {
     try {
@@ -215,11 +215,6 @@ onMounted(async () => {
             }
         });
 
-        // Set up auto-refresh interval as fallback
-        refreshInterval = setInterval(async () => {
-            await fetchData(false);
-        }, DASHBOARD_CONFIG.AUTO_REFRESH_INTERVAL);
-
     } catch (err) {
         error.value = true;
         errorMessage.value = err.message || 'Fehler beim Initialisieren des Dashboards';
@@ -227,12 +222,12 @@ onMounted(async () => {
     }
 });
 
-const handleResize = () => {
+const handleResize = debounce(() => {
     if (grid.value) {
         const isMobile = window.innerWidth <= 640;
         grid.value.setStatic(isMobile);
     }
-};
+}, 150);
 
 onUnmounted(() => {
     window.removeEventListener('resize', handleResize);
@@ -241,9 +236,6 @@ onUnmounted(() => {
     }
     if (sseDisconnect) {
         sseDisconnect();
-    }
-    if (refreshInterval) {
-        clearInterval(refreshInterval);
     }
 });
 
