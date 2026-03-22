@@ -1,0 +1,23 @@
+name: Sync to GitHub Wiki
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+  workflow_dispatch:
+
+jobs:
+  update-wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync docs to wiki
+        uses: newrelic/newrelic-action-sync-to-wiki@v1.1.0
+        with:
+          repository: ${{ github.repository }}.wiki
+          branch: master
+          path: docs
+          token: ${{ secrets.GITHUB_TOKEN }}
