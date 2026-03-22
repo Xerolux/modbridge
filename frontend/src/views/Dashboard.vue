@@ -55,7 +55,8 @@
                         :title="widget.title"
                         :value="getWidgetValue(widget)"
                         :unit="widget.unit"
-                        :status="widget.status"
+                        :status="getWidgetStatus(widget)"
+                        :activeConnections="getWidgetConnections(widget)"
                     />
                      <button
                         type="button"
@@ -108,7 +109,7 @@ import DashboardWidget from '../components/DashboardWidget.vue';
 import ProxyConfigPanel from '../components/ProxyConfigPanel.vue';
 import { useEventSource } from '../utils/eventSource';
 import { DASHBOARD_CONFIG, BREAKPOINTS, GRID_CONFIG } from '../utils/constants';
-import { debounce } from '../utils/helpers';
+import { debounce, formatNumber } from '../utils/helpers';
 
 const grid = ref(null);
 const proxies = ref([]);
@@ -330,9 +331,20 @@ const getWidgetValue = (widget) => {
     const p = proxies.value.find(x => x.id === widget.proxy_id);
     if (!p) return 'Unknown';
     if (p.status === 'Running') {
-        return `${p.requests || 0} Anfragen`;
+        return `${formatNumber(p.requests || 0)} Anfragen`;
     }
     return p.status;
+};
+
+const getWidgetConnections = (widget) => {
+    const p = proxies.value.find(x => x.id === widget.proxy_id);
+    if (!p) return null;
+    return p.active_connections ?? 0;
+};
+
+const getWidgetStatus = (widget) => {
+    const p = proxies.value.find(x => x.id === widget.proxy_id);
+    return p ? p.status : widget.status || 'Unknown';
 };
 
 const openAddWidget = () => {
