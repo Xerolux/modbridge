@@ -269,14 +269,14 @@ func (m *MockServer) generateResponse(transactionID, protocolID uint16, unitID, 
 		response = append(response, 0x00, 0x01) // Register values
 		response = append(response, 0x00, 0x02)
 		response[4] = 0x00
-		response[5] = 0x06 // Length
+		response[5] = 0x07 // Length
 
 	case 0x04: // Read Input Registers
-		response = append(response, 0x02)       // Byte count
+		response = append(response, 0x04)       // Byte count
 		response = append(response, 0x00, 0x10) // Register values
 		response = append(response, 0x00, 0x20)
 		response[4] = 0x00
-		response[5] = 0x06
+		response[5] = 0x07
 
 	case 0x05: // Write Single Coil
 		response = append(response, data[0], data[1]) // Address
