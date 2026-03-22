@@ -3,7 +3,7 @@
 # Variables
 BINARY_NAME=modbridge
 DOCKER_IMAGE=modbridge
-VERSION?=$(shell cat version.txt 2>/dev/null || echo "1.0.0")
+VERSION?=$(shell cat version.txt 2>/dev/null || echo "1.0.12")
 LDFLAGS=-ldflags "-s -w -X main.Version=$(VERSION)"
 
 help: ## Show this help message
@@ -14,7 +14,7 @@ help: ## Show this help message
 
 build: build-frontend ## Build the application
 	@echo "Building $(BINARY_NAME)..."
-	go build $(LDFLAGS) -o $(BINARY_NAME) ./main.go
+	go build $(LDFLAGS) -o $(BINARY_NAME) .
 
 build-frontend: ## Build the frontend
 	@echo "Building frontend..."
@@ -34,7 +34,7 @@ build-all: ## Build for all platforms
 
 test: ## Run tests
 	@echo "Running tests..."
-	go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+	go list -f '{{if or (len .TestGoFiles) (len .XTestGoFiles)}}{{.ImportPath}}{{end}}' ./... | xargs go test -v -race -coverprofile=coverage.txt -covermode=atomic
 
 coverage: test ## Generate coverage report
 	@echo "Generating coverage report..."
