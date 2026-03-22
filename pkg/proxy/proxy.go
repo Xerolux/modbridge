@@ -81,12 +81,26 @@ type ProxyInstance struct {
 }
 
 type Stats struct {
-	Uptime      time.Duration
-	LastStart   time.Time
-	Requests    atomic.Int64
-	Errors      atomic.Int64
-	ActiveConns atomic.Int64
-	status      atomic.Value // stores string
+	Uptime        time.Duration
+	lastStartNano atomic.Int64 // stores UnixNano; use SetLastStart/GetLastStart
+	Requests      atomic.Int64
+	Errors        atomic.Int64
+	ActiveConns   atomic.Int64
+	status        atomic.Value // stores string
+}
+
+// SetLastStart stores the start time atomically.
+func (s *Stats) SetLastStart(t time.Time) {
+	s.lastStartNano.Store(t.UnixNano())
+}
+
+// GetLastStart returns the last start time atomically.
+func (s *Stats) GetLastStart() time.Time {
+	n := s.lastStartNano.Load()
+	if n == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, n)
 }
 
 func (s *Stats) GetStatus() string {
@@ -189,7 +203,7 @@ func (p *ProxyInstance) Start() error {
 
 	p.ctx, p.cancel = context.WithCancel(context.Background())
 	p.Stats.setStatus("Running")
-	p.Stats.LastStart = time.Now()
+	p.Stats.SetLastStart(time.Now())
 
 	p.log.Info(p.ID, fmt.Sprintf("Started proxy listening on %s -> %s (max conns: %d)", p.ListenAddr, p.TargetAddr, p.MaxConns))
 

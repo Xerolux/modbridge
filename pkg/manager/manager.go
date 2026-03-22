@@ -290,7 +290,7 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 		status := &p.Stats
 		uptime := time.Duration(0)
 		if status.GetStatus() == "Running" {
-			uptime = time.Since(status.LastStart)
+			uptime = time.Since(status.GetLastStart())
 		}
 
 		pCfg := cfgMap[p.ID]
