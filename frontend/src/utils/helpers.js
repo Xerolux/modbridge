@@ -98,11 +98,20 @@ export function formatUptime(seconds) {
 }
 
 export function formatNumber(num) {
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(1) + 'M';
+  if (num === null || num === undefined) return '0';
+  const n = Number(num);
+  if (isNaN(n)) return '0';
+  if (n >= 1_000_000_000) {
+    const v = (n / 1_000_000_000).toFixed(1).replace(/\.0$/, '');
+    return `${v} G`;
   }
-  if (num >= 1000) {
-    return (num / 1000).toFixed(1) + 'K';
+  if (n >= 1_000_000) {
+    const v = (n / 1_000_000).toFixed(1).replace(/\.0$/, '');
+    return `${v} M`;
   }
-  return num.toString();
+  if (n >= 1_000) {
+    const v = (n / 1_000).toFixed(1).replace(/\.0$/, '');
+    return `${v} k`;
+  }
+  return n.toString();
 }

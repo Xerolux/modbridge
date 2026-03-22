@@ -6,6 +6,10 @@ defineProps({
     status: {
         type: String,
         default: 'Unknown'
+    },
+    activeConnections: {
+        type: Number,
+        default: null
     }
 });
 </script>
@@ -26,8 +30,15 @@ defineProps({
                 {{ status }}
             </div>
         </div>
-        <div class="text-2xl font-bold text-blue-400 my-2 truncate" :title="value">
+        <div class="text-2xl font-bold text-blue-400 my-1 truncate" :title="String(value)">
             {{ value }} <span v-if="unit" class="text-sm text-gray-500 ml-1">{{ unit }}</span>
+        </div>
+        <div v-if="activeConnections !== null" class="flex items-center gap-1 mt-1">
+            <span class="inline-block w-2 h-2 rounded-full"
+                :class="status === 'Running' ? 'bg-green-400' : 'bg-gray-500'"></span>
+            <span class="text-xs text-gray-400">
+                {{ activeConnections }} {{ activeConnections === 1 ? 'Client' : 'Clients' }}
+            </span>
         </div>
     </div>
 </template>
