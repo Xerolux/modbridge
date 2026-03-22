@@ -45,7 +45,7 @@
                          <div class="text-sm">Listen: {{ proxy.listen_addr }}</div>
                          <div class="text-sm">Target: {{ proxy.target_addr }}</div>
 
-                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-2">
+                         <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
                               <Button
                                  icon="pi pi-play"
                                  severity="success"
@@ -68,6 +68,22 @@
                                  label="Restart"
                                  :disabled="proxy.status === 'Stopped'"
                                  @click="controlProxy(proxy.id, 'restart')"
+                                 class="text-base p-3 sm:p-2 min-h-[44px]"
+                              />
+                              <Button
+                                 v-if="!proxy.paused && proxy.status === 'Running'"
+                                 icon="pi pi-pause"
+                                 severity="warning"
+                                 label="Pause"
+                                 @click="controlProxy(proxy.id, 'pause')"
+                                 class="text-base p-3 sm:p-2 min-h-[44px]"
+                              />
+                              <Button
+                                 v-if="proxy.paused"
+                                 icon="pi pi-play"
+                                 severity="success"
+                                 label="Resume"
+                                 @click="controlProxy(proxy.id, 'resume')"
                                  class="text-base p-3 sm:p-2 min-h-[44px]"
                               />
                               <Button
@@ -323,7 +339,7 @@
          showProxyDialog.value = false;
          await fetchProxies();
      } catch (e) {
-         toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.error || e.message, life: 5000 });
+         toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data || e.message, life: 5000 });
      }
  };
 
@@ -338,7 +354,7 @@
                  toast.add({ severity: 'success', summary: 'Success', detail: 'Proxy deleted', life: 3000 });
                  await fetchProxies();
              } catch (e) {
-                 toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.error || e.message, life: 5000 });
+                 toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data || e.message, life: 5000 });
              }
          }
      });
@@ -363,7 +379,7 @@
          toast.add({ severity: 'success', summary: 'Success', detail: `Proxy ${action} command sent`, life: 3000 });
          setTimeout(fetchProxies, 500);
      } catch (e) {
-         toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.error || e.message, life: 5000 });
+         toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data || e.message, life: 5000 });
      }
  };
 
@@ -373,7 +389,7 @@
          toast.add({ severity: 'success', summary: 'Success', detail: `All proxies ${action.replace('_all', '')} command sent`, life: 3000 });
          setTimeout(fetchProxies, 500);
      } catch (e) {
-         toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.error || e.message, life: 5000 });
+         toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data || e.message, life: 5000 });
      }
  };
 

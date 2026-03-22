@@ -79,6 +79,11 @@ func NewPool(cfg Config) (*Pool, error) {
 		cancel()
 
 		if err != nil {
+			// Close already-opened connections to avoid leaking them
+			close(p.conns)
+			for pc := range p.conns {
+				pc.conn.Close()
+			}
 			return nil, err
 		}
 

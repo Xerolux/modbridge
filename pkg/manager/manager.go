@@ -290,7 +290,7 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 		status := &p.Stats
 		uptime := time.Duration(0)
 		if status.GetStatus() == "Running" {
-			uptime = time.Since(status.LastStart)
+			uptime = time.Since(status.GetLastStart())
 		}
 
 		pCfg := cfgMap[p.ID]
@@ -306,6 +306,7 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 			"uptime_s":           uptime.Seconds(),
 			"requests":           status.Requests.Load(),
 			"errors":             status.Errors.Load(),
+			"active_connections": status.ActiveConns.Load(),
 			"description":        pCfg.Description,
 			"connection_timeout": pCfg.ConnectionTimeout,
 			"read_timeout":       pCfg.ReadTimeout,
@@ -426,6 +427,7 @@ func (m *Manager) getProxyStatus(id string) map[string]interface{} {
 		"uptime_s":           uptime.Seconds(),
 		"requests":           status.Requests.Load(),
 		"errors":             status.Errors.Load(),
+		"active_connections": status.ActiveConns.Load(),
 		"description":        pCfg.Description,
 		"connection_timeout": pCfg.ConnectionTimeout,
 		"read_timeout":       pCfg.ReadTimeout,
