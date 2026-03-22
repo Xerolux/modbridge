@@ -9,8 +9,11 @@ export function useEventSource(url, options = {}) {
   const eventSource = ref(null);
   let reconnectAttempts = 0;
   let reconnectTimeout = null;
+  let manualClose = false; // true when disconnect() is called explicitly
 
   const connect = () => {
+    manualClose = false;
+
     if (reconnectTimeout) {
       clearTimeout(reconnectTimeout);
       reconnectTimeout = null;
@@ -45,10 +48,10 @@ export function useEventSource(url, options = {}) {
       eventSource.value.onerror = () => {
         isConnected.value = false;
 
-        if (eventSource.value?.readyState === EventSource.CLOSED) {
-          return;
-        }
+        // Don't reconnect if the user explicitly disconnected
+        if (manualClose) return;
 
+        // Always reconnect — including when server closes (CLOSED state after 30min timeout)
         const backoffDelay = Math.min(
           EVENT_SOURCE_CONFIG.INITIAL_DELAY * Math.pow(2, reconnectAttempts),
           EVENT_SOURCE_CONFIG.MAX_DELAY
@@ -66,6 +69,7 @@ export function useEventSource(url, options = {}) {
   };
 
   const disconnect = () => {
+    manualClose = true;
     if (reconnectTimeout) {
       clearTimeout(reconnectTimeout);
       reconnectTimeout = null;
