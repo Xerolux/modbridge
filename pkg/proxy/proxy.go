@@ -81,11 +81,12 @@ type ProxyInstance struct {
 }
 
 type Stats struct {
-	Uptime    time.Duration
-	LastStart time.Time
-	Requests  atomic.Int64
-	Errors    atomic.Int64
-	status    atomic.Value // stores string
+	Uptime      time.Duration
+	LastStart   time.Time
+	Requests    atomic.Int64
+	Errors      atomic.Int64
+	ActiveConns atomic.Int64
+	status      atomic.Value // stores string
 }
 
 func (s *Stats) GetStatus() string {
@@ -284,6 +285,10 @@ func (p *ProxyInstance) acceptLoop() {
 func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 	defer p.wg.Done()
 	defer clientConn.Close()
+
+	// Track active connections for this proxy
+	p.Stats.ActiveConns.Add(1)
+	defer p.Stats.ActiveConns.Add(-1)
 
 	// Release global connection counter when done
 	defer atomic.AddInt64(&globalActiveConnections, -1)
