@@ -12,7 +12,7 @@ jobs:
   update-wiki:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Sync docs to wiki
         uses: newrelic/newrelic-action-sync-to-wiki@v1.1.0
