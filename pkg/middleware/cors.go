@@ -11,19 +11,16 @@ type CORSMiddleware struct {
 	allowedOrigins map[string]bool
 }
 
-// NewCORSMiddleware creates a new CORS middleware
+// NewCORSMiddleware creates a new CORS middleware with the given allowed origins.
+// Pass an empty slice for no additional origins (all requests without an Origin
+// header are still served — CORS headers are only added for recognised origins).
 func NewCORSMiddleware(allowedOrigins []string) *CORSMiddleware {
-	origins := make(map[string]bool)
+	origins := make(map[string]bool, len(allowedOrigins))
 	for _, origin := range allowedOrigins {
-		origins[origin] = true
+		if origin != "" {
+			origins[origin] = true
+		}
 	}
-
-	// Always allow localhost for development
-	origins["http://localhost:8080"] = true
-	origins["http://localhost:3000"] = true
-	origins["http://127.0.0.1:8080"] = true
-	origins["http://127.0.0.1:3000"] = true
-
 	return &CORSMiddleware{
 		allowedOrigins: origins,
 	}

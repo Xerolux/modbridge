@@ -2,6 +2,7 @@ package web
 
 import (
 	"embed"
+	"fmt"
 	"io/fs"
 	"mime"
 	"net/http"
@@ -12,10 +13,12 @@ import (
 //go:embed dist
 var distFS embed.FS
 
-func Handler() http.Handler {
+// Handler returns the SPA handler and an error if the embedded FS cannot be
+// accessed. Callers must check the error before registering the handler.
+func Handler() (http.Handler, error) {
 	distRoot, err := fs.Sub(distFS, "dist")
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to access embedded web assets: %w", err)
 	}
 
 	// Use a custom handler for SPA support
@@ -67,5 +70,5 @@ func Handler() http.Handler {
 		}
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = w.Write(content) // Ignore write error (already committed response)
-	})
+	}), nil
 }

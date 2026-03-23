@@ -58,7 +58,8 @@ type ProxyInstance struct {
 	ConnectionTimeout time.Duration
 	ReadTimeout       time.Duration
 	MaxRetries        int
-	MaxConns          int // Maximum concurrent connections (0 = unlimited)
+	MaxConns          int    // Maximum concurrent connections (0 = unlimited)
+	Protocol          string // "tcp" (default) or "rtu-tcp"
 
 	listener  net.Listener
 	connPool  *pool.Pool
@@ -137,6 +138,7 @@ func NewProxyInstance(id, name, listen, target string, maxReadSize, connectionTi
 		ReadTimeout:       time.Duration(readTimeout) * time.Second,
 		MaxRetries:        maxRetries,
 		MaxConns:          500,
+		Protocol:          "tcp",
 		log:               l,
 		deviceTracker:     tracker,
 	}
@@ -255,22 +257,19 @@ func (p *ProxyInstance) acceptLoop() {
 			}
 		}
 
-		// Check GLOBAL connection limit first (system-wide across all proxies)
+		// Check GLOBAL connection limit first (system-wide across all proxies).
+		// Use Add+check to avoid a CAS retry-loop that drops connections on contention.
 		maxConns := atomic.LoadInt64(&globalMaxConnections)
+		globalLimitApplied := false
 		if maxConns > 0 {
-			currentConns := atomic.LoadInt64(&globalActiveConnections)
-			if currentConns >= maxConns {
+			current := atomic.AddInt64(&globalActiveConnections, 1)
+			if current > maxConns {
+				atomic.AddInt64(&globalActiveConnections, -1) // undo
 				conn.Close()
 				p.log.Warn(p.ID, fmt.Sprintf("Global connection limit reached (%d), dropping connection", maxConns))
 				continue
 			}
-			// Try to increment global counter
-			if !atomic.CompareAndSwapInt64(&globalActiveConnections, currentConns, currentConns+1) {
-				// Counter changed, retry
-				conn.Close()
-				time.Sleep(10 * time.Millisecond)
-				continue
-			}
+			globalLimitApplied = true
 		}
 
 		// Check connection limit (if configured)
@@ -292,11 +291,11 @@ func (p *ProxyInstance) acceptLoop() {
 		}
 
 		p.wg.Add(1)
-		go p.handleClient(conn, sem)
+		go p.handleClient(conn, sem, globalLimitApplied)
 	}
 }
 
-func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
+func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}, globalLimitApplied bool) {
 	defer p.wg.Done()
 	defer clientConn.Close()
 
@@ -304,8 +303,10 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 	p.Stats.ActiveConns.Add(1)
 	defer p.Stats.ActiveConns.Add(-1)
 
-	// Release global connection counter when done
-	defer atomic.AddInt64(&globalActiveConnections, -1)
+	// Release global connection counter only if we incremented it
+	if globalLimitApplied {
+		defer atomic.AddInt64(&globalActiveConnections, -1)
+	}
 
 	// Release semaphore slot when done
 	if sem != nil {
@@ -358,8 +359,10 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 		var respFrame []byte
 		var errFwd error
 
-		// Check if splitting is needed
-		if p.MaxReadSize > 0 && modbus.IsReadRequest(reqFrame) {
+		// Route to the appropriate forwarding function based on protocol.
+		if p.Protocol == "rtu-tcp" {
+			respFrame, errFwd = p.forwardRequestRTU(reqFrame)
+		} else if p.MaxReadSize > 0 && modbus.IsReadRequest(reqFrame) {
 			respFrame, errFwd = p.handleSplitRead(reqFrame)
 		} else {
 			respFrame, errFwd = p.forwardRequest(reqFrame)
@@ -519,4 +522,79 @@ func (p *ProxyInstance) forwardRequest(req []byte) ([]byte, error) {
 	}
 
 	return nil, fmt.Errorf("failed after %d retries: %w", p.MaxRetries, lastErr)
+}
+
+// forwardRequestRTU converts a Modbus TCP frame to RTU, sends it to the target,
+// reads the RTU response, and converts it back to a TCP frame.
+// Used when Protocol == "rtu-tcp".
+func (p *ProxyInstance) forwardRequestRTU(tcpReq []byte) ([]byte, error) {
+	if len(tcpReq) < 8 {
+		return nil, fmt.Errorf("rtu-tcp: tcp request too short (%d bytes)", len(tcpReq))
+	}
+	txID := uint16(tcpReq[0])<<8 | uint16(tcpReq[1])
+	fc := tcpReq[7]
+
+	rtuReq, err := modbus.TCPToRTU(tcpReq)
+	if err != nil {
+		return nil, fmt.Errorf("rtu-tcp: tcp→rtu conversion: %w", err)
+	}
+
+	var lastErr error
+	for attempt := 0; attempt <= p.MaxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(1<<min(uint(attempt-1), 10)) * 100 * time.Millisecond
+			if backoff > 30*time.Second {
+				backoff = 30 * time.Second
+			}
+			time.Sleep(backoff)
+		}
+
+		rawConn, err := p.connPool.Get(p.ctx)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		var markBroken func()
+		if wc, ok := rawConn.(*pool.WrappedConn); ok {
+			markBroken = wc.MarkBroken
+		} else {
+			markBroken = func() {}
+		}
+
+		if err := rawConn.SetWriteDeadline(time.Now().Add(p.ConnectionTimeout)); err != nil {
+			markBroken()
+			rawConn.Close()
+			lastErr = err
+			continue
+		}
+		if _, err := rawConn.Write(rtuReq); err != nil {
+			markBroken()
+			rawConn.Close()
+			lastErr = err
+			continue
+		}
+		if err := rawConn.SetReadDeadline(time.Now().Add(p.ReadTimeout)); err != nil {
+			markBroken()
+			rawConn.Close()
+			lastErr = err
+			continue
+		}
+		rtuResp, err := modbus.ReadRTUFrame(rawConn, fc)
+		if err != nil {
+			markBroken()
+			rawConn.Close()
+			lastErr = err
+			continue
+		}
+		rawConn.Close()
+
+		tcpResp, err := modbus.RTUToTCP(rtuResp, txID)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		return tcpResp, nil
+	}
+
+	return nil, fmt.Errorf("rtu-tcp: failed after %d retries: %w", p.MaxRetries, lastErr)
 }
