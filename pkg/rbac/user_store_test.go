@@ -1,3 +1,8 @@
+// Copyright (c) 2026 Xerolux. All rights reserved.
+// ModBridge — Modbus TCP Proxy Manager
+// Created by Xerolux
+// https://github.com/Xerolux/modbridge
+
 package rbac
 
 import (
