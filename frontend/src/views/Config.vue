@@ -384,7 +384,7 @@
          const res = await axios.get('/api/config/system');
          config.value = { ...config.value, ...res.data };
      } catch (e) {
-         console.error('Failed to fetch config', e);
+         toast.add({ severity: 'error', summary: 'Fehler', detail: 'Konfiguration konnte nicht geladen werden', life: 5000 });
      }
  };
 
