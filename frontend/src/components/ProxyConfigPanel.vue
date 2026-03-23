@@ -1,4 +1,5 @@
 <template>
+  <Toast />
   <div
     v-if="visible"
     :class="['proxy-config-panel', minimized ? 'minimized' : '']"
@@ -156,11 +157,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, onUnmounted } from 'vue';
 import InputNumber from 'primevue/inputnumber';
 import Checkbox from 'primevue/checkbox';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
+import { useToast } from 'primevue/usetoast';
+import Toast from 'primevue/toast';
 import axios from '../axios.js';
 
 const props = defineProps({
@@ -175,9 +178,10 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close', 'refresh']);
+const toast = useToast();
 
 const minimized = ref(false);
-const position = reactive({ x: window.innerWidth - 420, y: 100 });
+const position = reactive({ x: Math.max(0, window.innerWidth - 420), y: 100 });
 const dragging = ref(false);
 const dragOffset = reactive({ x: 0, y: 0 });
 const selectedProxies = ref([]);
@@ -279,10 +283,11 @@ const applyBatchConfig = async () => {
     });
 
     await Promise.all(promises);
+    toast.add({ severity: 'success', summary: 'Erfolg', detail: 'Konfiguration angewendet', life: 3000 });
     emit('refresh');
     selectedProxies.value = [];
   } catch (error) {
-    console.error('Failed to apply batch config:', error);
+    toast.add({ severity: 'error', summary: 'Fehler', detail: error.response?.data || error.message, life: 5000 });
   } finally {
     applying.value = false;
   }
@@ -292,9 +297,10 @@ const batchAction = async (action) => {
   applying.value = true;
   try {
     await axios.post('/api/proxies/control', { action });
+    toast.add({ severity: 'success', summary: 'Erfolg', detail: `Aktion "${action}" ausgeführt`, life: 3000 });
     emit('refresh');
   } catch (error) {
-    console.error('Failed to execute batch action:', error);
+    toast.add({ severity: 'error', summary: 'Fehler', detail: error.response?.data || error.message, life: 5000 });
   } finally {
     applying.value = false;
   }

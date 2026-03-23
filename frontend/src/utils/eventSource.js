@@ -10,6 +10,7 @@ export function useEventSource(url, options = {}) {
   let reconnectAttempts = 0;
   let reconnectTimeout = null;
   let manualClose = false; // true when disconnect() is called explicitly
+  const maxReconnectAttempts = EVENT_SOURCE_CONFIG.MAX_RECONNECT_ATTEMPTS;
 
   const connect = () => {
     manualClose = false;
@@ -51,7 +52,13 @@ export function useEventSource(url, options = {}) {
         // Don't reconnect if the user explicitly disconnected
         if (manualClose) return;
 
-        // Always reconnect — including when server closes (CLOSED state after 30min timeout)
+        // Stop retrying after max attempts to prevent infinite loops
+        if (reconnectAttempts >= maxReconnectAttempts) {
+          error.value = new Error(`SSE: Max reconnect attempts (${maxReconnectAttempts}) reached`);
+          return;
+        }
+
+        // Reconnect with exponential backoff — including when server closes (CLOSED state after 30min timeout)
         const backoffDelay = Math.min(
           EVENT_SOURCE_CONFIG.INITIAL_DELAY * Math.pow(2, reconnectAttempts),
           EVENT_SOURCE_CONFIG.MAX_DELAY

@@ -3,7 +3,7 @@
  import { useEventSource } from '../utils/eventSource';
  import Checkbox from 'primevue/checkbox';
  import axios from '../axios.js';
- import { formatDate, getLogLevelColor } from '../utils/helpers';
+ import { formatDateTime, getLogLevelColor } from '../utils/helpers';
 
  const logs = ref([]);
  const isConnected = ref(false);
@@ -111,7 +111,7 @@
           class="mb-1 border-b border-gray-700/50 pb-1 flex flex-col sm:block hover:bg-gray-700/30 px-1 rounded transition-colors"
         >
           <div>
-              <span class="text-gray-400">[{{ formatDate(log.timestamp) }}]</span>
+              <span class="text-gray-400">[{{ formatDateTime(log.timestamp) }}]</span>
               <span :class="getLogLevelColor(log.level)" class="mx-2 font-bold">{{ log.level }}</span>
           </div>
           <div>

@@ -219,7 +219,7 @@ onMounted(async () => {
     } catch (err) {
         error.value = true;
         errorMessage.value = err.message || 'Fehler beim Initialisieren des Dashboards';
-        loading.value = false;
+        loading.value = false; // Ensure loading is always cleared on error
     }
 });
 
@@ -329,7 +329,7 @@ const fetchData = async (isInitial = false) => {
 
 const getWidgetValue = (widget) => {
     const p = proxies.value.find(x => x.id === widget.proxy_id);
-    if (!p) return 'Unknown';
+    if (!p) return 'Unbekannt';
     if (p.status === 'Running') {
         return `${formatNumber(p.requests || 0)} Anfragen`;
     }
@@ -344,7 +344,7 @@ const getWidgetConnections = (widget) => {
 
 const getWidgetStatus = (widget) => {
     const p = proxies.value.find(x => x.id === widget.proxy_id);
-    return p ? p.status : widget.status || 'Unknown';
+    return p ? p.status : widget.status || 'Unbekannt';
 };
 
 const openAddWidget = () => {
