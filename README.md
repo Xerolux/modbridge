@@ -10,6 +10,11 @@
 [![Docker Publish](https://github.com/Xerolux/modbridge/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Xerolux/modbridge/actions/workflows/docker-publish.yml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/xerolux/modbridge?style=for-the-badge)](https://hub.docker.com/r/xerolux/modbridge)
 
+[![GitHub Sponsor][sponsor-badge]][github-sponsors]
+[![Ko-Fi][kofi-badge]][kofi]
+[![Buy Me A Coffee][bmac-badge]][bmac]
+[![Tesla](https://img.shields.io/badge/Tesla-Referral-red?style=for-the-badge&logo=tesla)](https://ts.la/sebastian564489)
+
 ![ModBridge Logo](./assets/banner.png)
 
 **ModBridge** ist ein moderner, robuster Modbus TCP Proxy Manager mit einer eleganten Web-Oberfläche. Er ermöglicht das Multiplexing und Management von Modbus-Verbindungen und bietet detailliertes Monitoring, Logging und Sicherheit in einem kompakten, einfach bereitzustellenden Paket.
