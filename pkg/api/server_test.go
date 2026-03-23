@@ -19,7 +19,7 @@ func TestHandleHealth(t *testing.T) {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
 	defer log.Close()
-	server := NewServer(config.NewManager("test.json"), manager.NewManager(config.NewManager("test.json"), log, nil), nil, log)
+	server := NewServer(config.NewManager("test.json"), manager.NewManager(config.NewManager("test.json"), log, nil), nil, log, nil)
 
 	req := httptest.NewRequest("GET", "/api/health", nil)
 	w := httptest.NewRecorder()
@@ -46,7 +46,7 @@ func TestHandleStatus(t *testing.T) {
 	defer log.Close()
 	cfgMgr := config.NewManager("test.json")
 	mgr := manager.NewManager(cfgMgr, log, nil)
-	server := NewServer(cfgMgr, mgr, nil, log)
+	server := NewServer(cfgMgr, mgr, nil, log, nil)
 
 	req := httptest.NewRequest("GET", "/api/status", nil)
 	w := httptest.NewRecorder()
@@ -84,7 +84,7 @@ func TestHandleProxiesGet(t *testing.T) {
 	defer log.Close()
 	cfgMgr := config.NewManager("test.json")
 	mgr := manager.NewManager(cfgMgr, log, nil)
-	server := NewServer(cfgMgr, mgr, nil, log)
+	server := NewServer(cfgMgr, mgr, nil, log, nil)
 
 	req := httptest.NewRequest("GET", "/api/proxies", nil)
 	w := httptest.NewRecorder()
@@ -111,7 +111,7 @@ func TestHandleProxiesPostInvalid(t *testing.T) {
 	defer log.Close()
 	cfgMgr := config.NewManager("test.json")
 	mgr := manager.NewManager(cfgMgr, log, nil)
-	server := NewServer(cfgMgr, mgr, nil, log)
+	server := NewServer(cfgMgr, mgr, nil, log, nil)
 
 	req := httptest.NewRequest("POST", "/api/proxies", nil)
 	w := httptest.NewRecorder()
@@ -131,7 +131,7 @@ func TestHandleProxiesPostValid(t *testing.T) {
 	defer log.Close()
 	cfgMgr := config.NewManager("test.json")
 	mgr := manager.NewManager(cfgMgr, log, nil)
-	server := NewServer(cfgMgr, mgr, nil, log)
+	server := NewServer(cfgMgr, mgr, nil, log, nil)
 
 	cfg := config.ProxyConfig{
 		ID:                "test-id",

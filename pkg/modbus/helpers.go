@@ -3,6 +3,7 @@ package modbus
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 )
 
 const (
@@ -119,4 +120,113 @@ func CreateExceptionResponse(reqFrame []byte, exceptionCode uint8) []byte {
 	fc := reqFrame[7]
 
 	return ExceptionResponse(txID, unitID, fc, exceptionCode)
+}
+
+// --- RTU-over-TCP helpers ---
+// These functions convert between Modbus TCP frames (with MBAP header) and
+// Modbus RTU frames (with CRC-16 instead of MBAP header).  They are used by
+// the proxy when the target speaks RTU over a raw TCP socket.
+
+// TCPToRTU converts a Modbus TCP frame to a Modbus RTU frame.
+// It strips the 6-byte MBAP header and appends a CRC-16.
+func TCPToRTU(tcpFrame []byte) ([]byte, error) {
+	// Minimum TCP frame: 6 (MBAP) + 1 (unit ID) + 1 (function) = 8 bytes
+	if len(tcpFrame) < 8 {
+		return nil, fmt.Errorf("tcp frame too short for RTU conversion: %d bytes", len(tcpFrame))
+	}
+	// PDU starts at byte 6 (unit ID + function code + data)
+	pdu := tcpFrame[6:]
+	rtu := make([]byte, len(pdu)+2)
+	copy(rtu, pdu)
+	crc := crc16Modbus(pdu)
+	rtu[len(pdu)] = crc[0]
+	rtu[len(pdu)+1] = crc[1]
+	return rtu, nil
+}
+
+// RTUToTCP converts a Modbus RTU response frame to a Modbus TCP frame,
+// re-using the transaction ID from the original request TCP frame.
+func RTUToTCP(rtuFrame []byte, txID uint16) ([]byte, error) {
+	// Minimum RTU response: 1 (slave) + 1 (function) + 1 (data) + 2 (CRC) = 5
+	if len(rtuFrame) < 5 {
+		return nil, fmt.Errorf("rtu frame too short for TCP conversion: %d bytes", len(rtuFrame))
+	}
+	// Validate CRC
+	payload := rtuFrame[:len(rtuFrame)-2]
+	expectedCRC := crc16Modbus(payload)
+	gotCRC := rtuFrame[len(rtuFrame)-2:]
+	if gotCRC[0] != expectedCRC[0] || gotCRC[1] != expectedCRC[1] {
+		return nil, fmt.Errorf("RTU CRC mismatch: got %02X%02X, expected %02X%02X",
+			gotCRC[0], gotCRC[1], expectedCRC[0], expectedCRC[1])
+	}
+	// Build TCP frame: MBAP (6) + PDU (without CRC)
+	pduLen := uint16(len(payload))
+	tcp := make([]byte, 6+int(pduLen))
+	binary.BigEndian.PutUint16(tcp[0:2], txID)
+	tcp[2] = 0 // Protocol ID high
+	tcp[3] = 0 // Protocol ID low
+	binary.BigEndian.PutUint16(tcp[4:6], pduLen)
+	copy(tcp[6:], payload)
+	return tcp, nil
+}
+
+// ReadRTUFrame reads one Modbus RTU frame from r, given the expected function
+// code and whether an exception response is expected.  It reads enough bytes to
+// determine the full frame length, then reads the CRC.
+func ReadRTUFrame(r io.Reader, fc byte) ([]byte, error) {
+	// Read slave ID + function code
+	header := make([]byte, 2)
+	if _, err := io.ReadFull(r, header); err != nil {
+		return nil, fmt.Errorf("rtu header read: %w", err)
+	}
+	isException := header[1]&0x80 != 0
+
+	var dataLen int
+	if isException {
+		dataLen = 1 // exception code
+	} else {
+		switch fc {
+		case 0x01, 0x02, 0x03, 0x04:
+			// Next byte is byte count
+			bc := make([]byte, 1)
+			if _, err := io.ReadFull(r, bc); err != nil {
+				return nil, fmt.Errorf("rtu byte count read: %w", err)
+			}
+			// header + byteCount byte + data bytes + CRC
+			full := make([]byte, 2+1+int(bc[0])+2)
+			copy(full, header)
+			full[2] = bc[0]
+			if _, err := io.ReadFull(r, full[3:]); err != nil {
+				return nil, fmt.Errorf("rtu data read: %w", err)
+			}
+			return full, nil
+		case 0x05, 0x06, 0x0F, 0x10:
+			dataLen = 4 // address (2) + value/quantity (2)
+		default:
+			return nil, fmt.Errorf("unsupported RTU function code 0x%02X", fc)
+		}
+	}
+
+	rest := make([]byte, dataLen+2) // data + CRC
+	if _, err := io.ReadFull(r, rest); err != nil {
+		return nil, fmt.Errorf("rtu data read: %w", err)
+	}
+	frame := append(header, rest...)
+	return frame, nil
+}
+
+// crc16Modbus calculates the CRC-16/Modbus checksum.
+func crc16Modbus(data []byte) []byte {
+	crc := uint16(0xFFFF)
+	for _, b := range data {
+		crc ^= uint16(b)
+		for i := 0; i < 8; i++ {
+			if crc&1 != 0 {
+				crc = (crc >> 1) ^ 0xA001
+			} else {
+				crc >>= 1
+			}
+		}
+	}
+	return []byte{byte(crc), byte(crc >> 8)}
 }

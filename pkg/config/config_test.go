@@ -65,6 +65,58 @@ func TestLoadSaveConfig(t *testing.T) {
 	}
 }
 
+func TestRollback(t *testing.T) {
+	testFile := "test_rollback_temp.json"
+	defer os.Remove(testFile)
+
+	mgr := NewManager(testFile)
+
+	// No rollback available initially.
+	if mgr.CanRollback() {
+		t.Fatal("CanRollback should be false before any Update")
+	}
+	if err := mgr.Rollback(); err == nil {
+		t.Fatal("Rollback should return error when no snapshot exists")
+	}
+
+	// Apply first change.
+	if err := mgr.Update(func(c *Config) error {
+		c.WebPort = ":9090"
+		return nil
+	}); err != nil {
+		t.Fatalf("first Update failed: %v", err)
+	}
+
+	// Rollback should now be available.
+	if !mgr.CanRollback() {
+		t.Fatal("CanRollback should be true after Update")
+	}
+
+	// Apply second change.
+	if err := mgr.Update(func(c *Config) error {
+		c.WebPort = ":7777"
+		return nil
+	}); err != nil {
+		t.Fatalf("second Update failed: %v", err)
+	}
+	if mgr.Get().WebPort != ":7777" {
+		t.Fatalf("expected :7777, got %s", mgr.Get().WebPort)
+	}
+
+	// Rollback should restore the first change value.
+	if err := mgr.Rollback(); err != nil {
+		t.Fatalf("Rollback failed: %v", err)
+	}
+	if mgr.Get().WebPort != ":9090" {
+		t.Fatalf("after rollback expected :9090, got %s", mgr.Get().WebPort)
+	}
+
+	// After rollback, snapshot is consumed.
+	if mgr.CanRollback() {
+		t.Fatal("CanRollback should be false after Rollback consumes snapshot")
+	}
+}
+
 func TestConfigDeepCopy(t *testing.T) {
 	mgr := NewManager("test.json")
 

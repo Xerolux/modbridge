@@ -60,6 +60,9 @@ func (m *Manager) AddProxy(cfg config.ProxyConfig, save bool) error {
 	}
 
 	p := proxy.NewProxyInstance(cfg.ID, cfg.Name, cfg.ListenAddr, cfg.TargetAddr, cfg.MaxReadSize, cfg.ConnectionTimeout, cfg.ReadTimeout, cfg.MaxRetries, m.log, m.deviceTracker)
+	if cfg.Protocol != "" {
+		p.Protocol = cfg.Protocol
+	}
 	m.proxies[cfg.ID] = p
 
 	// Broadcast event
@@ -247,6 +250,9 @@ func (m *Manager) UpdateProxy(cfg config.ProxyConfig) error {
 
 	// Create new proxy with updated config
 	p := proxy.NewProxyInstance(cfg.ID, cfg.Name, cfg.ListenAddr, cfg.TargetAddr, cfg.MaxReadSize, cfg.ConnectionTimeout, cfg.ReadTimeout, cfg.MaxRetries, m.log, m.deviceTracker)
+	if cfg.Protocol != "" {
+		p.Protocol = cfg.Protocol
+	}
 	m.proxies[cfg.ID] = p
 
 	// Start if it was enabled and not paused
