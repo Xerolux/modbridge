@@ -23,19 +23,24 @@
 | Endpunkt | Methode | Beschreibung |
 |----------|---------|--------------|
 | `/api/health` | GET | Health Check (kein Login erforderlich) |
+| `/api/status` | GET | Server-Status |
 | `/api/login` | POST | Anmelden |
 | `/api/logout` | POST | Abmelden |
 | `/api/proxies` | GET | Alle Proxies auflisten |
 | `/api/proxies` | POST | Neuen Proxy anlegen |
-| `/api/proxies/{id}` | PUT | Proxy aktualisieren |
-| `/api/proxies/{id}` | DELETE | Proxy löschen |
-| `/api/proxies/{id}/start` | POST | Proxy starten |
-| `/api/proxies/{id}/stop` | POST | Proxy stoppen |
-| `/api/config` | GET | Konfiguration abrufen |
-| `/api/config` | PUT | Konfiguration speichern |
+| `/api/proxies` | PUT | Proxy aktualisieren (ID im Body) |
+| `/api/proxies?id={id}` | DELETE | Proxy löschen |
+| `/api/proxies/control` | POST | Proxy steuern (`{id, action: start\|stop\|restart\|pause\|resume}`) |
+| `/api/proxies/control` | POST | Alle Proxies steuern (`{action: start_all\|stop_all}`) |
+| `/api/proxies/stream` | GET | Live-Proxy-Updates (SSE) |
+| `/api/config/system` | GET | Systemkonfiguration abrufen |
+| `/api/config/system` | PUT | Systemkonfiguration speichern |
+| `/api/config/password` | POST | Passwort ändern |
 | `/api/logs` | GET | Log-Einträge abrufen |
 | `/api/logs/stream` | GET | Live-Log-Stream (SSE) |
 | `/api/devices` | GET | Verbundene Geräte auflisten |
+| `/api/system/info` | GET | Systeminformationen & Metriken |
+| `/api/system/diagnostics/connectivity` | GET | Verbindbarkeit aller Proxy-Ziele prüfen |
 | `/api/metrics` | GET | Prometheus-Metriken (Port `:9090`) |
 
 ## Skripte
