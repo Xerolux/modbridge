@@ -65,12 +65,27 @@ func NewEnhancedStats(latencyWindow int) *EnhancedStats {
 	}
 }
 
-// RecordRequestStart records the start of a request
+// staleRequestAge is the maximum duration a request start entry is kept
+// without a corresponding completion record. Entries older than this are
+// evicted during the next RecordRequestStart call to prevent map growth
+// caused by goroutines that exit without calling RecordRequestComplete.
+const staleRequestAge = 5 * time.Minute
+
+// RecordRequestStart records the start of a request.
 func (s *EnhancedStats) RecordRequestStart(requestID int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.requestStartTimes[requestID] = time.Now()
+	// Evict stale entries (requests that never completed) to prevent map growth.
+	now := time.Now()
+	for id, t := range s.requestStartTimes {
+		if now.Sub(t) > staleRequestAge {
+			delete(s.requestStartTimes, id)
+			s.activeConnections-- // were counted as active; undo
+		}
+	}
+
+	s.requestStartTimes[requestID] = now
 	s.activeConnections++
 	s.totalConnections++
 

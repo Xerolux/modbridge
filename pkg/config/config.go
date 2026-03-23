@@ -60,13 +60,19 @@ type ProxyConfig struct {
 	ListenAddr        string       `json:"listen_addr"`
 	TargetAddr        string       `json:"target_addr"`
 	Enabled           bool         `json:"enabled"`
-	Paused            bool         `json:"paused"`             // New: Paused state (different from Enabled)
-	ConnectionTimeout int          `json:"connection_timeout"` // New: Connection timeout in seconds (default: 10)
-	ReadTimeout       int          `json:"read_timeout"`       // New: Read timeout in seconds (default: 30)
-	MaxRetries        int          `json:"max_retries"`        // New: Max retry attempts (default: 3)
-	Description       string       `json:"description"`        // New: User description
+	Paused            bool         `json:"paused"`             // Paused state (different from Enabled)
+	ConnectionTimeout int          `json:"connection_timeout"` // Connection timeout in seconds (default: 10)
+	ReadTimeout       int          `json:"read_timeout"`       // Read timeout in seconds (default: 30)
+	MaxRetries        int          `json:"max_retries"`        // Max retry attempts (default: 3)
+	Description       string       `json:"description"`        // User description
 	MaxReadSize       int          `json:"max_read_size"`
 	Tags              FlexibleTags `json:"tags"`
+	// Protocol controls the wire format used when talking to the target.
+	// "tcp"     – standard Modbus TCP (MBAP header, default)
+	// "rtu-tcp" – Modbus RTU over TCP: client sends TCP frames, proxy strips
+	//             the MBAP header, appends CRC-16, forwards raw RTU frames to
+	//             the target, then wraps the RTU response back in a TCP frame.
+	Protocol string `json:"protocol"`
 }
 
 // Config holds the global configuration.
@@ -125,9 +131,10 @@ type Config struct {
 
 // Manager handles config persistence.
 type Manager struct {
-	mu   sync.RWMutex
-	path string
-	cfg  Config
+	mu       sync.RWMutex
+	path     string
+	cfg      Config
+	previous *Config // snapshot before the last Update call, enables Rollback
 }
 
 // NewManager creates a config manager.
@@ -254,6 +261,9 @@ func (m *Manager) Update(fn func(*Config) error) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// Snapshot current config for potential rollback.
+	prev := m.deepCopyConfig(m.cfg)
+
 	// Create a deep copy to modify
 	newCfg := m.deepCopyConfig(m.cfg)
 
@@ -261,6 +271,7 @@ func (m *Manager) Update(fn func(*Config) error) error {
 		return err
 	}
 
+	m.previous = &prev
 	m.cfg = newCfg
 
 	// Save to disk immediately
@@ -273,6 +284,38 @@ func (m *Manager) Update(fn func(*Config) error) error {
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
 
+	return enc.Encode(m.cfg)
+}
+
+// CanRollback reports whether a previous config snapshot is available.
+func (m *Manager) CanRollback() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.previous != nil
+}
+
+// Rollback restores the configuration to the state before the last Update call.
+// Returns an error if no previous snapshot exists or the save fails.
+func (m *Manager) Rollback() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.previous == nil {
+		return fmt.Errorf("no previous configuration to roll back to")
+	}
+
+	restored := m.deepCopyConfig(*m.previous)
+	m.previous = nil // consume the snapshot
+	m.cfg = restored
+
+	f, err := os.Create(m.path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	enc := json.NewEncoder(f)
+	enc.SetIndent("", "  ")
 	return enc.Encode(m.cfg)
 }
 

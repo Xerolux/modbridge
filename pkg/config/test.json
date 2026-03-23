@@ -15,7 +15,8 @@
       "max_retries": 0,
       "description": "",
       "max_read_size": 0,
-      "tags": null
+      "tags": null,
+      "protocol": ""
     }
   ],
   "log_level": "INFO",
