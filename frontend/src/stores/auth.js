@@ -10,8 +10,8 @@ export const useAuthStore = defineStore('auth', () => {
     if (checking.value) return isAuthenticated.value
     checking.value = true
     try {
-      // Just check health or a protected endpoint to verify session
-      await axios.get('/api/proxies')
+      // Use lightweight status endpoint to verify session
+      await axios.get('/api/status')
       isAuthenticated.value = true
     } catch (e) {
       isAuthenticated.value = false

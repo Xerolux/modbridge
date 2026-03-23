@@ -31,6 +31,13 @@
              <i class="pi pi-spin pi-spinner text-4xl"></i>
          </div>
 
+         <div v-else-if="proxies.length === 0" class="flex justify-center items-center min-h-[300px]">
+             <div class="text-center text-gray-400">
+                 <i class="pi pi-inbox text-5xl mb-4 block"></i>
+                 <p>Keine Proxies vorhanden. Klicke auf "Add Proxy" um einen hinzuzufügen.</p>
+             </div>
+         </div>
+
          <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
              <Card v-for="proxy in proxies" :key="proxy.id" class="bg-gray-800 text-white">
                  <template #title>
@@ -263,7 +270,7 @@
          const res = await axios.get('/api/proxies');
          proxies.value = res.data;
      } catch (e) {
-         console.error("Failed to fetch proxies");
+         toast.add({ severity: 'error', summary: 'Fehler', detail: 'Proxies konnten nicht geladen werden', life: 5000 });
      }
  };
 
@@ -385,7 +392,7 @@
 
  const controlAllProxies = async (action) => {
      try {
-         await axios.post('/api/proxies/control', { action: action === 'start_all' ? 'start_all' : 'stop_all' });
+         await axios.post('/api/proxies/control', { action });
          toast.add({ severity: 'success', summary: 'Success', detail: `All proxies ${action.replace('_all', '')} command sent`, life: 3000 });
          setTimeout(fetchProxies, 500);
      } catch (e) {
