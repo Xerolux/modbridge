@@ -400,4 +400,4 @@ Coverage: ~18%
 
 This document is maintained by the ModBridge development team and updated regularly to reflect the current state of the project.
 
-For questions or to contribute, please see [CONTRIBUTING.md](../CONTRIBUTING.md) or open an issue on GitHub.
+For questions or to contribute, please see [CONTRIBUTING.md](https://github.com/Xerolux/modbridge/blob/main/CONTRIBUTING.md) or open an issue on GitHub.

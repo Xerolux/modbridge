@@ -1,4 +1,4 @@
-## Systemanforderungen
+# Systemanforderungen
 
 | Ressource | Minimum | Empfohlen |
 |-----------|---------|-----------|

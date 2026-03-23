@@ -26,9 +26,12 @@ jobs:
         env:
           GIT_TERMINAL_PROMPT: 0
 
-      - name: Copy wiki files
+      - name: Copy wiki files and assets
         run: |
           cp docs/*.md /tmp/wiki/
+          if [ -d docs/assets ]; then
+            cp -r docs/assets /tmp/wiki/assets
+          fi
 
       - name: Commit and push to wiki
         working-directory: /tmp/wiki
