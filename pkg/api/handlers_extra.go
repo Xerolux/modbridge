@@ -17,7 +17,9 @@ func (s *Server) handleLogDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", "attachment; filename=proxy.log")
 	w.Header().Set("Content-Type", "application/json")
 	logs := s.log.GetRecent(10000)
-	json.NewEncoder(w).Encode(logs)
+	if err := json.NewEncoder(w).Encode(logs); err != nil {
+		s.log.Error("API", fmt.Sprintf("Failed to encode log download response: %v", err))
+	}
 }
 
 func (s *Server) handleConfigExport(w http.ResponseWriter, r *http.Request) {
@@ -26,7 +28,37 @@ func (s *Server) handleConfigExport(w http.ResponseWriter, r *http.Request) {
 
 	cfg := s.cfgMgr.Get()
 	cfg.AdminPassHash = ""
-	json.NewEncoder(w).Encode(cfg)
+	if err := json.NewEncoder(w).Encode(cfg); err != nil {
+		s.log.Error("API", fmt.Sprintf("Failed to encode config export response: %v", err))
+	}
+}
+
+// handleConfigRollback reverts the configuration to the state before the last
+// change.  Only one level of undo is supported.
+func (s *Server) handleConfigRollback(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !s.cfgMgr.CanRollback() {
+		http.Error(w, "no previous configuration available for rollback", http.StatusConflict)
+		return
+	}
+
+	if err := s.cfgMgr.Rollback(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Restart all proxies with the restored configuration.
+	s.mgr.StopAll()
+	s.mgr.Initialize()
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "rolled back"}); err != nil {
+		s.log.Error("API", fmt.Sprintf("Failed to encode rollback response: %v", err))
+	}
 }
 
 func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {

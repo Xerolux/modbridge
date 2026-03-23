@@ -139,6 +139,9 @@ func (m *Manager) GetTLSConfig() (*tls.Config, error) {
 	// Set client CA pool for mTLS
 	if m.clientCAs != nil {
 		cfg.ClientCAs = m.clientCAs
+		// Use custom verification so we can enforce ExtKeyUsageClientAuth
+		// and support intermediate CAs in the peer chain.
+		cfg.VerifyPeerCertificate = m.VerifyClientCertificate
 	}
 
 	// Enable session tickets
@@ -475,8 +478,46 @@ func MutualTLSConfig(certFile, keyFile, caFile string) (*Config, error) {
 	return config, nil
 }
 
-// VerifyClientCertificate verifies client certificate
-func (m *Manager) VerifyClientCertificate(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-	// TODO: Implement custom certificate verification
+// VerifyClientCertificate verifies that the client certificate is signed by the
+// configured client CA and has not expired. It is intended to be used as
+// tls.Config.VerifyPeerCertificate when ClientAuth is set to
+// tls.RequireAnyClientCert so that Go's standard library skips chain building
+// and delegates the check here.
+func (m *Manager) VerifyClientCertificate(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+	if m.clientCAs == nil {
+		// No client CA configured — nothing to verify.
+		return nil
+	}
+
+	if len(rawCerts) == 0 {
+		return fmt.Errorf("no client certificate provided")
+	}
+
+	cert, err := x509.ParseCertificate(rawCerts[0])
+	if err != nil {
+		return fmt.Errorf("failed to parse client certificate: %w", err)
+	}
+
+	opts := x509.VerifyOptions{
+		Roots:     m.clientCAs,
+		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}
+
+	// Include any intermediate certs supplied by the peer.
+	if len(rawCerts) > 1 {
+		opts.Intermediates = x509.NewCertPool()
+		for _, raw := range rawCerts[1:] {
+			intermediate, err := x509.ParseCertificate(raw)
+			if err != nil {
+				return fmt.Errorf("failed to parse intermediate certificate: %w", err)
+			}
+			opts.Intermediates.AddCert(intermediate)
+		}
+	}
+
+	if _, err := cert.Verify(opts); err != nil {
+		return fmt.Errorf("client certificate verification failed: %w", err)
+	}
+
 	return nil
 }

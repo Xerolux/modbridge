@@ -3,6 +3,7 @@ package modbus
 import (
 	"bytes"
 	"testing"
+	"io"
 )
 
 func TestReadRequestHelpers(t *testing.T) {
@@ -96,5 +97,104 @@ func TestExceptionResponse(t *testing.T) {
 	_, err := ParseReadResponse(frame)
 	if err == nil {
 		t.Errorf("Expected error for exception frame, got nil")
+	}
+}
+
+// --- RTU-over-TCP helper tests ---
+
+func TestCRC16Modbus(t *testing.T) {
+	// Known CRC for "Hello" tested against reference implementation.
+	data := []byte{0x01, 0x03, 0x00, 0x00, 0x00, 0x0A} // Read 10 registers from addr 0
+	crc := crc16Modbus(data)
+	if len(crc) != 2 {
+		t.Fatalf("expected 2 CRC bytes, got %d", len(crc))
+	}
+	// Round-trip: appending CRC and recalculating should give 0x0000.
+	full := append(data, crc...)
+	check := crc16Modbus(full[:len(full)-2])
+	if check[0] != crc[0] || check[1] != crc[1] {
+		t.Errorf("CRC round-trip mismatch")
+	}
+}
+
+func TestTCPToRTU(t *testing.T) {
+	// Modbus TCP frame: MBAP(6) + UnitID(1) + FC(1) + Addr(2) + Qty(2)
+	tcpFrame := CreateReadRequest(1234, 1, 0x03, 0, 10)
+	rtu, err := TCPToRTU(tcpFrame)
+	if err != nil {
+		t.Fatalf("TCPToRTU error: %v", err)
+	}
+	// RTU = PDU (6 bytes) + CRC (2) = 8
+	if len(rtu) != 8 {
+		t.Fatalf("expected 8 RTU bytes, got %d", len(rtu))
+	}
+	// First byte should be UnitID (1)
+	if rtu[0] != 1 {
+		t.Errorf("RTU[0] UnitID: expected 1, got %d", rtu[0])
+	}
+	// Second byte should be FC (0x03)
+	if rtu[1] != 0x03 {
+		t.Errorf("RTU[1] FC: expected 0x03, got 0x%02X", rtu[1])
+	}
+}
+
+func TestTCPToRTUTooShort(t *testing.T) {
+	_, err := TCPToRTU([]byte{0x01, 0x02})
+	if err == nil {
+		t.Fatal("expected error for too-short frame")
+	}
+}
+
+func TestRTUToTCP(t *testing.T) {
+	// Build a valid RTU response: UnitID + FC + ByteCount + Data + CRC
+	payload := []byte{0x01, 0x03, 0x04, 0x00, 0x01, 0x00, 0x02} // 2 registers
+	crc := crc16Modbus(payload)
+	rtuFrame := append(payload, crc...)
+
+	tcp, err := RTUToTCP(rtuFrame, 42)
+	if err != nil {
+		t.Fatalf("RTUToTCP error: %v", err)
+	}
+	// TCP frame: 6 (MBAP) + 7 (PDU) = 13
+	if len(tcp) != 13 {
+		t.Fatalf("expected 13 TCP bytes, got %d", len(tcp))
+	}
+	// Transaction ID should be 42
+	txID := uint16(tcp[0])<<8 | uint16(tcp[1])
+	if txID != 42 {
+		t.Errorf("txID: expected 42, got %d", txID)
+	}
+}
+
+func TestRTUToTCPBadCRC(t *testing.T) {
+	// Corrupt the CRC
+	payload := []byte{0x01, 0x03, 0x04, 0x00, 0x01, 0x00, 0x02}
+	rtuFrame := append(payload, 0xFF, 0xFF) // wrong CRC
+	_, err := RTUToTCP(rtuFrame, 1)
+	if err == nil {
+		t.Fatal("expected CRC mismatch error")
+	}
+}
+
+func TestRTUToTCPTooShort(t *testing.T) {
+	_, err := RTUToTCP([]byte{0x01, 0x02, 0x03}, 1)
+	if err == nil {
+		t.Fatal("expected error for too-short RTU frame")
+	}
+}
+
+func TestReadRTUFrame(t *testing.T) {
+	// Build a valid RTU read-registers response (FC 0x03).
+	payload := []byte{0x01, 0x03, 0x04, 0x00, 0x0A, 0x00, 0x14} // 2 registers: 10, 20
+	crc := crc16Modbus(payload)
+	rtuFrame := append(payload, crc...)
+
+	r := bytes.NewReader(rtuFrame)
+	got, err := ReadRTUFrame(r, 0x03)
+	if err != nil && err != io.EOF {
+		t.Fatalf("ReadRTUFrame error: %v", err)
+	}
+	if !bytes.Equal(got, rtuFrame) {
+		t.Errorf("ReadRTUFrame: got %X, want %X", got, rtuFrame)
 	}
 }

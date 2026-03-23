@@ -22,6 +22,7 @@ import (
 	"modbridge/pkg/manager"
 	"modbridge/pkg/metrics"
 	"modbridge/pkg/middleware"
+	"modbridge/pkg/users"
 )
 
 // checkPortAvailable checks if a port is available for binding
@@ -41,6 +42,7 @@ type Server struct {
 	cfgMgr           *config.Manager
 	mgr              *manager.Manager
 	auth             *auth.Authenticator
+	userMgr          *users.Manager // nil when database is unavailable
 	log              *logger.Logger
 	cors             *middleware.CORSMiddleware
 	security         *middleware.SecurityMiddleware
@@ -52,7 +54,9 @@ type Server struct {
 }
 
 // NewServer creates a new API server.
-func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator, l *logger.Logger) *Server {
+// userMgr may be nil when the database is unavailable; in that case the
+// multi-user endpoints will return 503.
+func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator, l *logger.Logger, userMgr *users.Manager) *Server {
 	// Generate random CSRF secret at startup
 	csrfSecretBytes := make([]byte, 32)
 	if _, err := rand.Read(csrfSecretBytes); err != nil {
@@ -61,8 +65,8 @@ func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator,
 	}
 	csrfSecret := hex.EncodeToString(csrfSecretBytes)
 
-	// Initialize middlewares
-	corsMW := middleware.NewCORSMiddleware([]string{})
+	// Initialize middlewares — seed CORS origins from current config.
+	corsMW := middleware.NewCORSMiddleware(cfg.Get().CORSAllowedOrigins)
 	secMW := middleware.NewSecurityMiddleware()
 	rateLimiter := middleware.NewRateLimiter(60, 100)
 	loginRateLimiter := middleware.NewRateLimiter(5, 10)
@@ -73,6 +77,7 @@ func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator,
 		cfgMgr:           cfg,
 		mgr:              mgr,
 		auth:             a,
+		userMgr:          userMgr,
 		log:              l,
 		cors:             corsMW,
 		security:         secMW,
@@ -120,7 +125,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	}
 
 	// Protected routes
-	mux.HandleFunc("/api/users", authMW(s.handleUsers))
+	mux.HandleFunc("/api/users", csrfMW(s.handleUsers))
 	mux.HandleFunc("/api/proxies", authMW(s.handleProxies))
 	mux.HandleFunc("/api/proxies/stream", authMW(s.handleProxiesStream))
 	mux.HandleFunc("/api/proxies/control", csrfMW(s.handleProxyControl))
@@ -131,6 +136,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/logs/stream", authMW(s.handleLogStream))
 	mux.HandleFunc("/api/config/export", authMW(s.handleConfigExport))
 	mux.HandleFunc("/api/config/import", csrfMW(s.handleConfigImport))
+	mux.HandleFunc("/api/config/rollback", csrfMW(s.handleConfigRollback))
 	mux.HandleFunc("/api/config/webport", csrfMW(s.handleWebPort))
 	mux.HandleFunc("/api/config/password", csrfMW(s.handleChangePassword))
 	mux.HandleFunc("/api/config/system", csrfMW(s.handleSystemConfig))
@@ -338,27 +344,106 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		// Mocked for now - just return the single admin user defined in config
-		w.Header().Set("Content-Type", "application/json")
-
-		users := []map[string]interface{}{
-			{
-				"id":       "1",
-				"username": "admin",
-				"email":    "admin@localhost",
-				"role":     "admin",
-				"enabled":  true,
-			},
-		}
-
-		if err := json.NewEncoder(w).Encode(users); err != nil {
-			s.log.Error("API", fmt.Sprintf("Failed to encode users response: %v", err))
-		}
+	if s.userMgr == nil {
+		http.Error(w, "user management unavailable (database not initialised)", http.StatusServiceUnavailable)
 		return
 	}
 
-	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case http.MethodGet:
+		all, err := s.userMgr.GetAllUsers()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		// Strip password hashes before sending to client.
+		type safeUser struct {
+			ID          string `json:"id"`
+			Username    string `json:"username"`
+			Email       string `json:"email"`
+			Role        string `json:"role"`
+			Enabled     bool   `json:"enabled"`
+			Description string `json:"description"`
+		}
+		out := make([]safeUser, 0, len(all))
+		for _, u := range all {
+			out = append(out, safeUser{
+				ID:          u.ID,
+				Username:    u.Username,
+				Email:       u.Email,
+				Role:        u.Role,
+				Enabled:     u.Enabled,
+				Description: u.Description,
+			})
+		}
+		if err := json.NewEncoder(w).Encode(out); err != nil {
+			s.log.Error("API", fmt.Sprintf("Failed to encode users response: %v", err))
+		}
+
+	case http.MethodPost:
+		var req struct {
+			Username    string `json:"username"`
+			Email       string `json:"email"`
+			Password    string `json:"password"`
+			Role        string `json:"role"`
+			Description string `json:"description"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		user, err := s.userMgr.CreateUser(req.Username, req.Email, req.Password, req.Role, "admin", req.Description)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		if err := json.NewEncoder(w).Encode(map[string]string{"id": user.ID}); err != nil {
+			s.log.Error("API", fmt.Sprintf("Failed to encode create-user response: %v", err))
+		}
+
+	case http.MethodPut:
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "id query parameter required", http.StatusBadRequest)
+			return
+		}
+		var req struct {
+			Username    string `json:"username"`
+			Email       string `json:"email"`
+			Role        string `json:"role"`
+			Description string `json:"description"`
+			Enabled     bool   `json:"enabled"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := s.userMgr.UpdateUser(id, req.Username, req.Email, req.Role, req.Description, req.Enabled); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
+			s.log.Error("API", fmt.Sprintf("Failed to encode update-user response: %v", err))
+		}
+
+	case http.MethodDelete:
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "id query parameter required", http.StatusBadRequest)
+			return
+		}
+		if err := s.userMgr.DeleteUser(id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 // handleProxiesStream streams proxy updates via SSE
@@ -435,7 +520,11 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if req.Enabled && !req.Paused {
-			_ = s.mgr.StartProxy(req.ID)
+			if startErr := s.mgr.StartProxy(req.ID); startErr != nil {
+				s.log.Error("API", fmt.Sprintf("Proxy %s created but failed to start: %v", req.ID, startErr))
+				http.Error(w, fmt.Sprintf("proxy created but failed to start: %v", startErr), http.StatusInternalServerError)
+				return
+			}
 		}
 
 		w.WriteHeader(http.StatusOK)

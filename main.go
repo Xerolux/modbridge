@@ -12,6 +12,7 @@ import (
 	"modbridge/pkg/database"
 	"modbridge/pkg/logger"
 	"modbridge/pkg/manager"
+	"modbridge/pkg/users"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -98,8 +99,14 @@ func main() {
 	defer authCancel()
 	go authenticator.CleanupExpiredSessions(authCtx)
 
+	// 4b. User Manager (requires database)
+	var userMgr *users.Manager
+	if db != nil {
+		userMgr = users.NewManager(db)
+	}
+
 	// 5. API Server
-	apiServer := api.NewServer(cfgMgr, mgr, authenticator, l)
+	apiServer := api.NewServer(cfgMgr, mgr, authenticator, l, userMgr)
 
 	// 6. Router
 	mux := http.NewServeMux()
