@@ -32,17 +32,17 @@ var (
 
 // User represents a system user
 type User struct {
-	ID          string       `json:"id"`
-	Username    string       `json:"username"`
-	Email       string       `json:"email"`
-	PasswordHash string      `json:"-"`
-	Role        Role         `json:"role"`
-	CreatedAt   time.Time    `json:"created_at"`
-	UpdatedAt   time.Time    `json:"updated_at"`
-	LastLogin   *time.Time   `json:"last_login,omitempty"`
-	Active      bool         `json:"active"`
-	APITokens   []string     `json:"api_tokens,omitempty"`
-	Permissions []Permission `json:"permissions,omitempty"`
+	ID           string       `json:"id"`
+	Username     string       `json:"username"`
+	Email        string       `json:"email"`
+	PasswordHash string       `json:"-"`
+	Role         Role         `json:"role"`
+	CreatedAt    time.Time    `json:"created_at"`
+	UpdatedAt    time.Time    `json:"updated_at"`
+	LastLogin    *time.Time   `json:"last_login,omitempty"`
+	Active       bool         `json:"active"`
+	APITokens    []string     `json:"api_tokens,omitempty"`
+	Permissions  []Permission `json:"permissions,omitempty"`
 }
 
 // UserStore manages users
