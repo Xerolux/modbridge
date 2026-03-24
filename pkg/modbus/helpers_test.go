@@ -7,8 +7,8 @@ package modbus
 
 import (
 	"bytes"
-	"testing"
 	"io"
+	"testing"
 )
 
 func TestReadRequestHelpers(t *testing.T) {
