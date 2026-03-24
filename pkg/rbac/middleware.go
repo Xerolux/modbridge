@@ -7,11 +7,11 @@ package rbac
 
 import (
 	"encoding/json"
-	"net/http"
 	"fmt"
+	"net/http"
 
-	"modbridge/pkg/logger"
 	"modbridge/pkg/auth"
+	"modbridge/pkg/logger"
 )
 
 // Middleware provides HTTP middleware for RBAC
