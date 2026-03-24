@@ -1,6 +1,6 @@
 # ModBridge - Modbus TCP Proxy Manager
 
-**Version:** 1.0.12
+**Version:** 1.0.13
 
 [![GitHub Release](https://img.shields.io/github/release/xerolux/modbridge.svg?style=for-the-badge)](https://github.com/xerolux/modbridge/releases)
 [![Downloads](https://img.shields.io/github/downloads/xerolux/modbridge/latest/total.svg?style=for-the-badge)](https://github.com/xerolux/modbridge/releases)
@@ -99,4 +99,4 @@ MIT License - siehe [LICENSE](LICENSE) für Details.
 - **Xerolux** - [GitHub](https://github.com/Xerolux)
 
 ---
-**Version**: 1.0.12 | **Status**: Beta | **Letzte Aktualisierung**: März 2026
+**Version**: 1.0.13 | **Status**: Beta | **Letzte Aktualisierung**: März 2026
