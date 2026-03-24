@@ -88,7 +88,7 @@ func main() {
 	}
 
 	// 3. Logger
-	l, err := logger.NewLogger("proxy.log", 1000)
+	l, err := logger.NewLogger("logs", 1000)
 	if err != nil {
 		log.Fatalf("Failed to init logger: %v", err)
 	}

@@ -35,7 +35,8 @@ type LogEntry struct {
 // Logger manages logging.
 type Logger struct {
 	mu          sync.Mutex
-	file        *os.File
+	logDir      string
+	files       map[string]*os.File
 	ringBuffer  []LogEntry
 	ringSize    int
 	subscribers map[chan LogEntry]struct{}
@@ -43,18 +44,16 @@ type Logger struct {
 }
 
 // NewLogger creates a new logger.
-func NewLogger(filePath string, bufferSize int) (*Logger, error) {
-	var f *os.File
-	var err error
-	if filePath != "" {
-		f, err = os.OpenFile(filepath.Clean(filePath), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-		if err != nil {
-			return nil, err
+func NewLogger(logDir string, bufferSize int) (*Logger, error) {
+	if logDir != "" {
+		if err := os.MkdirAll(logDir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create log directory: %w", err)
 		}
 	}
 
 	return &Logger{
-		file:        f,
+		logDir:      logDir,
+		files:       make(map[string]*os.File),
 		ringBuffer:  make([]LogEntry, 0, bufferSize),
 		ringSize:    bufferSize,
 		subscribers: make(map[chan LogEntry]struct{}),
@@ -65,12 +64,41 @@ func NewLogger(filePath string, bufferSize int) (*Logger, error) {
 // NewNullLogger creates a logger that discards file output.
 func NewNullLogger(bufferSize int) *Logger {
 	return &Logger{
-		file:        nil,
+		logDir:      "",
+		files:       make(map[string]*os.File),
 		ringBuffer:  make([]LogEntry, 0, bufferSize),
 		ringSize:    bufferSize,
 		subscribers: make(map[chan LogEntry]struct{}),
 		minLevel:    INFO, // Default to INFO
 	}
+}
+
+func (l *Logger) getLogFile(proxyID string) (*os.File, error) {
+	if l.logDir == "" {
+		return nil, nil
+	}
+
+	fileID := proxyID
+	if fileID == "" || fileID == "SYSTEM" || fileID == "API" {
+		fileID = "system"
+	}
+
+	if f, exists := l.files[fileID]; exists {
+		return f, nil
+	}
+
+	filePath := filepath.Join(l.logDir, fmt.Sprintf("proxy_%s.log", fileID))
+	if fileID == "system" {
+		filePath = filepath.Join(l.logDir, "system.log")
+	}
+
+	f, err := os.OpenFile(filepath.Clean(filePath), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return nil, err
+	}
+
+	l.files[fileID] = f
+	return f, nil
 }
 
 // shouldLog returns true if the given level should be logged.
@@ -109,10 +137,10 @@ func (l *Logger) Log(level LogLevel, proxyID, msg string) {
 		defer l.mu.Unlock()
 
 		// 1. Write to file
-		if l.file != nil {
+		if f, _ := l.getLogFile(proxyID); f != nil {
 			if jsonBytes, err := json.Marshal(entry); err == nil {
-				_, _ = l.file.Write(jsonBytes)
-				_, _ = l.file.WriteString("\n")
+				_, _ = f.Write(jsonBytes)
+				_, _ = f.WriteString("\n")
 			}
 		}
 
@@ -210,14 +238,16 @@ func (l *Logger) GetLogLevel() LogLevel {
 	return l.minLevel
 }
 
-// Close closes the logger file.
+// Close closes all logger files.
 func (l *Logger) Close() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.file != nil {
-		err := l.file.Close()
-		l.file = nil
-		return err
+	var lastErr error
+	for id, f := range l.files {
+		if err := f.Close(); err != nil {
+			lastErr = err
+		}
+		delete(l.files, id)
 	}
-	return nil
+	return lastErr
 }

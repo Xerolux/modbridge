@@ -13,7 +13,7 @@ import (
 )
 
 func TestNewManager(t *testing.T) {
-	log, err := logger.NewLogger("test.log", 100)
+	log, err := logger.NewLogger("test_logs", 100)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestNewManager(t *testing.T) {
 }
 
 func TestAddProxy(t *testing.T) {
-	log, err := logger.NewLogger("test.log", 100)
+	log, err := logger.NewLogger("test_logs", 100)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestAddProxy(t *testing.T) {
 }
 
 func TestRemoveProxy(t *testing.T) {
-	log, err := logger.NewLogger("test.log", 100)
+	log, err := logger.NewLogger("test_logs", 100)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestRemoveProxy(t *testing.T) {
 }
 
 func TestRemoveProxyNotFound(t *testing.T) {
-	log, err := logger.NewLogger("test.log", 100)
+	log, err := logger.NewLogger("test_logs", 100)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestRemoveProxyNotFound(t *testing.T) {
 }
 
 func TestGetProxies(t *testing.T) {
-	log, err := logger.NewLogger("test.log", 100)
+	log, err := logger.NewLogger("test_logs", 100)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestGetProxies(t *testing.T) {
 }
 
 func TestGetProxyStatus(t *testing.T) {
-	log, err := logger.NewLogger("test.log", 100)
+	log, err := logger.NewLogger("test_logs", 100)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
