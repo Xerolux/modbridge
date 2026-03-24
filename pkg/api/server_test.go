@@ -19,7 +19,7 @@ import (
 )
 
 func TestHandleHealth(t *testing.T) {
-	log, err := logger.NewLogger("test.log", 100)
+	log, err := logger.NewLogger("test_logs", 100)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestHandleHealth(t *testing.T) {
 }
 
 func TestHandleStatus(t *testing.T) {
-	log, err := logger.NewLogger("test.log", 100)
+	log, err := logger.NewLogger("test_logs", 100)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestHandleStatus(t *testing.T) {
 }
 
 func TestHandleProxiesGet(t *testing.T) {
-	log, err := logger.NewLogger("test.log", 100)
+	log, err := logger.NewLogger("test_logs", 100)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestHandleProxiesGet(t *testing.T) {
 }
 
 func TestHandleProxiesPostInvalid(t *testing.T) {
-	log, err := logger.NewLogger("test.log", 100)
+	log, err := logger.NewLogger("test_logs", 100)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestHandleProxiesPostInvalid(t *testing.T) {
 }
 
 func TestHandleProxiesPostValid(t *testing.T) {
-	log, err := logger.NewLogger("test.log", 100)
+	log, err := logger.NewLogger("test_logs", 100)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestHandleProxiesPostValid(t *testing.T) {
 }
 
 func TestMiddlewareChain(t *testing.T) {
-	log, err := logger.NewLogger("test.log", 100)
+	log, err := logger.NewLogger("test_logs", 100)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}

@@ -57,12 +57,16 @@ func (m *Manager) Initialize() {
 // AddProxy adds a new proxy or updates existing.
 func (m *Manager) AddProxy(cfg config.ProxyConfig, save bool) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	old, ok := m.proxies[cfg.ID]
+	m.mu.Unlock()
 
-	// Stop existing if any
-	if old, ok := m.proxies[cfg.ID]; ok {
+	// Stop existing if any without holding the lock
+	if ok {
 		old.Stop()
 	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	p := proxy.NewProxyInstance(cfg.ID, cfg.Name, cfg.ListenAddr, cfg.TargetAddr, cfg.MaxReadSize, cfg.ConnectionTimeout, cfg.ReadTimeout, cfg.MaxRetries, m.log, m.deviceTracker)
 	if cfg.Protocol != "" {
@@ -243,15 +247,19 @@ func (m *Manager) ResumeProxy(id string) error {
 // UpdateProxy updates an existing proxy configuration.
 func (m *Manager) UpdateProxy(cfg config.ProxyConfig) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	old, ok := m.proxies[cfg.ID]
+	m.mu.Unlock()
 
 	// Check if proxy exists
-	if _, ok := m.proxies[cfg.ID]; !ok {
+	if !ok {
 		return fmt.Errorf("proxy not found")
 	}
 
-	// Stop the old proxy
-	m.proxies[cfg.ID].Stop()
+	// Stop the old proxy without holding the lock
+	old.Stop()
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	// Create new proxy with updated config
 	p := proxy.NewProxyInstance(cfg.ID, cfg.Name, cfg.ListenAddr, cfg.TargetAddr, cfg.MaxReadSize, cfg.ConnectionTimeout, cfg.ReadTimeout, cfg.MaxRetries, m.log, m.deviceTracker)

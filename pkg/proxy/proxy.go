@@ -68,7 +68,6 @@ type ProxyInstance struct {
 
 	listener  net.Listener
 	connPool  *pool.Pool
-	splitMu   sync.Mutex    // Only for split read operations
 	connSem   chan struct{} // Semaphore for limiting concurrent connections
 	connSemMu sync.Mutex    // Protects connSem initialization
 
@@ -289,7 +288,9 @@ func (p *ProxyInstance) acceptLoop() {
 			case <-time.After(5 * time.Second):
 				// Connection limit reached, drop this connection
 				conn.Close()
-				atomic.AddInt64(&globalActiveConnections, -1) // Release global counter
+				if globalLimitApplied {
+					atomic.AddInt64(&globalActiveConnections, -1) // Release global counter
+				}
 				p.log.Info(p.ID, "Connection limit reached, dropping connection")
 				continue
 			}
@@ -409,10 +410,6 @@ func (p *ProxyInstance) handleSplitRead(reqFrame []byte) ([]byte, error) {
 	if int(quantity) <= p.MaxReadSize {
 		return p.forwardRequest(reqFrame)
 	}
-
-	// Split logic - use lock to ensure atomicity of the split operation
-	p.splitMu.Lock()
-	defer p.splitMu.Unlock()
 
 	expectedBytes := int(quantity) * 2 // 2 bytes per register
 	aggregatedData := make([]byte, 0, expectedBytes)
