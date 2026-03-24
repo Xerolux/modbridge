@@ -3,7 +3,7 @@
 # Variables
 BINARY_NAME=modbridge
 DOCKER_IMAGE=modbridge
-VERSION?=$(shell cat version.txt 2>/dev/null || echo "1.0.12")
+VERSION?=$(shell cat version.txt 2>/dev/null || echo "1.0.13")
 LDFLAGS=-ldflags "-s -w -X main.Version=$(VERSION)"
 
 help: ## Show this help message

@@ -6,9 +6,22 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"log"
+	"modbridge/pkg/api"
+	"modbridge/pkg/auth"
+	"modbridge/pkg/config"
+	"modbridge/pkg/database"
+	"modbridge/pkg/logger"
+	"modbridge/pkg/manager"
+	"modbridge/pkg/users"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 var (
@@ -56,8 +69,94 @@ func printUsage() {
 
 func runServer(configFile string, port int) {
 	fmt.Printf("Starting ModBridge server on port %d\n", port)
-	if configFile != "" {
-		fmt.Printf("Using config: %s\n", configFile)
+
+	if configFile == "" {
+		configFile = "config.json"
 	}
-	// TODO: Implement actual server startup
+	fmt.Printf("Using config: %s\n", configFile)
+
+	// Initialize database
+	db, err := database.NewDB("modbridge.db")
+	if err != nil {
+		log.Printf("Warning: Failed to init database: %v. Database features will be disabled.", err)
+		db = nil
+	} else {
+		defer db.Close()
+	}
+
+	// Initialize config
+	cfgMgr := config.NewManager(configFile)
+	if err := cfgMgr.Load(); err != nil {
+		log.Printf("Starting with empty config: %v", err)
+	}
+
+	// Initialize logger
+	l, err := logger.NewLogger("logs", 1000)
+	if err != nil {
+		log.Fatalf("Failed to init logger: %v", err)
+	}
+	defer l.Close()
+
+	// Initialize proxy manager
+	mgr := manager.NewManager(cfgMgr, l, db)
+	mgr.Initialize()
+
+	// Initialize authentication
+	authenticator := auth.NewAuthenticator()
+	authCtx, authCancel := context.WithCancel(context.Background())
+	defer authCancel()
+	go authenticator.CleanupExpiredSessions(authCtx)
+
+	// Initialize user manager (if db is available)
+	var userMgr *users.Manager
+	if db != nil {
+		userMgr = users.NewManager(db)
+	}
+
+	// Initialize API server
+	apiServer := api.NewServer(cfgMgr, mgr, authenticator, l, userMgr)
+
+	// Setup HTTP router
+	mux := http.NewServeMux()
+	apiServer.Routes(mux)
+
+	addr := fmt.Sprintf(":%d", port)
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 30 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	log.Printf("Listening on %s", addr)
+	l.Info("SYSTEM", "Starting Modbus Manager on "+addr)
+
+	// Run server
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server error: %v", err)
+		}
+	}()
+
+	// Graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down server...")
+	l.Info("SYSTEM", "Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	mgr.StopAll()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("Server forced to shutdown: %v", err)
+	}
+
+	log.Println("Server stopped")
+	l.Info("SYSTEM", "Server stopped")
 }

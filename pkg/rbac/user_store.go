@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"modbridge/pkg/auth"
 )
 
 var (
@@ -33,6 +35,7 @@ type User struct {
 	ID          string       `json:"id"`
 	Username    string       `json:"username"`
 	Email       string       `json:"email"`
+	PasswordHash string      `json:"-"`
 	Role        Role         `json:"role"`
 	CreatedAt   time.Time    `json:"created_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
@@ -57,14 +60,16 @@ func NewUserStore() *UserStore {
 	}
 
 	// Create default admin user
+	adminHash, _ := auth.HashPassword("admin")
 	admin := &User{
-		ID:        "admin",
-		Username:  "admin",
-		Email:     "admin@modbridge.local",
-		Role:      RoleAdmin,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-		Active:    true,
+		ID:           "admin",
+		Username:     "admin",
+		Email:        "admin@modbridge.local",
+		PasswordHash: adminHash,
+		Role:         RoleAdmin,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+		Active:       true,
 	}
 
 	store.users[admin.ID] = admin
@@ -74,7 +79,7 @@ func NewUserStore() *UserStore {
 }
 
 // CreateUser creates a new user
-func (s *UserStore) CreateUser(username, email string, role Role) (*User, error) {
+func (s *UserStore) CreateUser(username, email, password string, role Role) (*User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -96,15 +101,21 @@ func (s *UserStore) CreateUser(username, email string, role Role) (*User, error)
 		return nil, fmt.Errorf("failed to generate ID: %w", err)
 	}
 
+	hash, err := auth.HashPassword(password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password: %w", err)
+	}
+
 	user := &User{
-		ID:          id,
-		Username:    username,
-		Email:       email,
-		Role:        role,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-		Active:      true,
-		Permissions: RolePermissions[role],
+		ID:           id,
+		Username:     username,
+		Email:        email,
+		PasswordHash: hash,
+		Role:         role,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+		Active:       true,
+		Permissions:  RolePermissions[role],
 	}
 
 	s.users[id] = user
@@ -213,9 +224,9 @@ func (s *UserStore) AuthenticateUser(username, password string) (*User, error) {
 		return nil, ErrInvalidCredentials
 	}
 
-	// TODO: Implement proper password verification
-	// For now, we'll just check if user exists
-	// In production, you'd verify bcrypt hash
+	if !auth.CheckPasswordHash(password, user.PasswordHash) {
+		return nil, ErrInvalidCredentials
+	}
 
 	return user, nil
 }
