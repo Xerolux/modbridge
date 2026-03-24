@@ -9,8 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@primevue/themes": "^4.5.4",
-    "@vueuse/core": "^14.2.1",
+    "@primeuix/themes": "^2.0.3",
     "axios": "^1.13.2",
     "gridstack": "^12.4.2",
     "lucide-vue-next": "^0.577.0",
