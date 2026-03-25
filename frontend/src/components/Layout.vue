@@ -100,68 +100,81 @@
 </script>
 
 <template>
-    <div class="min-h-screen flex flex-col">
-        <Menubar :model="isMobile ? [] : items" class="rounded-none border-0 border-b border-gray-700 bg-gray-800">
-             <template #start>
-               <div class="flex items-center gap-4">
-                   <Button v-if="isMobile" icon="pi pi-bars" text rounded @click="mobileMenuVisible = true" class="text-white" />
-                   <span class="text-xl font-bold px-4 text-white">ModBridge</span>
-               </div>
-            </template>
-            <template #item="{ item, props }">
-                <a v-ripple class="flex items-center gap-2 px-3 py-2 hover:bg-gray-700 rounded cursor-pointer text-gray-200" v-bind="props.action">
-                    <i :class="item.icon"></i>
-                    <span>{{ item.label }}</span>
-                </a>
-            </template>
-             <template #end>
-                 <div class="flex items-center gap-2">
-                     <LanguageSelector class="hidden sm:flex" />
-                     <div class="hidden sm:flex items-center gap-2 px-3">
-                         <i :class="appStore.darkMode ? 'pi pi-moon' : 'pi pi-sun'"></i>
-                         <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" />
+    <div class="min-h-screen flex flex-col bg-transparent">
+        <header class="px-4 py-3 z-10">
+            <Menubar :model="isMobile ? [] : items" class="glass-card border border-white/10 rounded-2xl shadow-lg !bg-surface-800/40">
+                 <template #start>
+                   <div class="flex items-center gap-4 pl-2">
+                       <Button v-if="isMobile" icon="pi pi-bars" text rounded @click="mobileMenuVisible = true" class="text-white hover:bg-white/10" />
+                       <div class="flex items-center gap-2 cursor-pointer" @click="navigate('/')">
+                           <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-blue-500 flex items-center justify-center shadow-lg shadow-primary-500/20">
+                               <i class="pi pi-bolt text-white text-sm"></i>
+                           </div>
+                           <span class="text-xl font-bold tracking-tight text-white hidden sm:block">ModBridge</span>
+                       </div>
+                   </div>
+                </template>
+                <template #item="{ item, props }">
+                    <a v-ripple class="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 rounded-xl cursor-pointer text-surface-200 transition-colors mx-1" :class="{'bg-white/10 text-white font-medium': isActiveRoute(item.path)}" v-bind="props.action">
+                        <i :class="item.icon" class="text-lg"></i>
+                        <span class="text-sm">{{ item.label }}</span>
+                    </a>
+                </template>
+                 <template #end>
+                     <div class="flex items-center gap-3 pr-2">
+                         <LanguageSelector class="hidden sm:flex" />
+                         <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-900/50 border border-white/5">
+                             <i :class="appStore.darkMode ? 'pi pi-moon' : 'pi pi-sun'" class="text-surface-300 text-sm"></i>
+                             <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" class="scale-75" />
+                         </div>
+                         <Button icon="pi pi-power-off" severity="danger" rounded text @click="logout" class="hidden sm:flex hover:bg-red-500/20 w-10 h-10" />
                      </div>
-                     <Button label="Logout" icon="pi pi-power-off" severity="danger" text @click="logout" class="hidden sm:flex" />
-                 </div>
-             </template>
-        </Menubar>
+                 </template>
+            </Menubar>
+        </header>
 
-        <Sidebar v-model:visible="mobileMenuVisible" :baseZIndex="10000">
-            <div class="flex flex-col gap-1 h-full">
+        <Sidebar v-model:visible="mobileMenuVisible" :baseZIndex="10000" class="glass-sidebar">
+            <template #header>
+                <div class="flex items-center gap-3 px-2">
+                     <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-blue-500 flex items-center justify-center shadow-lg">
+                         <i class="pi pi-bolt text-white text-sm"></i>
+                     </div>
+                     <span class="text-xl font-bold tracking-tight text-white">ModBridge</span>
+                </div>
+            </template>
+            <div class="flex flex-col gap-2 h-full py-4">
                 <div v-for="item in items" :key="item.label">
                     <Button
                         @click="item.command"
                         :label="item.label"
                         :icon="item.icon"
                         text
-                        :class="['w-full text-left', isActiveRoute(item.path) ? 'bg-gray-700 text-white' : '']"
-                        size="large"
+                        :class="['w-full text-left rounded-xl py-3 px-4', isActiveRoute(item.path) ? 'bg-primary-500/20 text-primary-300 font-medium border border-primary-500/20' : 'text-surface-200 hover:bg-white/5']"
                     />
                 </div>
 
-                <div class="mt-auto border-t border-gray-700 pt-4 flex flex-col gap-4">
-                     <div class="flex items-center justify-between px-3">
-                        <span class="text-gray-300 font-medium">Theme</span>
-                        <div class="flex items-center gap-2">
-                            <i :class="appStore.darkMode ? 'pi pi-moon text-gray-300' : 'pi pi-sun text-gray-300'"></i>
-                            <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" />
+                <div class="mt-auto border-t border-white/10 pt-6 flex flex-col gap-4">
+                     <div class="flex items-center justify-between px-4 py-3 rounded-xl bg-surface-900/50 border border-white/5">
+                        <span class="text-surface-200 font-medium text-sm">Theme</span>
+                        <div class="flex items-center gap-3">
+                            <i :class="appStore.darkMode ? 'pi pi-moon text-surface-400' : 'pi pi-sun text-surface-400'"></i>
+                            <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" class="scale-90" />
                         </div>
                      </div>
-                     <LanguageSelector class="w-full px-3" />
+                     <LanguageSelector class="w-full px-2" />
                     <Button
                         @click="logout"
                         label="Logout"
                         icon="pi pi-power-off"
                         severity="danger"
                         text
-                        class="w-full text-left"
-                        size="large"
+                        class="w-full text-left rounded-xl py-3 px-4 hover:bg-red-500/10"
                     />
                 </div>
             </div>
         </Sidebar>
 
-        <main class="flex-grow bg-gray-900 text-white">
+        <main class="flex-grow text-white w-full max-w-7xl mx-auto p-4 pt-0">
              <router-view></router-view>
         </main>
     </div>
@@ -170,10 +183,20 @@
 <style scoped>
 :deep(.p-menubar) {
     padding: 0.5rem;
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px) !important;
 }
-
-:deep(.p-sidebar) {
-    background-color: #1f2937;
+:deep(.p-menubar .p-menubar-button) {
     color: white;
+}
+:deep(.p-sidebar) {
+    background: rgba(17, 24, 39, 0.7) !important;
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+}
+:deep(.p-sidebar-header) {
+    padding: 1.5rem 1.5rem 0.5rem;
 }
 </style>

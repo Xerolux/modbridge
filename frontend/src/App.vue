@@ -27,8 +27,6 @@ watch(() => store.darkMode, (isDark) => {
 <template>
   <div :class="store.darkMode ? 'dark' : 'light'" class="app-container">
     <!-- Animated Background -->
-    <div class="cyber-grid"></div>
-    <div class="scanlines"></div>
     <div class="ambient-glow"></div>
 
     <!-- Main Content -->
@@ -44,7 +42,7 @@ watch(() => store.darkMode, (isDark) => {
    ======================================== */
 
 /* Custom Font Imports via Google Fonts */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Rajdhani:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 /* CSS Variables - Neon Industrial Palette */
 :root {
@@ -73,9 +71,9 @@ watch(() => store.darkMode, (isDark) => {
   --status-error: #ff0055;
 
   /* Gradients */
-  --gradient-primary: linear-gradient(135deg, var(--neon-cyan) 0%, var(--neon-blue) 100%);
-  --gradient-secondary: linear-gradient(135deg, var(--neon-magenta) 0%, #8b5cf6 100%);
-  --gradient-accent: linear-gradient(135deg, var(--neon-green) 0%, var(--neon-cyan) 100%);
+  --gradient-primary: linear-gradient(135deg, #a855f7 0%, #3b82f6 100%);
+  --gradient-secondary: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+  --gradient-accent: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
   --gradient-danger: linear-gradient(135deg, #ff0055 0%, #ff4444 100%);
 
   /* Effects */
@@ -84,17 +82,17 @@ watch(() => store.darkMode, (isDark) => {
   --glow-green: 0 0 20px rgba(0, 255, 136, 0.6), 0 0 40px rgba(0, 255, 136, 0.3);
 
   /* Glassmorphism */
-  --glass-bg: rgba(31, 41, 55, 0.7);
+  --glass-bg: rgba(31, 34, 43, 0.7);
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 /* Dark Theme Overrides */
 .dark {
-  --bg-deep: #05080f;
-  --bg-dark: #0a0f1a;
-  --bg-mid: #151b2e;
-  --bg-light: #1e273a;
+  --bg-deep: #0E1015;
+  --bg-dark: #16181D;
+  --bg-mid: #1F222B;
+  --bg-light: #2C313C;
 }
 
 /* Light Theme (Professional) */
@@ -126,7 +124,7 @@ watch(() => store.darkMode, (isDark) => {
 }
 
 body {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-family: 'Inter', sans-serif;
   background-color: var(--bg-deep);
   color: var(--text-primary);
   overflow-x: hidden;
@@ -150,50 +148,6 @@ body {
    ANIMATED BACKGROUNDS
    ======================================== */
 
-/* Cyber Grid Background */
-.cyber-grid {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 1;
-  background-image:
-    linear-gradient(rgba(0, 255, 245, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 255, 245, 0.03) 1px, transparent 1px);
-  background-size: 50px 50px;
-  animation: gridMove 20s linear infinite;
-}
-
-@keyframes gridMove {
-  0% {
-    transform: perspective(500px) rotateX(60deg) translateY(0);
-  }
-  100% {
-    transform: perspective(500px) rotateX(60deg) translateY(50px);
-  }
-}
-
-/* Scanlines Overlay */
-.scanlines {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 2;
-  background: repeating-linear-gradient(
-    0deg,
-    rgba(0, 0, 0, 0.1) 0px,
-    rgba(0, 0, 0, 0.1) 1px,
-    transparent 1px,
-    transparent 2px
-  );
-  opacity: 0.3;
-}
-
 /* Ambient Glow */
 .ambient-glow {
   position: fixed;
@@ -204,9 +158,8 @@ body {
   pointer-events: none;
   z-index: 3;
   background:
-    radial-gradient(circle at 20% 80%, rgba(0, 255, 245, 0.08) 0%, transparent 40%),
-    radial-gradient(circle at 80% 20%, rgba(255, 0, 255, 0.06) 0%, transparent 40%),
-    radial-gradient(circle at 50% 50%, rgba(0, 212, 255, 0.04) 0%, transparent 50%);
+    radial-gradient(circle at 20% 80%, rgba(168, 85, 247, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(59, 130, 246, 0.15) 0%, transparent 50%);
   animation: ambientPulse 8s ease-in-out infinite;
 }
 
@@ -224,10 +177,8 @@ body {
    ======================================== */
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Orbitron', 'Rajdhani', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
 }
 
 h1 {
@@ -236,7 +187,6 @@ h1 {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  text-shadow: 0 0 30px rgba(0, 255, 245, 0.5);
 }
 
 h2 {
@@ -274,16 +224,16 @@ h3 {
   background: var(--glass-bg);
   backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
-  border-radius: 16px;
+  border-radius: 24px;
   box-shadow: var(--glass-shadow);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glass-card:hover {
-  border-color: rgba(0, 255, 245, 0.3);
+  border-color: rgba(255, 255, 255, 0.2);
   box-shadow:
     var(--glass-shadow),
-    0 0 30px rgba(0, 255, 245, 0.2);
+    0 0 30px rgba(168, 85, 247, 0.15);
   transform: translateY(-2px);
 }
 
@@ -340,19 +290,17 @@ h3 {
 .btn-neon {
   position: relative;
   padding: 12px 24px;
-  font-family: 'Rajdhani', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-weight: 600;
   font-size: 0.875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--gradient-primary);
-  color: var(--bg-deep);
+  color: #ffffff;
   cursor: pointer;
   overflow: hidden;
   transition: all 0.3s ease;
-  box-shadow: 0 0 20px rgba(0, 255, 245, 0.3);
+  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.3);
 }
 
 .btn-neon::before {
@@ -362,7 +310,7 @@ h3 {
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
   transition: left 0.5s ease;
 }
 
@@ -371,7 +319,7 @@ h3 {
 }
 
 .btn-neon:hover {
-  box-shadow: var(--glow-cyan);
+  box-shadow: 0 6px 20px rgba(168, 85, 247, 0.4);
   transform: translateY(-2px);
 }
 
@@ -469,8 +417,6 @@ h3 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cyber-grid,
-  .scanlines,
   .ambient-glow {
     display: none;
   }
