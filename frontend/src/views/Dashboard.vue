@@ -389,7 +389,7 @@ const resetLayout = () => {
 <style scoped>
 /* Dashboard Container */
 .dashboard-container {
-    background: linear-gradient(135deg, rgba(17, 24, 39, 0.9) 0%, rgba(31, 41, 55, 0.9) 100%);
+    background: transparent;
     min-height: 100vh;
 }
 
@@ -405,18 +405,19 @@ const resetLayout = () => {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%);
-    border-radius: 12px;
-    border: 1px solid rgba(59, 130, 246, 0.3);
-    color: #60a5fa;
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 /* Glass Effect */
 .glass-effect {
-    background: rgba(31, 41, 55, 0.6);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(75, 85, 99, 0.3);
+    background: rgba(17, 24, 39, 0.4);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
@@ -437,14 +438,14 @@ const resetLayout = () => {
     position: absolute;
     inset: -8px;
     border-radius: 50%;
-    background: conic-gradient(from 0deg, transparent, #3b82f6, transparent);
+    background: conic-gradient(from 0deg, transparent, #a855f7, transparent);
     animation: spin 2s linear infinite;
     opacity: 0.3;
 }
 
 .loading-spinner i {
-    color: #3b82f6;
-    filter: drop-shadow(0 0 12px rgba(59, 130, 246, 0.6));
+    color: #a855f7;
+    filter: drop-shadow(0 0 12px rgba(168, 85, 247, 0.6));
 }
 
 /* Error Animation */
@@ -463,44 +464,29 @@ const resetLayout = () => {
     position: relative;
 }
 
-.grid-stack-dashboard::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.05) 0%, transparent 50%);
-    pointer-events: none;
-}
-
 .grid-stack-item-content {
-    background: linear-gradient(135deg, rgba(31, 41, 55, 0.8) 0%, rgba(17, 24, 39, 0.8) 100%);
-    backdrop-filter: blur(16px);
+    background: rgba(31, 41, 55, 0.5);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     color: white;
-    border-radius: 16px;
+    border-radius: 24px;
     box-shadow:
         0 4px 6px -1px rgba(0, 0, 0, 0.3),
         0 2px 4px -1px rgba(0, 0, 0, 0.06),
         inset 0 1px 0 rgba(255, 255, 255, 0.05);
     overflow: hidden;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    border: 1px solid rgba(75, 85, 99, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     position: relative;
-}
-
-.grid-stack-item-content::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, transparent 50%);
-    pointer-events: none;
 }
 
 .grid-stack-item:hover .grid-stack-item-content {
     box-shadow:
         0 20px 25px -5px rgba(0, 0, 0, 0.5),
         0 10px 10px -5px rgba(0, 0, 0, 0.04),
-        0 0 0 1px rgba(59, 130, 246, 0.5),
-        0 0 20px rgba(59, 130, 246, 0.2);
-    border-color: rgba(59, 130, 246, 0.6);
+        0 0 0 1px rgba(168, 85, 247, 0.3),
+        0 0 20px rgba(168, 85, 247, 0.1);
+    border-color: rgba(168, 85, 247, 0.4);
     transform: translateY(-4px) scale(1.02);
     z-index: 10 !important;
 }
@@ -560,10 +546,10 @@ const resetLayout = () => {
 
 @keyframes glow {
     0%, 100% {
-        box-shadow: 0 0 5px rgba(59, 130, 246, 0.3);
+        box-shadow: 0 0 5px rgba(168, 85, 247, 0.3);
     }
     50% {
-        box-shadow: 0 0 20px rgba(59, 130, 246, 0.6), 0 0 30px rgba(59, 130, 246, 0.3);
+        box-shadow: 0 0 20px rgba(168, 85, 247, 0.6), 0 0 30px rgba(168, 85, 247, 0.3);
     }
 }
 
@@ -585,19 +571,20 @@ const resetLayout = () => {
 
 :deep(.p-button-rounded:hover) {
     transform: rotate(90deg) scale(1.1);
-    box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
 }
 
 /* Dialog Enhancements */
 :deep(.p-dialog) {
-    backdrop-filter: blur(20px);
-    background: rgba(31, 41, 55, 0.95);
-    border: 1px solid rgba(75, 85, 99, 0.5);
+    backdrop-filter: blur(24px);
+    background: rgba(31, 41, 55, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 }
 
 :deep(.p-dialog-header) {
-    border-bottom: 1px solid rgba(75, 85, 99, 0.3);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Responsive Design */
@@ -612,7 +599,7 @@ const resetLayout = () => {
     }
 
     .grid-stack-item-content {
-        border-radius: 12px;
+        border-radius: 16px;
     }
 }
 </style>
