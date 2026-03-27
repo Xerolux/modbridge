@@ -11,10 +11,10 @@
                 <TabList class="bg-gray-800 text-gray-200 overflow-x-auto flex-nowrap whitespace-nowrap hide-scrollbar">
                     <Tab value="0" class="shrink-0">Proxies</Tab>
                     <Tab value="1" class="shrink-0">Logging</Tab>
-                    <Tab value="2" class="shrink-0">Security</Tab>
-                    <Tab value="3" class="shrink-0">Email</Tab>
-                    <Tab value="4" class="shrink-0">Backup</Tab>
-                    <Tab value="5" class="shrink-0">Advanced</Tab>
+                    <Tab v-if="auth.hasPermission('config:edit')" value="2" class="shrink-0">Security</Tab>
+                    <Tab v-if="auth.hasPermission('config:edit')" value="3" class="shrink-0">Email</Tab>
+                    <Tab v-if="auth.hasPermission('config:edit')" value="4" class="shrink-0">Backup</Tab>
+                    <Tab v-if="auth.hasPermission('config:edit')" value="5" class="shrink-0">Advanced</Tab>
                 </TabList>
 
                 <TabPanels class="bg-gray-800 text-white p-2 sm:p-4 rounded">
@@ -241,7 +241,7 @@
                                 </div>
                             </div>
 
-                            <div>
+                            <div v-if="auth.hasPermission('config:edit')">
                                 <h3 class="text-lg font-semibold mb-4">Password</h3>
                                 <div class="grid grid-cols-1 gap-4">
                                     <div>
@@ -264,7 +264,7 @@
                                 </div>
                             </div>
 
-                            <div>
+                            <div v-if="auth.hasPermission('config:export')">
                                 <h3 class="text-lg font-semibold mb-4">Configuration Backup</h3>
                                 <div class="flex gap-4">
                                     <Button label="Export Configuration" icon="pi pi-download" @click="exportConfig" />
@@ -273,7 +273,7 @@
                                 </div>
                             </div>
 
-                            <div>
+                            <div v-if="auth.hasPermission('system:restart')">
                                 <h3 class="text-lg font-semibold mb-4">System Actions</h3>
                                 <div class="flex gap-4">
                                     <Button label="Restart System" icon="pi pi-refresh" severity="danger" @click="confirmRestart" />
@@ -293,26 +293,29 @@
 </template>
 
 <script setup>
- import { ref, onMounted } from 'vue';
- import axios from '../axios.js';
- import Button from 'primevue/button';
- import Password from 'primevue/password';
- import Tabs from 'primevue/tabs';
- import TabList from 'primevue/tablist';
- import Tab from 'primevue/tab';
- import TabPanels from 'primevue/tabpanels';
- import TabPanel from 'primevue/tabpanel';
- import Dropdown from 'primevue/dropdown';
- import InputNumber from 'primevue/inputnumber';
- import InputText from 'primevue/inputtext';
- import ToggleSwitch from 'primevue/toggleswitch';
- import Chips from 'primevue/chips';
- import Toast from 'primevue/toast';
- import ConfirmDialog from 'primevue/confirmdialog';
- import { useToast } from 'primevue/usetoast';
- import { useConfirm } from 'primevue/useconfirm';
- import ConfigForm from '../components/ConfigForm.vue';
- import { useAppStore } from '../stores/appStore';
+  import { ref, onMounted } from 'vue';
+  import axios from '../axios.js';
+  import Button from 'primevue/button';
+  import Password from 'primevue/password';
+  import Tabs from 'primevue/tabs';
+  import TabList from 'primevue/tablist';
+  import Tab from 'primevue/tab';
+  import TabPanels from 'primevue/tabpanels';
+  import TabPanel from 'primevue/tabpanel';
+  import Dropdown from 'primevue/dropdown';
+  import InputNumber from 'primevue/inputnumber';
+  import InputText from 'primevue/inputtext';
+  import ToggleSwitch from 'primevue/toggleswitch';
+  import Chips from 'primevue/chips';
+  import Toast from 'primevue/toast';
+  import ConfirmDialog from 'primevue/confirmdialog';
+  import { useToast } from 'primevue/usetoast';
+  import { useConfirm } from 'primevue/useconfirm';
+  import ConfigForm from '../components/ConfigForm.vue';
+  import { useAppStore } from '../stores/appStore';
+  import { useAuthStore } from '../stores/auth';
+
+  const auth = useAuthStore();
 
  const loading = ref(true);
  const toast = useToast();

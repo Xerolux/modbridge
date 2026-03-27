@@ -78,9 +78,11 @@ type ProxyInstance struct {
 	wg            sync.WaitGroup
 
 	// Enhanced features
-	circuitBreaker *CircuitBreaker
-	enhancedStats  *EnhancedStats
-	requestID      int64 // Atomic counter for request IDs
+	circuitBreaker  *CircuitBreaker
+	enhancedStats   *EnhancedStats
+	requestID       int64 // Atomic counter for request IDs
+	healthChecker   *HealthChecker
+	adaptiveTimeout *AdaptiveTimeout
 
 	Stats Stats
 }
@@ -207,6 +209,18 @@ func (p *ProxyInstance) Start() error {
 	p.enhancedStats = NewEnhancedStats(1000) // Track last 1000 requests
 	p.requestID = 0
 
+	// Initialize health checker
+	p.healthChecker = NewHealthChecker(
+		p.TargetAddr,
+		30*time.Second,
+		p.ConnectionTimeout,
+		func(id, msg string) { p.log.Info(id, msg) },
+	)
+	p.healthChecker.Start()
+
+	// Initialize adaptive timeouts
+	p.adaptiveTimeout = NewAdaptiveTimeout(p.ReadTimeout, p.ConnectionTimeout)
+
 	p.ctx, p.cancel = context.WithCancel(context.Background())
 	p.Stats.setStatus("Running")
 	p.Stats.SetLastStart(time.Now())
@@ -236,6 +250,10 @@ func (p *ProxyInstance) Stop() {
 
 	if p.connPool != nil {
 		p.connPool.Close()
+	}
+
+	if p.healthChecker != nil {
+		p.healthChecker.Stop()
 	}
 
 	// Wait for all goroutines to finish
@@ -365,6 +383,8 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}, glo
 		var respFrame []byte
 		var errFwd error
 
+		forwardStart := time.Now()
+
 		// Route to the appropriate forwarding function based on protocol.
 		if p.Protocol == "rtu-tcp" {
 			respFrame, errFwd = p.forwardRequestRTU(reqFrame)
@@ -388,6 +408,9 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}, glo
 		p.circuitBreaker.RecordSuccess()
 		bytesWritten = len(respFrame)
 		p.enhancedStats.RecordRequestComplete(reqID, bytesRead, bytesWritten, nil)
+		if p.adaptiveTimeout != nil {
+			p.adaptiveTimeout.Record(time.Since(forwardStart))
+		}
 
 		// Debug: Log Modbus response
 		p.log.Debug(p.ID, fmt.Sprintf("Sending Modbus response: %X (%d bytes)", respFrame, len(respFrame)))
@@ -463,6 +486,13 @@ func (p *ProxyInstance) handleSplitRead(reqFrame []byte) ([]byte, error) {
 func (p *ProxyInstance) forwardRequest(req []byte) ([]byte, error) {
 	var lastErr error
 
+	readTimeout := p.ReadTimeout
+	connectTimeout := p.ConnectionTimeout
+	if p.adaptiveTimeout != nil {
+		readTimeout = p.adaptiveTimeout.GetReadTimeout()
+		connectTimeout = p.adaptiveTimeout.GetConnectTimeout()
+	}
+
 	for attempt := 0; attempt <= p.MaxRetries; attempt++ {
 		if attempt > 0 {
 			// Exponential backoff with cap to prevent overflow
@@ -488,7 +518,7 @@ func (p *ProxyInstance) forwardRequest(req []byte) ([]byte, error) {
 		}
 
 		// Try write
-		if err := rawConn.SetWriteDeadline(time.Now().Add(p.ConnectionTimeout)); err != nil {
+		if err := rawConn.SetWriteDeadline(time.Now().Add(connectTimeout)); err != nil {
 			markBroken()
 			rawConn.Close()
 			lastErr = err
@@ -503,7 +533,7 @@ func (p *ProxyInstance) forwardRequest(req []byte) ([]byte, error) {
 		}
 
 		// Try read
-		if err := rawConn.SetReadDeadline(time.Now().Add(p.ReadTimeout)); err != nil {
+		if err := rawConn.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
 			markBroken()
 			rawConn.Close()
 			lastErr = err
@@ -542,6 +572,12 @@ func (p *ProxyInstance) forwardRequestRTU(tcpReq []byte) ([]byte, error) {
 	}
 
 	var lastErr error
+	rtuReadTimeout := p.ReadTimeout
+	rtuConnectTimeout := p.ConnectionTimeout
+	if p.adaptiveTimeout != nil {
+		rtuReadTimeout = p.adaptiveTimeout.GetReadTimeout()
+		rtuConnectTimeout = p.adaptiveTimeout.GetConnectTimeout()
+	}
 	for attempt := 0; attempt <= p.MaxRetries; attempt++ {
 		if attempt > 0 {
 			backoff := time.Duration(1<<min(uint(attempt-1), 10)) * 100 * time.Millisecond
@@ -563,7 +599,7 @@ func (p *ProxyInstance) forwardRequestRTU(tcpReq []byte) ([]byte, error) {
 			markBroken = func() {}
 		}
 
-		if err := rawConn.SetWriteDeadline(time.Now().Add(p.ConnectionTimeout)); err != nil {
+		if err := rawConn.SetWriteDeadline(time.Now().Add(rtuConnectTimeout)); err != nil {
 			markBroken()
 			rawConn.Close()
 			lastErr = err
@@ -575,7 +611,7 @@ func (p *ProxyInstance) forwardRequestRTU(tcpReq []byte) ([]byte, error) {
 			lastErr = err
 			continue
 		}
-		if err := rawConn.SetReadDeadline(time.Now().Add(p.ReadTimeout)); err != nil {
+		if err := rawConn.SetReadDeadline(time.Now().Add(rtuReadTimeout)); err != nil {
 			markBroken()
 			rawConn.Close()
 			lastErr = err

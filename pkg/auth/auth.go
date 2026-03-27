@@ -19,28 +19,26 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Session holds session data.
 type Session struct {
 	Token     string
+	UserID    string
+	Username  string
+	Role      string
 	ExpiresAt time.Time
 }
 
-// Authenticator handles auth.
 type Authenticator struct {
 	mu       sync.RWMutex
 	sessions map[string]Session
 }
 
-// NewAuthenticator creates a new authenticator.
 func NewAuthenticator() *Authenticator {
 	return &Authenticator{
 		sessions: make(map[string]Session),
 	}
 }
 
-// HashPassword hashes a password.
 func HashPassword(password string) (string, error) {
-	// Validate password strength before hashing
 	if err := ValidatePasswordStrength(password); err != nil {
 		return "", err
 	}
@@ -48,7 +46,6 @@ func HashPassword(password string) (string, error) {
 	return string(bytes), err
 }
 
-// ValidatePasswordStrength checks if a password meets security requirements
 func ValidatePasswordStrength(password string) error {
 	if len(password) < 8 {
 		return errors.New("password must be at least 8 characters long")
@@ -77,7 +74,6 @@ func ValidatePasswordStrength(password string) error {
 		}
 	}
 
-	// Require at least 3 of 4 character types
 	typeCount := 0
 	if hasUpper {
 		typeCount++
@@ -96,7 +92,6 @@ func ValidatePasswordStrength(password string) error {
 		return errors.New("password must contain at least 3 of: uppercase, lowercase, numbers, special characters")
 	}
 
-	// Check for common weak passwords
 	weakPasswords := []string{
 		"password", "Password1!", "12345678", "qwerty",
 		"admin", "letmein", "welcome", "monkey",
@@ -112,30 +107,39 @@ func ValidatePasswordStrength(password string) error {
 	return nil
 }
 
-// CheckPasswordHash checks password.
 func CheckPasswordHash(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }
 
-// CreateSession creates a session.
-func (a *Authenticator) CreateSession() (string, error) {
+func (a *Authenticator) CreateSession(userID, username, role string) (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	token := base64.URLEncoding.EncodeToString(b)
+	token := base64.StdEncoding.EncodeToString(b)
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.sessions[token] = Session{
 		Token:     token,
+		UserID:    userID,
+		Username:  username,
+		Role:      role,
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}
 	return token, nil
 }
 
-// ValidateSession validates a session.
+func (a *Authenticator) GetSession(token string) *Session {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if session, ok := a.sessions[token]; ok {
+		return &session
+	}
+	return nil
+}
+
 func (a *Authenticator) ValidateSession(token string) bool {
 	a.mu.RLock()
 	session, ok := a.sessions[token]
@@ -153,7 +157,6 @@ func (a *Authenticator) ValidateSession(token string) bool {
 	return true
 }
 
-// Middleware protects routes.
 func (a *Authenticator) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		c, err := r.Cookie("session_token")
@@ -171,7 +174,6 @@ func (a *Authenticator) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// CleanupExpiredSessions periodically removes expired sessions.
 func (a *Authenticator) CleanupExpiredSessions(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()

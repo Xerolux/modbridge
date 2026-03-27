@@ -1,7 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
  import { useAuthStore } from '../stores/auth'
 
- // Lazy load components for better performance
  const Dashboard = () => import('../views/Dashboard.vue')
  const Login = () => import('../views/Login.vue')
  const Control = () => import('../views/Control.vue')
@@ -34,37 +33,44 @@ import { createRouter, createWebHashHistory } from 'vue-router'
       {
         path: '/control',
         name: 'Control',
-        component: Control
+        component: Control,
+        meta: { permission: 'proxy:view' }
       },
       {
         path: '/devices',
         name: 'Devices',
-        component: Devices
+        component: Devices,
+        meta: { permission: 'device:view' }
       },
       {
         path: '/config',
         name: 'Config',
-        component: Config
+        component: Config,
+        meta: { permission: 'config:view' }
       },
       {
         path: '/logs',
         name: 'Logs',
-        component: Logs
+        component: Logs,
+        meta: { permission: 'logs:view' }
       },
       {
         path: '/system',
         name: 'System',
-        component: SystemInfo
+        component: SystemInfo,
+        meta: { permission: 'system:view' }
       },
       {
         path: '/users',
         name: 'Users',
-        component: Users
+        component: Users,
+        meta: { permission: 'user:view' }
       },
       {
         path: '/audit',
         name: 'Audit',
-        component: Audit
+        component: Audit,
+        meta: { permission: 'audit:view' }
       }
     ]
   }
@@ -82,6 +88,10 @@ router.beforeEach(async (to, from, next) => {
      const valid = await auth.checkAuth()
      if (!valid) {
          next('/login')
+         return
+     }
+     if (to.meta.permission && !auth.hasPermission(to.meta.permission)) {
+         next('/')
          return
      }
   }

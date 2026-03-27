@@ -1,27 +1,43 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { useRouter } from 'vue-router';
 import Card from 'primevue/card';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import Message from 'primevue/message';
+import axios from '../axios.js';
 
+const username = ref('');
 const password = ref('');
 const error = ref('');
 const auth = useAuthStore();
 const router = useRouter();
 const loading = ref(false);
+const multiUser = ref(false);
+
+onMounted(async () => {
+    try {
+        const res = await axios.get('/api/status', { skipAuth: true });
+        multiUser.value = res.data.multi_user === true;
+    } catch {
+        multiUser.value = false;
+    }
+});
 
 const handleLogin = async () => {
     loading.value = true;
     error.value = '';
-    const result = await auth.login(password.value);
+    const payload = { password: password.value };
+    if (multiUser.value) {
+        payload.username = username.value;
+    }
+    const result = await auth.login(payload);
     loading.value = false;
     if (result.success) {
         router.push('/');
     } else {
-        error.value = result.message || 'Invalid password';
+        error.value = result.message || 'Invalid credentials';
     }
 };
 </script>
@@ -31,10 +47,17 @@ const handleLogin = async () => {
         <Card class="w-full max-w-md glass-card border border-white/10 shadow-2xl overflow-hidden relative">
             <template #title>
                 <div class="text-2xl font-semibold tracking-tight text-white mb-2">Welcome Back</div>
-                <div class="text-sm font-normal text-surface-400">Please enter your password to continue</div>
+                <div class="text-sm font-normal text-surface-400">
+                    <span v-if="multiUser">Enter your credentials to continue</span>
+                    <span v-else>Enter your password to continue</span>
+                </div>
             </template>
             <template #content>
                 <div class="flex flex-col gap-5 mt-4">
+                    <div v-if="multiUser" class="flex flex-col gap-2">
+                        <label for="username" class="text-sm font-medium text-surface-200">Username</label>
+                        <InputText id="username" v-model="username" @keyup.enter="handleLogin" class="p-3 w-full bg-surface-800/50 border-surface-700/50 text-white focus:border-primary-500 transition-colors rounded-xl" placeholder="Username" />
+                    </div>
                     <div class="flex flex-col gap-2">
                         <label for="password" class="text-sm font-medium text-surface-200">Password</label>
                         <InputText id="password" v-model="password" type="password" @keyup.enter="handleLogin" class="p-3 w-full bg-surface-800/50 border-surface-700/50 text-white focus:border-primary-500 transition-colors rounded-xl" placeholder="••••••••" />
