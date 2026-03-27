@@ -4,6 +4,7 @@
             <h1 class="text-xl sm:text-2xl font-bold">Proxy Control</h1>
             <div class="flex flex-wrap gap-2">
                 <Button
+                    v-if="auth.hasPermission('proxy:create')"
                     icon="pi pi-plus"
                     severity="info"
                     label="Add Proxy"
@@ -11,6 +12,7 @@
                     class="text-sm flex-1 sm:flex-none"
                 />
                 <Button
+                    v-if="auth.hasPermission('proxy:control')"
                     icon="pi pi-play"
                     severity="success"
                     label="Start All"
@@ -18,6 +20,7 @@
                     class="text-sm flex-1 sm:flex-none"
                 />
                 <Button
+                    v-if="auth.hasPermission('proxy:control')"
                     icon="pi pi-stop"
                     severity="danger"
                     label="Stop All"
@@ -52,79 +55,84 @@
                          <div class="text-sm">Listen: {{ proxy.listen_addr }}</div>
                          <div class="text-sm">Target: {{ proxy.target_addr }}</div>
 
-                         <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
-                              <Button
-                                 icon="pi pi-play"
-                                 severity="success"
-                                 label="Start"
-                                 :disabled="proxy.status === 'Running'"
-                                 @click="controlProxy(proxy.id, 'start')"
-                                 class="text-base p-3 sm:p-2 min-h-[44px]"
-                              />
-                              <Button
-                                 icon="pi pi-stop"
-                                 severity="danger"
-                                 label="Stop"
-                                 :disabled="proxy.status === 'Stopped' || proxy.status === 'Error'"
-                                 @click="controlProxy(proxy.id, 'stop')"
-                                 class="text-base p-3 sm:p-2 min-h-[44px]"
-                              />
+                          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
                                <Button
-                                 icon="pi pi-refresh"
-                                 severity="info"
-                                 label="Restart"
-                                 :disabled="proxy.status === 'Stopped'"
-                                 @click="controlProxy(proxy.id, 'restart')"
-                                 class="text-base p-3 sm:p-2 min-h-[44px]"
+                                  v-if="auth.hasPermission('proxy:control')"
+                                  icon="pi pi-play"
+                                  severity="success"
+                                  label="Start"
+                                  :disabled="proxy.status === 'Running'"
+                                  @click="controlProxy(proxy.id, 'start')"
+                                  class="text-base p-3 sm:p-2 min-h-[44px]"
+                               />
+                               <Button
+                                  v-if="auth.hasPermission('proxy:control')"
+                                  icon="pi pi-stop"
+                                  severity="danger"
+                                  label="Stop"
+                                  :disabled="proxy.status === 'Stopped' || proxy.status === 'Error'"
+                                  @click="controlProxy(proxy.id, 'stop')"
+                                  class="text-base p-3 sm:p-2 min-h-[44px]"
+                               />
+                                <Button
+                                  v-if="auth.hasPermission('proxy:control') && !proxy.paused && proxy.status === 'Running'"
+                                  icon="pi pi-pause"
+                                  severity="warning"
+                                  label="Pause"
+                                  @click="controlProxy(proxy.id, 'pause')"
+                                  class="text-base p-3 sm:p-2 min-h-[44px]"
+                               />
+                               <Button
+                                  v-if="auth.hasPermission('proxy:control') && proxy.paused"
+                                  icon="pi pi-play"
+                                  severity="success"
+                                  label="Resume"
+                                  @click="controlProxy(proxy.id, 'resume')"
+                                  class="text-base p-3 sm:p-2 min-h-[44px]"
+                               />
+                               <Button
+                                  v-if="auth.hasPermission('proxy:control')"
+                                  icon="pi pi-refresh"
+                                  severity="info"
+                                  label="Restart"
+                                  :disabled="proxy.status === 'Stopped'"
+                                  @click="controlProxy(proxy.id, 'restart')"
+                                  class="text-base p-3 sm:p-2 min-h-[44px]"
+                               />
+                               <Button
+                                  v-if="auth.hasPermission('proxy:edit')"
+                                  icon="pi pi-pencil"
+                                  severity="secondary"
+                                  label="Edit"
+                                  @click="openEditProxyDialog(proxy)"
+                                  class="text-base p-3 sm:p-2 min-h-[44px]"
+                               />
+                          </div>
+                          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
+                              <Button
+                                  icon="pi pi-search"
+                                  severity="info"
+                                  label="Test"
+                                  @click="testConnectivity(proxy)"
+                                  :loading="testingProxy === proxy.id"
+                                  class="text-base p-3 sm:p-2 min-h-[44px]"
                               />
                               <Button
-                                 v-if="!proxy.paused && proxy.status === 'Running'"
-                                 icon="pi pi-pause"
-                                 severity="warning"
-                                 label="Pause"
-                                 @click="controlProxy(proxy.id, 'pause')"
-                                 class="text-base p-3 sm:p-2 min-h-[44px]"
+                                  icon="pi pi-eye"
+                                  severity="secondary"
+                                  label="View Logs"
+                                  @click="openProxyLogs(proxy.id)"
+                                  class="text-base p-3 sm:p-2 min-h-[44px]"
                               />
                               <Button
-                                 v-if="proxy.paused"
-                                 icon="pi pi-play"
-                                 severity="success"
-                                 label="Resume"
-                                 @click="controlProxy(proxy.id, 'resume')"
-                                 class="text-base p-3 sm:p-2 min-h-[44px]"
+                                  v-if="auth.hasPermission('proxy:delete')"
+                                  icon="pi pi-trash"
+                                  severity="danger"
+                                  label="Delete"
+                                  @click="confirmDeleteProxy(proxy.id)"
+                                  class="text-base p-3 sm:p-2 min-h-[44px]"
                               />
-                              <Button
-                                 icon="pi pi-pencil"
-                                 severity="secondary"
-                                 label="Edit"
-                                 @click="openEditProxyDialog(proxy)"
-                                 class="text-base p-3 sm:p-2 min-h-[44px]"
-                              />
-                         </div>
-                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
-                             <Button
-                                 icon="pi pi-search"
-                                 severity="info"
-                                 label="Test"
-                                 @click="testConnectivity(proxy)"
-                                 :loading="testingProxy === proxy.id"
-                                 class="text-base p-3 sm:p-2 min-h-[44px]"
-                             />
-                             <Button
-                                 icon="pi pi-eye"
-                                 severity="secondary"
-                                 label="View Logs"
-                                 @click="openProxyLogs(proxy.id)"
-                                 class="text-base p-3 sm:p-2 min-h-[44px]"
-                             />
-                             <Button
-                                 icon="pi pi-trash"
-                                 severity="danger"
-                                 label="Delete"
-                                 @click="confirmDeleteProxy(proxy.id)"
-                                 class="text-base p-3 sm:p-2 min-h-[44px]"
-                             />
-                         </div>
+                          </div>
 
                          <div v-if="connectionStatus[proxy.id]" class="mt-3 p-3 rounded" :class="connectionStatus[proxy.id].reachable ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'">
                              <div class="flex items-center gap-2 mb-1">
@@ -216,24 +224,26 @@
 </template>
 
 <script setup>
- import { ref, onMounted, onUnmounted, watch } from 'vue';
- import axios from '../axios.js';
- import Card from 'primevue/card';
- import Button from 'primevue/button';
- import Tag from 'primevue/tag';
- import Dialog from 'primevue/dialog';
- import InputText from 'primevue/inputtext';
- import InputNumber from 'primevue/inputnumber';
- import Checkbox from 'primevue/checkbox';
- import Chips from 'primevue/chips';
- import Toast from 'primevue/toast';
- import ConfirmDialog from 'primevue/confirmdialog';
- import { useToast } from 'primevue/usetoast';
- import { useConfirm } from 'primevue/useconfirm';
- import { useEventSource } from '../utils/eventSource';
- import { getSeverity, getLogLevelColor, formatTime } from '../utils/helpers';
+  import { ref, onMounted, onUnmounted, watch } from 'vue';
+  import axios from '../axios.js';
+  import Card from 'primevue/card';
+  import Button from 'primevue/button';
+  import Tag from 'primevue/tag';
+  import Dialog from 'primevue/dialog';
+  import InputText from 'primevue/inputtext';
+  import InputNumber from 'primevue/inputnumber';
+  import Checkbox from 'primevue/checkbox';
+  import Chips from 'primevue/chips';
+  import Toast from 'primevue/toast';
+  import ConfirmDialog from 'primevue/confirmdialog';
+  import { useToast } from 'primevue/usetoast';
+  import { useConfirm } from 'primevue/useconfirm';
+  import { useEventSource } from '../utils/eventSource';
+  import { getSeverity, getLogLevelColor, formatTime } from '../utils/helpers';
+  import { useAuthStore } from '../stores/auth';
 
- const proxies = ref([]);
+  const auth = useAuthStore();
+  const proxies = ref([]);
  const loading = ref(true);
  const toast = useToast();
  const confirm = useConfirm();

@@ -40,8 +40,8 @@ func TestCheckPasswordHash(t *testing.T) {
 }
 
 func TestCreateSession(t *testing.T) {
-	auth := NewAuthenticator()
-	token, err := auth.CreateSession()
+	a := NewAuthenticator()
+	token, err := a.CreateSession("user1", "testuser", "admin")
 	if err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
@@ -49,45 +49,60 @@ func TestCreateSession(t *testing.T) {
 		t.Error("Token is empty")
 	}
 
-	// Validate the created session
-	if !auth.ValidateSession(token) {
+	if !a.ValidateSession(token) {
 		t.Error("Created session should be valid")
+	}
+
+	session := a.GetSession(token)
+	if session == nil {
+		t.Fatal("GetSession returned nil")
+	}
+	if session.UserID != "user1" {
+		t.Errorf("Expected UserID user1, got %s", session.UserID)
+	}
+	if session.Username != "testuser" {
+		t.Errorf("Expected Username testuser, got %s", session.Username)
+	}
+	if session.Role != "admin" {
+		t.Errorf("Expected Role admin, got %s", session.Role)
 	}
 }
 
 func TestValidateSession(t *testing.T) {
-	auth := NewAuthenticator()
+	a := NewAuthenticator()
 
-	// Test invalid token
-	if auth.ValidateSession("invalid-token") {
+	if a.ValidateSession("invalid-token") {
 		t.Error("Invalid token should not validate")
 	}
 
-	// Test valid token
-	token, _ := auth.CreateSession()
-	if !auth.ValidateSession(token) {
+	token, _ := a.CreateSession("u1", "user", "admin")
+	if !a.ValidateSession(token) {
 		t.Error("Valid token should validate")
 	}
 
-	// Test expired token
-	auth.sessions[token] = Session{
+	a.mu.Lock()
+	a.sessions[token] = Session{
 		Token:     token,
+		UserID:    "u1",
+		Username:  "user",
+		Role:      "admin",
 		ExpiresAt: time.Now().Add(-1 * time.Hour),
 	}
-	if auth.ValidateSession(token) {
+	a.mu.Unlock()
+
+	if a.ValidateSession(token) {
 		t.Error("Expired token should not validate")
 	}
 }
 
 func TestMiddleware(t *testing.T) {
-	auth := NewAuthenticator()
-	token, _ := auth.CreateSession()
+	a := NewAuthenticator()
+	token, _ := a.CreateSession("u1", "user", "admin")
 
-	handler := auth.Middleware(func(w http.ResponseWriter, r *http.Request) {
+	handler := a.Middleware(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	// Test without cookie
 	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
 	handler(w, req)
@@ -95,7 +110,6 @@ func TestMiddleware(t *testing.T) {
 		t.Errorf("Expected %d, got %d", http.StatusUnauthorized, w.Code)
 	}
 
-	// Test with valid cookie
 	req = httptest.NewRequest("GET", "/test", nil)
 	req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
 	w = httptest.NewRecorder()
@@ -104,7 +118,6 @@ func TestMiddleware(t *testing.T) {
 		t.Errorf("Expected %d, got %d", http.StatusOK, w.Code)
 	}
 
-	// Test with invalid cookie
 	req = httptest.NewRequest("GET", "/test", nil)
 	req.AddCookie(&http.Cookie{Name: "session_token", Value: "invalid"})
 	w = httptest.NewRecorder()

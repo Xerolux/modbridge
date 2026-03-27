@@ -1,5 +1,5 @@
 <script setup>
-  import { ref, onMounted, onUnmounted } from "vue";
+  import { ref, computed, onMounted, onUnmounted } from "vue";
   import { useRouter, useRoute } from 'vue-router'
   import { useAuthStore } from "../stores/auth";
   import { useAppStore } from "../stores/appStore";
@@ -7,7 +7,6 @@
   import Button from 'primevue/button';
   import Sidebar from 'primevue/sidebar';
   import InputSwitch from 'primevue/inputswitch';
-  import Menu from 'primevue/menu';
   import LanguageSelector from './LanguageSelector.vue';
   import { debounce } from '../utils/helpers';
 
@@ -24,56 +23,72 @@
       mobileMenuVisible.value = false;
   };
 
-  const items = ref([
+  const allItems = [
       {
           label: 'Dashboard',
           icon: 'pi pi-home',
           path: '/',
+          permission: null,
           command: () => navigate('/')
       },
       {
           label: 'Control',
           icon: 'pi pi-sliders-h',
           path: '/control',
+          permission: 'proxy:view',
           command: () => navigate('/control')
       },
       {
           label: 'Devices',
           icon: 'pi pi-desktop',
           path: '/devices',
+          permission: 'device:view',
           command: () => navigate('/devices')
       },
       {
           label: 'Logs',
           icon: 'pi pi-list',
           path: '/logs',
+          permission: 'logs:view',
           command: () => navigate('/logs')
       },
       {
           label: 'System',
           icon: 'pi pi-info-circle',
           path: '/system',
+          permission: 'system:view',
           command: () => navigate('/system')
       },
       {
           label: 'Settings',
           icon: 'pi pi-cog',
           path: '/config',
+          permission: 'config:view',
           command: () => navigate('/config')
       },
       {
           label: 'Users',
           icon: 'pi pi-users',
           path: '/users',
+          permission: 'user:view',
           command: () => navigate('/users')
       },
       {
           label: 'Audit Log',
           icon: 'pi pi-history',
           path: '/audit',
+          permission: 'audit:view',
           command: () => navigate('/audit')
       }
-  ]);
+  ];
+
+  const items = computed(() => {
+      return allItems.filter(item => {
+          if (!item.permission) return true;
+          if (auth.isAdmin) return true;
+          return auth.hasPermission(item.permission);
+      });
+  });
 
   const logout = async () => {
       await auth.logout();
@@ -113,19 +128,24 @@
                            <span class="text-xl font-bold tracking-tight text-white hidden sm:block">ModBridge</span>
                        </div>
                    </div>
-                </template>
-                <template #item="{ item, props }">
-                    <a v-ripple class="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 rounded-xl cursor-pointer text-surface-200 transition-colors mx-1" :class="{'bg-white/10 text-white font-medium': isActiveRoute(item.path)}" v-bind="props.action">
-                        <i :class="item.icon" class="text-lg"></i>
-                        <span class="text-sm">{{ item.label }}</span>
-                    </a>
-                </template>
+                 </template>
+                 <template #item="{ item, props }">
+                     <a v-ripple class="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 rounded-xl cursor-pointer text-surface-200 transition-colors mx-1" :class="{'bg-white/10 text-white font-medium': isActiveRoute(item.path)}" v-bind="props.action">
+                         <i :class="item.icon" class="text-lg"></i>
+                         <span class="text-sm">{{ item.label }}</span>
+                     </a>
+                 </template>
                  <template #end>
                      <div class="flex items-center gap-3 pr-2">
                          <LanguageSelector class="hidden sm:flex" />
                          <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-900/50 border border-white/5">
                              <i :class="appStore.darkMode ? 'pi pi-moon' : 'pi pi-sun'" class="text-surface-300 text-sm"></i>
                              <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" class="scale-75" />
+                         </div>
+                         <div v-if="auth.user.username" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-900/50 border border-white/5">
+                             <i class="pi pi-user text-surface-300 text-sm"></i>
+                             <span class="text-surface-200 text-sm">{{ auth.user.username }}</span>
+                             <span class="text-xs text-surface-400">({{ auth.user.role }})</span>
                          </div>
                          <Button icon="pi pi-power-off" severity="danger" rounded text @click="logout" class="hidden sm:flex hover:bg-red-500/20 w-10 h-10" />
                      </div>
@@ -154,6 +174,11 @@
                 </div>
 
                 <div class="mt-auto border-t border-white/10 pt-6 flex flex-col gap-4">
+                    <div v-if="auth.user.username" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-900/50 border border-white/5">
+                        <i class="pi pi-user text-surface-400 text-sm"></i>
+                        <span class="text-surface-200 text-sm">{{ auth.user.username }}</span>
+                        <span class="text-xs text-surface-400">({{ auth.user.role }})</span>
+                    </div>
                      <div class="flex items-center justify-between px-4 py-3 rounded-xl bg-surface-900/50 border border-white/5">
                         <span class="text-surface-200 font-medium text-sm">Theme</span>
                         <div class="flex items-center gap-3">
