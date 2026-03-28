@@ -33,6 +33,11 @@
           </div>
         </template>
       </Column>
+      <Column field="full_name" header="Name" sortable>
+        <template #body="{ data }">
+          <span class="text-gray-300">{{ data.full_name || '-' }}</span>
+        </template>
+      </Column>
       <Column field="email" header="Email" sortable class="hidden sm:table-cell">
         <template #body="{ data }">
           <span class="text-gray-300">{{ data.email || '-' }}</span>
@@ -46,14 +51,33 @@
       <Column field="enabled" header="Status" sortable>
         <template #body="{ data }">
           <Tag
-            :value="data.enabled ? 'Enabled' : 'Disabled'"
+            :value="data.enabled ? 'Active' : 'Inactive'"
             :severity="data.enabled ? 'success' : 'danger'"
           />
+        </template>
+      </Column>
+      <Column header="Expires" sortable field="expires_at">
+        <template #body="{ data }">
+          <span v-if="data.expires_at" class="text-gray-300 text-sm">
+            {{ formatDate(data.expires_at) }}
+          </span>
+          <span v-else-if="data.auto_deactivate_days > 0" class="text-yellow-400 text-sm">
+            After {{ data.auto_deactivate_days }} days
+          </span>
+          <span v-else class="text-gray-500 text-sm">Never</span>
         </template>
       </Column>
       <Column header="Actions" :exportable="false">
         <template #body="{ data }">
           <div class="flex gap-2">
+            <Button
+              :icon="data.enabled ? 'pi pi-ban' : 'pi pi-check'"
+              size="small"
+              text
+              :severity="data.enabled ? 'warning' : 'success'"
+              @click="toggleUserEnabled(data)"
+              v-tooltip="data.enabled ? 'Deactivate' : 'Activate'"
+            />
             <Button
               icon="pi pi-pencil"
               size="small"
@@ -84,31 +108,64 @@
       v-model:visible="showModal"
       :header="isEditMode ? 'Edit User' : 'Create User'"
       modal
-      class="w-full max-w-md mx-4"
+      class="w-full max-w-lg mx-4"
     >
       <div class="flex flex-col gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Username</label>
-          <InputText v-model="formData.username" class="w-full" :disabled="isEditMode" />
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Username *</label>
+            <InputText v-model="formData.username" class="w-full" :disabled="isEditMode" placeholder="username" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Full Name *</label>
+            <InputText v-model="formData.full_name" class="w-full" placeholder="Max Mustermann" />
+          </div>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Email</label>
-          <InputText v-model="formData.email" type="email" class="w-full" />
+          <label class="block text-sm font-medium text-gray-300 mb-1">Email *</label>
+          <InputText v-model="formData.email" type="email" class="w-full" placeholder="user@example.com" />
         </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Role</label>
-          <Dropdown
-            v-model="formData.role"
-            :options="roles"
-            optionLabel="label"
-            optionValue="value"
-            class="w-full"
-          />
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Role *</label>
+            <Dropdown
+              v-model="formData.role"
+              :options="roles"
+              optionLabel="label"
+              optionValue="value"
+              class="w-full"
+            />
+          </div>
+          <div v-if="!isEditMode">
+            <label class="block text-sm font-medium text-gray-300 mb-1">Password *</label>
+            <Password v-model="formData.password" :feedback="true" toggleMask class="w-full" />
+          </div>
         </div>
-        <div v-if="!isEditMode">
-          <label class="block text-sm font-medium text-gray-300 mb-1">Password</label>
-          <Password v-model="formData.password" :feedback="true" toggleMask class="w-full" />
+
+        <div v-if="isEditMode" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">New Password</label>
+            <Password v-model="formData.password" :feedback="true" toggleMask class="w-full" placeholder="Leave empty to keep" />
+            <small class="text-gray-500">Leave empty to keep current password</small>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Description</label>
+            <InputText v-model="formData.description" class="w-full" placeholder="Optional note" />
+          </div>
         </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Auto-Deactivate (days)</label>
+            <InputNumber v-model="formData.auto_deactivate_days" :min="0" :max="3650" class="w-full" placeholder="0 = never" />
+            <small class="text-gray-500">0 = no auto-deactivation</small>
+          </div>
+          <div v-if="formData.expires_at">
+            <label class="block text-sm font-medium text-gray-300 mb-1">Expires At</label>
+            <InputText :modelValue="formatDate(formData.expires_at)" class="w-full" disabled />
+          </div>
+        </div>
+
         <div class="flex items-center gap-2">
           <Checkbox v-model="formData.enabled" binary inputId="enabled-cb" />
           <label for="enabled-cb" class="text-sm text-gray-300">Enabled</label>
@@ -133,6 +190,7 @@ import Column from 'primevue/column';
 import Button from 'primevue/button';
 import Dialog from 'primevue/dialog';
 import InputText from 'primevue/inputtext';
+import InputNumber from 'primevue/inputnumber';
 import Dropdown from 'primevue/dropdown';
 import Password from 'primevue/password';
 import Checkbox from 'primevue/checkbox';
@@ -151,21 +209,33 @@ const isEditMode = ref(false);
 const toast = useToast();
 const confirm = useConfirm();
 
-const formData = ref({
+const defaultFormData = () => ({
   id: null,
   username: '',
+  full_name: '',
   email: '',
   role: 'viewer',
   password: '',
-  enabled: true
+  enabled: true,
+  auto_deactivate_days: 0,
+  expires_at: null,
+  description: ''
 });
 
+const formData = ref(defaultFormData());
+
 const roles = [
-  { label: 'Admin', value: 'admin' },
-  { label: 'Operator', value: 'operator' },
-  { label: 'Viewer', value: 'viewer' },
-  { label: 'Auditor', value: 'auditor' }
+  { label: 'Admin - Full access', value: 'admin' },
+  { label: 'Operator - Control proxies & devices', value: 'operator' },
+  { label: 'Viewer - Read-only access', value: 'viewer' },
+  { label: 'Auditor - Audit logs access', value: 'auditor' }
 ];
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
 
 const loadUsers = async () => {
   loading.value = true;
@@ -183,14 +253,7 @@ const loadUsers = async () => {
 
 const openCreateModal = () => {
   isEditMode.value = false;
-  formData.value = {
-    id: null,
-    username: '',
-    email: '',
-    role: 'viewer',
-    password: '',
-    enabled: true
-  };
+  formData.value = defaultFormData();
   showModal.value = true;
 };
 
@@ -201,11 +264,23 @@ const editUser = (user) => {
 };
 
 const saveUser = async () => {
+  if (!formData.value.username || !formData.value.full_name || !formData.value.email) {
+    toast.add({ severity: 'warn', summary: 'Validation', detail: 'Username, full name, and email are required', life: 4000 });
+    return;
+  }
+
+  if (!isEditMode.value && !formData.value.password) {
+    toast.add({ severity: 'warn', summary: 'Validation', detail: 'Password is required', life: 4000 });
+    return;
+  }
+
   saving.value = true;
   try {
     if (isEditMode.value) {
       const updateData = { ...formData.value };
-      delete updateData.password;
+      if (!updateData.password) {
+        delete updateData.password;
+      }
       await axios.put(`/api/users/${formData.value.id}`, updateData);
       toast.add({ severity: 'success', summary: 'Success', detail: 'User updated', life: 3000 });
     } else {
@@ -215,16 +290,35 @@ const saveUser = async () => {
     closeModal();
     await loadUsers();
   } catch (e) {
-    const msg = e.response?.data || 'Failed to save user';
+    const msg = typeof e.response?.data === 'string' ? e.response.data : 'Failed to save user';
     toast.add({ severity: 'error', summary: 'Error', detail: msg, life: 5000 });
   } finally {
     saving.value = false;
   }
 };
 
+const toggleUserEnabled = async (user) => {
+  try {
+    await axios.put(`/api/users/${user.id}`, {
+      ...user,
+      enabled: !user.enabled,
+      password: ''
+    });
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: `User ${!user.enabled ? 'activated' : 'deactivated'}`,
+      life: 3000
+    });
+    await loadUsers();
+  } catch (e) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to toggle user status', life: 5000 });
+  }
+};
+
 const confirmDeleteUser = (user) => {
   confirm.require({
-    message: `Are you sure you want to delete user "${user.username}"?`,
+    message: `Are you sure you want to delete user "${user.username}" (${user.full_name})?`,
     header: 'Confirm Delete',
     icon: 'pi pi-exclamation-triangle',
     acceptLabel: 'Delete',
@@ -243,14 +337,7 @@ const confirmDeleteUser = (user) => {
 
 const closeModal = () => {
   showModal.value = false;
-  formData.value = {
-    id: null,
-    username: '',
-    email: '',
-    role: 'viewer',
-    password: '',
-    enabled: true
-  };
+  formData.value = defaultFormData();
 };
 
 const getRoleSeverity = (role) => {

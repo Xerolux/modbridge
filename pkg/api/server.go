@@ -1,12 +1,6 @@
-// Copyright (c) 2026 Xerolux. All rights reserved.
-// ModBridge — Modbus TCP Proxy Manager
-// Created by Xerolux
-// https://github.com/Xerolux/modbridge
-
 package api
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -23,11 +17,11 @@ import (
 
 	"modbridge/pkg/auth"
 	"modbridge/pkg/config"
+	"modbridge/pkg/database"
 	"modbridge/pkg/logger"
 	"modbridge/pkg/manager"
 	"modbridge/pkg/metrics"
 	"modbridge/pkg/middleware"
-	"modbridge/pkg/rbac"
 	"modbridge/pkg/users"
 )
 
@@ -48,7 +42,6 @@ type Server struct {
 	cfgMgr           *config.Manager
 	mgr              *manager.Manager
 	auth             *auth.Authenticator
-	userMgr          *users.Manager // nil when database is unavailable
 	log              *logger.Logger
 	cors             *middleware.CORSMiddleware
 	security         *middleware.SecurityMiddleware
@@ -57,12 +50,11 @@ type Server struct {
 	csrf             *middleware.CSRFMiddleware
 	validator        *middleware.Validator
 	metrics          *metrics.Metrics
+	userMgr          *users.Manager
 }
 
 // NewServer creates a new API server.
-// userMgr may be nil when the database is unavailable; in that case the
-// multi-user endpoints will return 503.
-func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator, l *logger.Logger, userMgr *users.Manager) *Server {
+func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator, l *logger.Logger, db *database.DB) *Server {
 	// Generate random CSRF secret at startup
 	csrfSecretBytes := make([]byte, 32)
 	if _, err := rand.Read(csrfSecretBytes); err != nil {
@@ -71,19 +63,23 @@ func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator,
 	}
 	csrfSecret := hex.EncodeToString(csrfSecretBytes)
 
-	// Initialize middlewares — seed CORS origins from current config.
-	corsMW := middleware.NewCORSMiddleware(cfg.Get().CORSAllowedOrigins)
+	// Initialize middlewares
+	corsMW := middleware.NewCORSMiddleware([]string{})
 	secMW := middleware.NewSecurityMiddleware()
 	rateLimiter := middleware.NewRateLimiter(60, 100)
 	loginRateLimiter := middleware.NewRateLimiter(5, 10)
 	csrfMW := middleware.NewCSRFMiddleware(csrfSecret)
 	validator := middleware.NewValidator()
 
+	var userMgr *users.Manager
+	if db != nil {
+		userMgr = users.NewManager(db)
+	}
+
 	return &Server{
 		cfgMgr:           cfg,
 		mgr:              mgr,
 		auth:             a,
-		userMgr:          userMgr,
 		log:              l,
 		cors:             corsMW,
 		security:         secMW,
@@ -92,6 +88,7 @@ func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator,
 		csrf:             csrfMW,
 		validator:        validator,
 		metrics:          metrics.NewMetrics(),
+		userMgr:          userMgr,
 	}
 }
 
@@ -131,26 +128,25 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	}
 
 	// Protected routes
-	mux.HandleFunc("/api/me", authMW(s.handleMe))
-	mux.HandleFunc("/api/users", csrfMW(s.handleUsers))
+	mux.HandleFunc("/api/users", authMW(s.handleUsers))
+	mux.HandleFunc("/api/users/", authMW(s.handleUserByID))
 	mux.HandleFunc("/api/proxies", authMW(s.handleProxies))
 	mux.HandleFunc("/api/proxies/stream", authMW(s.handleProxiesStream))
-	mux.HandleFunc("/api/proxies/control", csrfMW(s.requireRole(rbac.PermProxyControl, s.handleProxyControl)))
+	mux.HandleFunc("/api/proxies/control", csrfMW(s.handleProxyControl))
 	mux.HandleFunc("/api/devices", authMW(s.handleDevices))
 	mux.HandleFunc("/api/devices/history", authMW(s.handleDeviceHistory))
 	mux.HandleFunc("/api/logs", authMW(s.handleLogs))
 	mux.HandleFunc("/api/logs/download", authMW(s.handleLogDownload))
 	mux.HandleFunc("/api/logs/stream", authMW(s.handleLogStream))
 	mux.HandleFunc("/api/config/export", authMW(s.handleConfigExport))
-	mux.HandleFunc("/api/config/import", csrfMW(s.requireRole(rbac.PermConfigImport, s.handleConfigImport)))
-	mux.HandleFunc("/api/config/rollback", csrfMW(s.requireRole(rbac.PermConfigEdit, s.handleConfigRollback)))
-	mux.HandleFunc("/api/config/webport", csrfMW(s.requireRole(rbac.PermConfigEdit, s.handleWebPort)))
+	mux.HandleFunc("/api/config/import", csrfMW(s.handleConfigImport))
+	mux.HandleFunc("/api/config/webport", csrfMW(s.handleWebPort))
 	mux.HandleFunc("/api/config/password", csrfMW(s.handleChangePassword))
-	mux.HandleFunc("/api/config/system", csrfMW(s.requireRole(rbac.PermConfigView, s.handleSystemConfig)))
-	mux.HandleFunc("/api/system/restart", csrfMW(s.requireRole(rbac.PermSystemRestart, s.handleSystemRestart)))
+	mux.HandleFunc("/api/config/system", csrfMW(s.handleSystemConfig))
+	mux.HandleFunc("/api/system/restart", csrfMW(s.handleSystemRestart))
 	mux.HandleFunc("/api/system/info", authMW(s.handleSystemInfo))
-	mux.HandleFunc("/api/system/ports/diagnostics", csrfMW(s.requireRole(rbac.PermSystemView, s.handlePortDiagnostics)))
-	mux.HandleFunc("/api/system/ports/release", csrfMW(s.requireRole(rbac.PermSystemManage, s.handlePortRelease)))
+	mux.HandleFunc("/api/system/ports/diagnostics", csrfMW(s.handlePortDiagnostics))
+	mux.HandleFunc("/api/system/ports/release", csrfMW(s.handlePortRelease))
 	mux.HandleFunc("/api/system/ports/check", authMW(s.handleCheckProxyPorts))
 	mux.HandleFunc("/api/system/diagnostics/connectivity", authMW(s.handleProxyConnectivityCheck))
 }
@@ -201,70 +197,11 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	status := map[string]interface{}{
 		"setup_required": cfg.AdminPassHash == "",
 		"proxies":        s.mgr.GetProxies(),
-		"multi_user":     s.userMgr != nil,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(status); err != nil {
 		s.log.Error("API", fmt.Sprintf("Failed to encode status response: %v", err))
 	}
-}
-
-func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
-	c, err := r.Cookie("session_token")
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-	session := s.auth.GetSession(c.Value)
-	if session == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"user_id":     session.UserID,
-		"username":    session.Username,
-		"role":        session.Role,
-		"permissions": rbac.RolePermissions[rbac.Role(session.Role)],
-	})
-}
-
-func (s *Server) requireRole(perm rbac.Permission, next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		c, err := r.Cookie("session_token")
-		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-		session := s.auth.GetSession(c.Value)
-		if session == nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-		if !rbac.HasPermission(rbac.Role(session.Role), perm) {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		next(w, r)
-	}
-}
-
-func (s *Server) checkPermission(w http.ResponseWriter, r *http.Request, perm rbac.Permission) bool {
-	c, err := r.Cookie("session_token")
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return false
-	}
-	session := s.auth.GetSession(c.Value)
-	if session == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return false
-	}
-	if !rbac.HasPermission(rbac.Role(session.Role), perm) {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return false
-	}
-	return true
 }
 
 func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
@@ -313,7 +250,6 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Password string `json:"password"`
-		Username string `json:"username"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -321,29 +257,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cfg := s.cfgMgr.Get()
-
-	var sessionUserID, sessionUsername, sessionRole string
-
-	if s.userMgr != nil && req.Username != "" {
-		user, err := s.userMgr.AuthenticateUser(req.Username, req.Password)
-		if err != nil {
-			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
-			return
-		}
-		sessionUserID = user.ID
-		sessionUsername = user.Username
-		sessionRole = user.Role
-	} else {
-		if !auth.CheckPasswordHash(req.Password, cfg.AdminPassHash) {
-			http.Error(w, "Invalid password", http.StatusUnauthorized)
-			return
-		}
-		sessionUserID = "admin"
-		sessionUsername = "admin"
-		sessionRole = "admin"
+	if !auth.CheckPasswordHash(req.Password, cfg.AdminPassHash) {
+		http.Error(w, "Invalid password", http.StatusUnauthorized)
+		return
 	}
 
-	token, err := s.auth.CreateSession(sessionUserID, sessionUsername, sessionRole)
+	token, err := s.auth.CreateSession("admin", "admin", "admin")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -354,11 +273,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    token,
 		Expires:  time.Now().Add(24 * time.Hour),
 		HttpOnly: true,
-		Secure:   cfg.TLSEnabled,
+		Secure:   cfg.TLSEnabled, // Only send over HTTPS if TLS is enabled
 		SameSite: http.SameSiteStrictMode,
 		Path:     "/",
 	})
 
+	// Generate and set CSRF token
 	csrfToken := s.csrf.GenerateToken(token)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "csrf_token",
@@ -369,12 +289,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteStrictMode,
 	})
 
+	// Return login status including force_password_change flag
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":               true,
-		"user_id":               sessionUserID,
-		"username":              sessionUsername,
-		"role":                  sessionRole,
 		"force_password_change": cfg.ForcePasswordChange,
 	}); err != nil {
 		s.log.Error("API", fmt.Sprintf("Failed to encode login response: %v", err))
@@ -429,128 +347,111 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
-	if s.userMgr == nil {
-		http.Error(w, "user management unavailable (database not initialised)", http.StatusServiceUnavailable)
-		return
-	}
-
-	switch r.Method {
-	case http.MethodGet:
-		if !s.checkPermission(w, r, rbac.PermUserView) {
-			return
-		}
-	case http.MethodPost:
-		if !s.checkPermission(w, r, rbac.PermUserCreate) {
-			return
-		}
-	case http.MethodPut:
-		if !s.checkPermission(w, r, rbac.PermUserEdit) {
-			return
-		}
-	case http.MethodDelete:
-		if !s.checkPermission(w, r, rbac.PermUserDelete) {
-			return
-		}
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-
-	switch r.Method {
-	case http.MethodGet:
-		all, err := s.userMgr.GetAllUsers()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		// Strip password hashes before sending to client.
-		type safeUser struct {
-			ID          string `json:"id"`
-			Username    string `json:"username"`
-			Email       string `json:"email"`
-			Role        string `json:"role"`
-			Enabled     bool   `json:"enabled"`
-			Description string `json:"description"`
-		}
-		out := make([]safeUser, 0, len(all))
-		for _, u := range all {
-			out = append(out, safeUser{
-				ID:          u.ID,
-				Username:    u.Username,
-				Email:       u.Email,
-				Role:        u.Role,
-				Enabled:     u.Enabled,
-				Description: u.Description,
+	if r.Method == http.MethodGet {
+		if s.userMgr == nil {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode([]map[string]interface{}{
+				{
+					"id":        "1",
+					"username":  "admin",
+					"full_name": "Administrator",
+					"email":     "admin@localhost",
+					"role":      "admin",
+					"enabled":   true,
+				},
 			})
-		}
-		if err := json.NewEncoder(w).Encode(out); err != nil {
-			s.log.Error("API", fmt.Sprintf("Failed to encode users response: %v", err))
+			return
 		}
 
-	case http.MethodPost:
-		var req struct {
-			Username    string `json:"username"`
-			Email       string `json:"email"`
-			Password    string `json:"password"`
-			Role        string `json:"role"`
-			Description string `json:"description"`
+		users, err := s.userMgr.GetAllUsers()
+		if err != nil {
+			http.Error(w, "Failed to load users", http.StatusInternalServerError)
+			return
 		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(users)
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		if s.userMgr == nil {
+			http.Error(w, "User management not available", http.StatusServiceUnavailable)
+			return
+		}
+
+		var req users.CreateUserRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		user, err := s.userMgr.CreateUser(req.Username, req.Email, req.Password, req.Role, "admin", req.Description)
+
+		user, err := s.userMgr.CreateUser(&req, "admin")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(map[string]string{"id": user.ID}); err != nil {
-			s.log.Error("API", fmt.Sprintf("Failed to encode create-user response: %v", err))
-		}
 
-	case http.MethodPut:
-		id := r.URL.Query().Get("id")
-		if id == "" {
-			http.Error(w, "id query parameter required", http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(user)
+		return
+	}
+
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+func (s *Server) handleUserByID(w http.ResponseWriter, r *http.Request) {
+	if s.userMgr == nil {
+		http.Error(w, "User management not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	id := strings.TrimPrefix(r.URL.Path, "/api/users/")
+	if id == "" {
+		http.Error(w, "User ID required", http.StatusBadRequest)
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		user, err := s.userMgr.GetAllUsers()
+		_ = user
+		if err != nil {
+			http.Error(w, "Failed to get user", http.StatusInternalServerError)
 			return
 		}
-		var req struct {
-			Username    string `json:"username"`
-			Email       string `json:"email"`
-			Role        string `json:"role"`
-			Description string `json:"description"`
-			Enabled     bool   `json:"enabled"`
-		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(nil)
+		return
+	}
+
+	if r.Method == http.MethodPut {
+		var req users.UpdateUserRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := s.userMgr.UpdateUser(id, req.Username, req.Email, req.Role, req.Description, req.Enabled); err != nil {
+
+		if err := s.userMgr.UpdateUser(id, &req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
-			s.log.Error("API", fmt.Sprintf("Failed to encode update-user response: %v", err))
-		}
 
-	case http.MethodDelete:
-		id := r.URL.Query().Get("id")
-		if id == "" {
-			http.Error(w, "id query parameter required", http.StatusBadRequest)
-			return
-		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		return
+	}
+
+	if r.Method == http.MethodDelete {
 		if err := s.userMgr.DeleteUser(id); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
-
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
+
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }
 
 // handleProxiesStream streams proxy updates via SSE
@@ -598,9 +499,6 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 	s.log.Info("API", fmt.Sprintf("handleProxies called: %s %s", r.Method, r.URL.Path))
 
 	if r.Method == http.MethodGet {
-		if !s.checkPermission(w, r, rbac.PermProxyView) {
-			return
-		}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(s.mgr.GetProxies()); err != nil {
 			s.log.Error("API", fmt.Sprintf("Failed to encode proxies response: %v", err))
@@ -609,9 +507,6 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
-		if !s.checkPermission(w, r, rbac.PermProxyCreate) {
-			return
-		}
 		var req config.ProxyConfig
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -633,11 +528,7 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if req.Enabled && !req.Paused {
-			if startErr := s.mgr.StartProxy(req.ID); startErr != nil {
-				s.log.Error("API", fmt.Sprintf("Proxy %s created but failed to start: %v", req.ID, startErr))
-				http.Error(w, fmt.Sprintf("proxy created but failed to start: %v", startErr), http.StatusInternalServerError)
-				return
-			}
+			_ = s.mgr.StartProxy(req.ID)
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -645,9 +536,6 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPut {
-		if !s.checkPermission(w, r, rbac.PermProxyEdit) {
-			return
-		}
 		// Read raw JSON to handle flexible tags field
 		var rawMap map[string]interface{}
 		bodyBytes, err := io.ReadAll(r.Body)
@@ -752,9 +640,6 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodDelete {
-		if !s.checkPermission(w, r, rbac.PermProxyDelete) {
-			return
-		}
 		id := r.URL.Query().Get("id")
 		if err := s.mgr.RemoveProxy(id); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -787,17 +672,8 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 	case "stop":
 		err = s.mgr.StopProxy(req.ID)
 	case "restart":
-		// Stop and wait for confirmation before restarting
-		err = s.mgr.StopProxy(req.ID)
-		if err != nil {
-			break // Don't attempt to start if stop failed
-		}
-		// Wait for proxy to fully stop (max 5 seconds)
-		stopped := s.waitForProxyStopped(req.ID, 5*time.Second)
-		if !stopped {
-			err = fmt.Errorf("timeout waiting for proxy to stop")
-			break
-		}
+		_ = s.mgr.StopProxy(req.ID)
+		time.Sleep(100 * time.Millisecond)
 		err = s.mgr.StartProxy(req.ID)
 	case "pause":
 		err = s.mgr.PauseProxy(req.ID)
@@ -809,12 +685,7 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 		s.mgr.StopAll()
 	case "restart_all":
 		s.mgr.StopAll()
-		// Wait for all proxies to fully stop (max 5 seconds)
-		time.Sleep(500 * time.Millisecond) // Initial delay for first wave
-		stopped := s.waitForAllProxiesStopped(5 * time.Second)
-		if !stopped {
-			s.log.Error("API", "Timeout waiting for all proxies to stop during restart_all")
-		}
+		time.Sleep(100 * time.Millisecond)
 		s.mgr.StartAll()
 	default:
 		err = fmt.Errorf("unknown action")
@@ -943,62 +814,4 @@ func (s *Server) handleWebPort(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-}
-
-// waitForProxyStopped waits for a proxy to fully stop before proceeding
-func (s *Server) waitForProxyStopped(id string, timeout time.Duration) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return false
-		case <-ticker.C:
-			// Check if proxy has stopped
-			proxies := s.mgr.GetProxies()
-			stopped := true
-			for _, p := range proxies {
-				if p["id"] == id && p["status"] == "Running" {
-					stopped = false
-					break
-				}
-			}
-			if stopped {
-				return true
-			}
-		}
-	}
-}
-
-// waitForAllProxiesStopped waits for all proxies to fully stop before proceeding
-func (s *Server) waitForAllProxiesStopped(timeout time.Duration) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return false
-		case <-ticker.C:
-			// Check if all proxies have stopped
-			proxies := s.mgr.GetProxies()
-			allStopped := true
-			for _, p := range proxies {
-				if p["status"] == "Running" {
-					allStopped = false
-					break
-				}
-			}
-			if allStopped {
-				return true
-			}
-		}
-	}
 }

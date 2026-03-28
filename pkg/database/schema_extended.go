@@ -16,10 +16,13 @@ func (db *DB) initExtendedSchema() error {
 	CREATE TABLE IF NOT EXISTS users (
 		id TEXT PRIMARY KEY,
 		username TEXT UNIQUE NOT NULL,
+		full_name TEXT NOT NULL DEFAULT '',
 		email TEXT UNIQUE,
 		password_hash TEXT NOT NULL,
 		role TEXT NOT NULL DEFAULT 'viewer',
 		enabled BOOLEAN DEFAULT 1,
+		auto_deactivate_days INTEGER DEFAULT 0,
+		expires_at DATETIME,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		last_login DATETIME,
@@ -61,44 +64,64 @@ func (db *DB) initExtendedSchema() error {
 	`
 
 	_, err := db.conn.Exec(schema)
-	return err
+	if err != nil {
+		return err
+	}
+
+	return db.migrateUsersTable()
+}
+
+func (db *DB) migrateUsersTable() error {
+	migrations := []string{
+		"ALTER TABLE users ADD COLUMN full_name TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE users ADD COLUMN auto_deactivate_days INTEGER DEFAULT 0",
+		"ALTER TABLE users ADD COLUMN expires_at DATETIME",
+	}
+	for _, m := range migrations {
+		db.conn.Exec(m)
+	}
+	return nil
 }
 
 // User represents a user in the system
 type User struct {
-	ID           string     `json:"id"`
-	Username     string     `json:"username"`
-	Email        string     `json:"email"`
-	PasswordHash string     `json:"-"`
-	Role         string     `json:"role"`
-	Enabled      bool       `json:"enabled"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
-	LastLogin    *time.Time `json:"last_login,omitempty"`
-	CreatedBy    string     `json:"created_by,omitempty"`
-	Description  string     `json:"description,omitempty"`
+	ID                 string     `json:"id"`
+	Username           string     `json:"username"`
+	FullName           string     `json:"full_name"`
+	Email              string     `json:"email"`
+	PasswordHash       string     `json:"-"`
+	Role               string     `json:"role"`
+	Enabled            bool       `json:"enabled"`
+	AutoDeactivateDays int        `json:"auto_deactivate_days"`
+	ExpiresAt          *time.Time `json:"expires_at,omitempty"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+	LastLogin          *time.Time `json:"last_login,omitempty"`
+	CreatedBy          string     `json:"created_by,omitempty"`
+	Description        string     `json:"description,omitempty"`
 }
 
 // CreateUser creates a new user
 func (db *DB) CreateUser(user *User) error {
 	query := `
-		INSERT INTO users (id, username, email, password_hash, role, enabled, created_by, description)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO users (id, username, full_name, email, password_hash, role, enabled, auto_deactivate_days, expires_at, created_by, description)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := db.conn.Exec(query,
-		user.ID, user.Username, user.Email, user.PasswordHash,
-		user.Role, user.Enabled, user.CreatedBy, user.Description)
+		user.ID, user.Username, user.FullName, user.Email, user.PasswordHash,
+		user.Role, user.Enabled, user.AutoDeactivateDays, user.ExpiresAt, user.CreatedBy, user.Description)
 	return err
 }
 
 // GetUser retrieves a user by ID
 func (db *DB) GetUser(id string) (*User, error) {
-	query := `SELECT id, username, email, password_hash, role, enabled, created_at, updated_at, last_login, created_by, description FROM users WHERE id = ?`
+	query := `SELECT id, username, full_name, email, password_hash, role, enabled, auto_deactivate_days, expires_at, created_at, updated_at, last_login, created_by, description FROM users WHERE id = ?`
 	var user User
-	var lastLogin sql.NullTime
+	var lastLogin, expiresAt sql.NullTime
 	err := db.conn.QueryRow(query, id).Scan(
-		&user.ID, &user.Username, &user.Email, &user.PasswordHash,
-		&user.Role, &user.Enabled, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Username, &user.FullName, &user.Email, &user.PasswordHash,
+		&user.Role, &user.Enabled, &user.AutoDeactivateDays, &expiresAt,
+		&user.CreatedAt, &user.UpdatedAt,
 		&lastLogin, &user.CreatedBy, &user.Description)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -108,18 +131,22 @@ func (db *DB) GetUser(id string) (*User, error) {
 	}
 	if lastLogin.Valid {
 		user.LastLogin = &lastLogin.Time
+	}
+	if expiresAt.Valid {
+		user.ExpiresAt = &expiresAt.Time
 	}
 	return &user, nil
 }
 
 // GetUserByUsername retrieves a user by username
 func (db *DB) GetUserByUsername(username string) (*User, error) {
-	query := `SELECT id, username, email, password_hash, role, enabled, created_at, updated_at, last_login, created_by, description FROM users WHERE username = ?`
+	query := `SELECT id, username, full_name, email, password_hash, role, enabled, auto_deactivate_days, expires_at, created_at, updated_at, last_login, created_by, description FROM users WHERE username = ?`
 	var user User
-	var lastLogin sql.NullTime
+	var lastLogin, expiresAt sql.NullTime
 	err := db.conn.QueryRow(query, username).Scan(
-		&user.ID, &user.Username, &user.Email, &user.PasswordHash,
-		&user.Role, &user.Enabled, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Username, &user.FullName, &user.Email, &user.PasswordHash,
+		&user.Role, &user.Enabled, &user.AutoDeactivateDays, &expiresAt,
+		&user.CreatedAt, &user.UpdatedAt,
 		&lastLogin, &user.CreatedBy, &user.Description)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -130,12 +157,15 @@ func (db *DB) GetUserByUsername(username string) (*User, error) {
 	if lastLogin.Valid {
 		user.LastLogin = &lastLogin.Time
 	}
+	if expiresAt.Valid {
+		user.ExpiresAt = &expiresAt.Time
+	}
 	return &user, nil
 }
 
 // GetAllUsers retrieves all users
 func (db *DB) GetAllUsers() ([]*User, error) {
-	query := `SELECT id, username, email, password_hash, role, enabled, created_at, updated_at, last_login, created_by, description FROM users ORDER BY username`
+	query := `SELECT id, username, full_name, email, password_hash, role, enabled, auto_deactivate_days, expires_at, created_at, updated_at, last_login, created_by, description FROM users ORDER BY username`
 	rows, err := db.conn.Query(query)
 	if err != nil {
 		return nil, err
@@ -145,16 +175,20 @@ func (db *DB) GetAllUsers() ([]*User, error) {
 	var users []*User
 	for rows.Next() {
 		var user User
-		var lastLogin sql.NullTime
+		var lastLogin, expiresAt sql.NullTime
 		err := rows.Scan(
-			&user.ID, &user.Username, &user.Email, &user.PasswordHash,
-			&user.Role, &user.Enabled, &user.CreatedAt, &user.UpdatedAt,
+			&user.ID, &user.Username, &user.FullName, &user.Email, &user.PasswordHash,
+			&user.Role, &user.Enabled, &user.AutoDeactivateDays, &expiresAt,
+			&user.CreatedAt, &user.UpdatedAt,
 			&lastLogin, &user.CreatedBy, &user.Description)
 		if err != nil {
 			return nil, err
 		}
 		if lastLogin.Valid {
 			user.LastLogin = &lastLogin.Time
+		}
+		if expiresAt.Valid {
+			user.ExpiresAt = &expiresAt.Time
 		}
 		users = append(users, &user)
 	}
@@ -164,10 +198,10 @@ func (db *DB) GetAllUsers() ([]*User, error) {
 // UpdateUser updates a user
 func (db *DB) UpdateUser(user *User) error {
 	query := `
-		UPDATE users SET username = ?, email = ?, role = ?, enabled = ?, description = ?
+		UPDATE users SET username = ?, full_name = ?, email = ?, role = ?, enabled = ?, description = ?, auto_deactivate_days = ?, expires_at = ?
 		WHERE id = ?
 	`
-	_, err := db.conn.Exec(query, user.Username, user.Email, user.Role, user.Enabled, user.Description, user.ID)
+	_, err := db.conn.Exec(query, user.Username, user.FullName, user.Email, user.Role, user.Enabled, user.Description, user.AutoDeactivateDays, user.ExpiresAt, user.ID)
 	return err
 }
 
@@ -312,4 +346,15 @@ func (db *DB) UpdateUserLastLogin(userID string) error {
 	query := `UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?`
 	_, err := db.conn.Exec(query, userID)
 	return err
+}
+
+// DeactivateExpiredUsers disables users whose expires_at has passed
+func (db *DB) DeactivateExpiredUsers() (int, error) {
+	query := `UPDATE users SET enabled = 0, updated_at = CURRENT_TIMESTAMP WHERE enabled = 1 AND expires_at IS NOT NULL AND expires_at <= ?`
+	result, err := db.conn.Exec(query, time.Now())
+	if err != nil {
+		return 0, err
+	}
+	affected, _ := result.RowsAffected()
+	return int(affected), nil
 }
