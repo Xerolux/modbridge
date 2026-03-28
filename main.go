@@ -1,8 +1,3 @@
-// Copyright (c) 2026 Xerolux. All rights reserved.
-// ModBridge — Modbus TCP Proxy Manager
-// Created by Xerolux
-// https://github.com/Xerolux/modbridge
-
 package main
 
 import (
@@ -10,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	_ "expvar"
+	"fmt"
 	"log"
 	"modbridge/pkg/api"
 	"modbridge/pkg/auth"
@@ -88,7 +84,7 @@ func main() {
 	}
 
 	// 3. Logger
-	l, err := logger.NewLogger("logs", 1000)
+	l, err := logger.NewLogger("proxy.log", 1000)
 	if err != nil {
 		log.Fatalf("Failed to init logger: %v", err)
 	}
@@ -104,14 +100,30 @@ func main() {
 	defer authCancel()
 	go authenticator.CleanupExpiredSessions(authCtx)
 
-	// 4b. User Manager (requires database)
-	var userMgr *users.Manager
-	if db != nil {
-		userMgr = users.NewManager(db)
-	}
-
 	// 5. API Server
-	apiServer := api.NewServer(cfgMgr, mgr, authenticator, l, userMgr)
+	apiServer := api.NewServer(cfgMgr, mgr, authenticator, l, db)
+
+	// 6. Auto-deactivate expired users periodically
+	if db != nil {
+		userMgr := users.NewManager(db)
+		go func() {
+			ticker := time.NewTicker(1 * time.Hour)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-authCtx.Done():
+					return
+				case <-ticker.C:
+					count, err := userMgr.DeactivateExpiredUsers()
+					if err != nil {
+						l.Error("SYSTEM", fmt.Sprintf("Failed to deactivate expired users: %v", err))
+					} else if count > 0 {
+						l.Info("SYSTEM", fmt.Sprintf("Auto-deactivated %d expired user(s)", count))
+					}
+				}
+			}
+		}()
+	}
 
 	// 6. Router
 	mux := http.NewServeMux()

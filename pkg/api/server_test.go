@@ -1,8 +1,3 @@
-// Copyright (c) 2026 Xerolux. All rights reserved.
-// ModBridge — Modbus TCP Proxy Manager
-// Created by Xerolux
-// https://github.com/Xerolux/modbridge
-
 package api
 
 import (
@@ -12,37 +7,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"modbridge/pkg/auth"
 	"modbridge/pkg/config"
 	"modbridge/pkg/logger"
 	"modbridge/pkg/manager"
 	"modbridge/pkg/middleware"
 )
 
-func newTestServer(t *testing.T) (*Server, string) {
-	t.Helper()
-	log, err := logger.NewLogger("test_logs", 100)
-	if err != nil {
-		t.Fatalf("Failed to create logger: %v", err)
-	}
-	t.Cleanup(func() { log.Close() })
-	cfgMgr := config.NewManager("test.json")
-	mgr := manager.NewManager(cfgMgr, log, nil)
-	a := auth.NewAuthenticator()
-	token, err := a.CreateSession("admin", "admin", "admin")
-	if err != nil {
-		t.Fatalf("Failed to create session: %v", err)
-	}
-	srv := NewServer(cfgMgr, mgr, a, log, nil)
-	return srv, token
-}
-
-func addSessionCookie(req *http.Request, token string) {
-	req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
-}
-
 func TestHandleHealth(t *testing.T) {
-	log, err := logger.NewLogger("test_logs", 100)
+	log, err := logger.NewLogger("test.log", 100)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
@@ -67,7 +39,7 @@ func TestHandleHealth(t *testing.T) {
 }
 
 func TestHandleStatus(t *testing.T) {
-	log, err := logger.NewLogger("test_logs", 100)
+	log, err := logger.NewLogger("test.log", 100)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
@@ -105,13 +77,19 @@ func TestHandleStatus(t *testing.T) {
 }
 
 func TestHandleProxiesGet(t *testing.T) {
-	srv, token := newTestServer(t)
+	log, err := logger.NewLogger("test.log", 100)
+	if err != nil {
+		t.Fatalf("Failed to create logger: %v", err)
+	}
+	defer log.Close()
+	cfgMgr := config.NewManager("test.json")
+	mgr := manager.NewManager(cfgMgr, log, nil)
+	server := NewServer(cfgMgr, mgr, nil, log, nil)
 
 	req := httptest.NewRequest("GET", "/api/proxies", nil)
-	addSessionCookie(req, token)
 	w := httptest.NewRecorder()
 
-	srv.handleProxies(w, req)
+	server.handleProxies(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
@@ -126,13 +104,19 @@ func TestHandleProxiesGet(t *testing.T) {
 }
 
 func TestHandleProxiesPostInvalid(t *testing.T) {
-	srv, token := newTestServer(t)
+	log, err := logger.NewLogger("test.log", 100)
+	if err != nil {
+		t.Fatalf("Failed to create logger: %v", err)
+	}
+	defer log.Close()
+	cfgMgr := config.NewManager("test.json")
+	mgr := manager.NewManager(cfgMgr, log, nil)
+	server := NewServer(cfgMgr, mgr, nil, log, nil)
 
 	req := httptest.NewRequest("POST", "/api/proxies", nil)
-	addSessionCookie(req, token)
 	w := httptest.NewRecorder()
 
-	srv.handleProxies(w, req)
+	server.handleProxies(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status 400, got %d", w.Code)
@@ -140,7 +124,14 @@ func TestHandleProxiesPostInvalid(t *testing.T) {
 }
 
 func TestHandleProxiesPostValid(t *testing.T) {
-	srv, token := newTestServer(t)
+	log, err := logger.NewLogger("test.log", 100)
+	if err != nil {
+		t.Fatalf("Failed to create logger: %v", err)
+	}
+	defer log.Close()
+	cfgMgr := config.NewManager("test.json")
+	mgr := manager.NewManager(cfgMgr, log, nil)
+	server := NewServer(cfgMgr, mgr, nil, log, nil)
 
 	cfg := config.ProxyConfig{
 		ID:                "test-id",
@@ -155,23 +146,22 @@ func TestHandleProxiesPostValid(t *testing.T) {
 
 	body, _ := json.Marshal(cfg)
 	req := httptest.NewRequest("POST", "/api/proxies", bytes.NewReader(body))
-	addSessionCookie(req, token)
 	w := httptest.NewRecorder()
 
-	srv.handleProxies(w, req)
+	server.handleProxies(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
 
-	proxies := srv.mgr.GetProxies()
+	proxies := mgr.GetProxies()
 	if len(proxies) != 1 {
 		t.Errorf("Expected 1 proxy, got %d", len(proxies))
 	}
 }
 
 func TestMiddlewareChain(t *testing.T) {
-	log, err := logger.NewLogger("test_logs", 100)
+	log, err := logger.NewLogger("test.log", 100)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}

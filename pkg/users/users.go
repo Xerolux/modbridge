@@ -12,50 +12,89 @@ import (
 	"modbridge/pkg/auth"
 	"modbridge/pkg/database"
 	"modbridge/pkg/rbac"
+	"time"
 )
 
-// Manager manages users
 type Manager struct {
 	db *database.DB
 }
 
-// NewManager creates a new user manager
 func NewManager(db *database.DB) *Manager {
 	return &Manager{db: db}
 }
 
-// CreateUser creates a new user
-func (m *Manager) CreateUser(username, email, password, role, createdBy, description string) (*database.User, error) {
-	// Check if username already exists
-	existing, _ := m.db.GetUserByUsername(username)
+type CreateUserRequest struct {
+	Username           string `json:"username"`
+	FullName           string `json:"full_name"`
+	Email              string `json:"email"`
+	Password           string `json:"password"`
+	Role               string `json:"role"`
+	Enabled            bool   `json:"enabled"`
+	AutoDeactivateDays int    `json:"auto_deactivate_days"`
+	Description        string `json:"description"`
+}
+
+type UpdateUserRequest struct {
+	Username           string `json:"username"`
+	FullName           string `json:"full_name"`
+	Email              string `json:"email"`
+	Role               string `json:"role"`
+	Enabled            bool   `json:"enabled"`
+	AutoDeactivateDays int    `json:"auto_deactivate_days"`
+	ExpiresAt          string `json:"expires_at"`
+	Password           string `json:"password,omitempty"`
+	Description        string `json:"description"`
+}
+
+func (m *Manager) CreateUser(req *CreateUserRequest, createdBy string) (*database.User, error) {
+	if req.Username == "" {
+		return nil, errors.New("username is required")
+	}
+	if req.FullName == "" {
+		return nil, errors.New("full name is required")
+	}
+	if req.Email == "" {
+		return nil, errors.New("email is required")
+	}
+	if req.Password == "" {
+		return nil, errors.New("password is required")
+	}
+
+	existing, _ := m.db.GetUserByUsername(req.Username)
 	if existing != nil {
 		return nil, errors.New("username already exists")
 	}
 
-	// Validate role
-	_, err := rbac.ParseRole(role)
+	_, err := rbac.ParseRole(req.Role)
 	if err != nil {
 		return nil, err
 	}
 
-	// Hash password
-	passwordHash, err := auth.HashPassword(password)
+	passwordHash, err := auth.HashPassword(req.Password)
 	if err != nil {
 		return nil, err
 	}
 
-	// Generate ID
 	id, _ := generateID()
 
+	var expiresAt *time.Time
+	if req.AutoDeactivateDays > 0 {
+		t := time.Now().AddDate(0, 0, req.AutoDeactivateDays)
+		expiresAt = &t
+	}
+
 	user := &database.User{
-		ID:           id,
-		Username:     username,
-		Email:        email,
-		PasswordHash: passwordHash,
-		Role:         role,
-		Enabled:      true,
-		CreatedBy:    createdBy,
-		Description:  description,
+		ID:                 id,
+		Username:           req.Username,
+		FullName:           req.FullName,
+		Email:              req.Email,
+		PasswordHash:       passwordHash,
+		Role:               req.Role,
+		Enabled:            req.Enabled,
+		AutoDeactivateDays: req.AutoDeactivateDays,
+		ExpiresAt:          expiresAt,
+		CreatedBy:          createdBy,
+		Description:        req.Description,
 	}
 
 	err = m.db.CreateUser(user)
@@ -66,7 +105,6 @@ func (m *Manager) CreateUser(username, email, password, role, createdBy, descrip
 	return user, nil
 }
 
-// AuthenticateUser authenticates a user
 func (m *Manager) AuthenticateUser(username, password string) (*database.User, error) {
 	user, err := m.db.GetUserByUsername(username)
 	if err != nil {
@@ -80,23 +118,26 @@ func (m *Manager) AuthenticateUser(username, password string) (*database.User, e
 		return nil, errors.New("user account is disabled")
 	}
 
+	if user.ExpiresAt != nil && time.Now().After(*user.ExpiresAt) {
+		user.Enabled = false
+		m.db.UpdateUser(user)
+		return nil, errors.New("user account has expired")
+	}
+
 	if !auth.CheckPasswordHash(password, user.PasswordHash) {
 		return nil, errors.New("invalid credentials")
 	}
 
-	// Update last login
 	m.db.UpdateUserLastLogin(user.ID)
 
 	return user, nil
 }
 
-// GetAllUsers returns all users
 func (m *Manager) GetAllUsers() ([]*database.User, error) {
 	return m.db.GetAllUsers()
 }
 
-// UpdateUser updates a user
-func (m *Manager) UpdateUser(id, username, email, role, description string, enabled bool) error {
+func (m *Manager) UpdateUser(id string, req *UpdateUserRequest) error {
 	user, err := m.db.GetUser(id)
 	if err != nil {
 		return err
@@ -105,21 +146,67 @@ func (m *Manager) UpdateUser(id, username, email, role, description string, enab
 		return errors.New("user not found")
 	}
 
-	user.Username = username
-	user.Email = email
-	user.Role = role
-	user.Description = description
-	user.Enabled = enabled
+	if req.Username != "" {
+		user.Username = req.Username
+	}
+	user.FullName = req.FullName
+	user.Email = req.Email
+	if req.Role != "" {
+		_, err := rbac.ParseRole(req.Role)
+		if err != nil {
+			return err
+		}
+		user.Role = req.Role
+	}
+	user.Enabled = req.Enabled
+	user.AutoDeactivateDays = req.AutoDeactivateDays
+	user.Description = req.Description
+
+	if req.ExpiresAt != "" {
+		t, err := time.Parse(time.RFC3339, req.ExpiresAt)
+		if err != nil {
+			return errors.New("invalid expires_at format, use RFC3339")
+		}
+		user.ExpiresAt = &t
+	} else if req.ExpiresAt == "" && req.AutoDeactivateDays > 0 {
+		t := time.Now().AddDate(0, 0, req.AutoDeactivateDays)
+		user.ExpiresAt = &t
+	}
+
+	if req.Password != "" {
+		hash, err := auth.HashPassword(req.Password)
+		if err != nil {
+			return err
+		}
+		user.PasswordHash = hash
+	}
 
 	return m.db.UpdateUser(user)
 }
 
-// DeleteUser deletes a user
 func (m *Manager) DeleteUser(id string) error {
+	user, err := m.db.GetUser(id)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return errors.New("user not found")
+	}
 	return m.db.DeleteUser(id)
 }
 
-// ChangePassword changes a user's password
+func (m *Manager) SetUserEnabled(id string, enabled bool) error {
+	user, err := m.db.GetUser(id)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return errors.New("user not found")
+	}
+	user.Enabled = enabled
+	return m.db.UpdateUser(user)
+}
+
 func (m *Manager) ChangePassword(userID, oldPassword, newPassword string) error {
 	user, err := m.db.GetUser(userID)
 	if err != nil {
@@ -129,18 +216,20 @@ func (m *Manager) ChangePassword(userID, oldPassword, newPassword string) error 
 		return errors.New("user not found")
 	}
 
-	// Verify old password
 	if !auth.CheckPasswordHash(oldPassword, user.PasswordHash) {
 		return errors.New("invalid old password")
 	}
 
-	// Hash new password
 	newHash, err := auth.HashPassword(newPassword)
 	if err != nil {
 		return err
 	}
 
 	return m.db.UpdateUserPassword(userID, newHash)
+}
+
+func (m *Manager) DeactivateExpiredUsers() (int, error) {
+	return m.db.DeactivateExpiredUsers()
 }
 
 func generateID() (string, error) {
