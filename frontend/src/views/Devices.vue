@@ -33,7 +33,7 @@
       <div class="flex flex-col sm:flex-row gap-4 items-center w-full">
         <InputText
           v-model="searchTerm"
-          placeholder="Geräte durchsuchen..."
+          placeholder="Search devices..."
           class="w-full sm:max-w-md"
         />
         <Dropdown
@@ -56,7 +56,7 @@
         filterDisplay="row"
         responsiveLayout="scroll"
         stripedRows
-        class="p-datatable-sm"
+        class="p-datatable-sm glass-card rounded-3xl border border-white/10 overflow-hidden"
       >
         <Column field="ip" header="IP-Adresse" sortable></Column>
          <Column field="name" header="Name" sortable filterMatchMode="contains">

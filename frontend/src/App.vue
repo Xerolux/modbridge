@@ -432,4 +432,132 @@ h3 {
     animation: none !important;
   }
 }
+
+/* ========================================
+   GLOBAL GLASS UI OVERRIDES
+   ======================================== */
+
+ .p-card,
+ .p-dialog,
+ .p-datatable,
+ .p-datatable-wrapper,
+ .p-datatable-table-container,
+ .p-tabpanels {
+   border-radius: 20px !important;
+   overflow: hidden;
+ }
+
+ .p-card {
+   background: rgba(31, 41, 55, 0.5) !important;
+   backdrop-filter: blur(24px) !important;
+   -webkit-backdrop-filter: blur(24px) !important;
+   border: 1px solid rgba(255, 255, 255, 0.1) !important;
+   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+ }
+
+ .p-card:hover {
+   border-color: rgba(255, 255, 255, 0.2) !important;
+   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(168, 85, 247, 0.1) !important;
+ }
+
+ .p-dialog {
+   background: rgba(31, 41, 55, 0.85) !important;
+   backdrop-filter: blur(24px) !important;
+   -webkit-backdrop-filter: blur(24px) !important;
+   border: 1px solid rgba(255, 255, 255, 0.1) !important;
+   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5) !important;
+   border-radius: 24px !important;
+ }
+
+ .p-dialog-header {
+   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+   border-radius: 24px 24px 0 0 !important;
+ }
+
+ .p-datatable {
+   background: rgba(31, 41, 55, 0.4) !important;
+   backdrop-filter: blur(16px) !important;
+   -webkit-backdrop-filter: blur(16px) !important;
+   border: 1px solid rgba(255, 255, 255, 0.1) !important;
+ }
+
+ .p-datatable-thead > tr > th {
+   background: rgba(17, 24, 39, 0.5) !important;
+   border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+   color: var(--text-secondary) !important;
+ }
+
+ .p-datatable-tbody > tr {
+   border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+   transition: background 0.2s ease;
+ }
+
+ .p-datatable-tbody > tr:hover {
+   background: rgba(255, 255, 255, 0.05) !important;
+ }
+
+ .p-datatable-tbody > tr:nth-child(even) {
+   background: rgba(255, 255, 255, 0.02) !important;
+ }
+
+ .p-tablist {
+   background: rgba(31, 41, 55, 0.4) !important;
+   backdrop-filter: blur(16px) !important;
+   border: 1px solid rgba(255, 255, 255, 0.1) !important;
+   border-radius: 20px 20px 0 0 !important;
+ }
+
+ .p-tabpanels {
+   background: rgba(31, 41, 55, 0.4) !important;
+   backdrop-filter: blur(16px) !important;
+   border: 1px solid rgba(255, 255, 255, 0.1) !important;
+   border-top: none !important;
+   border-radius: 0 0 20px 20px !important;
+ }
+
+ .p-inputtext,
+ .p-dropdown,
+ .p-inputnumber-input,
+ .p-password-input {
+   background: rgba(17, 24, 39, 0.5) !important;
+   border: 1px solid rgba(255, 255, 255, 0.1) !important;
+   border-radius: 14px !important;
+   color: var(--text-primary) !important;
+   transition: all 0.2s ease;
+ }
+
+ .p-inputtext:focus,
+ .p-dropdown:focus-within,
+ .p-inputnumber-input:focus,
+ .p-password-input:focus {
+   border-color: rgba(168, 85, 247, 0.5) !important;
+   box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15) !important;
+ }
+
+ .p-button {
+   border-radius: 14px !important;
+   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+ }
+
+ .p-button:hover {
+   transform: translateY(-1px);
+ }
+
+ .p-tag {
+   border-radius: 10px !important;
+ }
+
+ .p-chips {
+   border-radius: 14px !important;
+ }
+
+ .p-dialog-footer {
+   border-top: 1px solid rgba(255, 255, 255, 0.1);
+   border-radius: 0 0 24px 24px !important;
+ }
+
+ .p-toggleswitch-slider {
+   border-radius: 20px !important;
+ }
 </style>

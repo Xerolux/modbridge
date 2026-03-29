@@ -29,7 +29,7 @@
       <Button @click="loadLogs" label="Retry" class="mt-4" />
     </div>
 
-    <div v-else class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+    <div v-else class="glass-card rounded-3xl border border-white/10 overflow-hidden">
       <DataTable
         :value="auditLogs"
         :paginator="auditLogs.length >= limit"

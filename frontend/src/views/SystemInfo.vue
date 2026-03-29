@@ -7,7 +7,7 @@
         </div>
 
         <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            <Card class="bg-gray-800 text-white shadow-md">
+            <Card class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
                 <template #title><div class="text-lg sm:text-xl">System</div></template>
                 <template #content>
                     <div class="space-y-2 text-sm sm:text-base">
@@ -35,7 +35,7 @@
                 </template>
             </Card>
 
-            <Card class="bg-gray-800 text-white shadow-md">
+            <Card class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
                 <template #title><div class="text-lg sm:text-xl">Memory</div></template>
                 <template #content>
                     <div class="space-y-2 text-sm sm:text-base">
@@ -59,7 +59,7 @@
                 </template>
             </Card>
 
-            <Card class="bg-gray-800 text-white shadow-md">
+            <Card class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
                 <template #title><div class="text-lg sm:text-xl">Proxies</div></template>
                 <template #content>
                     <div class="space-y-2 text-sm sm:text-base">
@@ -79,7 +79,7 @@
                 </template>
             </Card>
 
-            <Card class="bg-gray-800 text-white shadow-md">
+            <Card class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
                 <template #title><div class="text-lg sm:text-xl">Configuration</div></template>
                 <template #content>
                     <div class="space-y-2 text-sm sm:text-base">
@@ -109,7 +109,7 @@
                 </template>
             </Card>
 
-            <Card class="bg-gray-800 text-white shadow-md">
+            <Card class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
                 <template #title><div class="text-lg sm:text-xl">Security</div></template>
                 <template #content>
                     <div class="space-y-2 text-sm sm:text-base">
@@ -141,7 +141,7 @@
                 </template>
             </Card>
 
-            <Card class="bg-gray-800 text-white shadow-md">
+            <Card class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
                 <template #title><div class="text-lg sm:text-xl">Server Control</div></template>
                 <template #content>
                     <div class="flex flex-col gap-3">
@@ -151,7 +151,7 @@
                 </template>
             </Card>
 
-            <Card class="bg-gray-800 text-white shadow-md">
+            <Card class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
                 <template #title><div class="text-lg sm:text-xl">Proxy Control</div></template>
                 <template #content>
                     <div class="flex flex-col gap-3">
@@ -163,7 +163,7 @@
                 </template>
             </Card>
 
-            <Card class="bg-gray-800 text-white shadow-md">
+            <Card class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
                 <template #title><div class="text-lg sm:text-xl">Port Management</div></template>
                 <template #content>
                     <div class="flex flex-col gap-3">

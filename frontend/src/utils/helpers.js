@@ -41,7 +41,6 @@ export function formatDateTime(dateStr) {
     second: '2-digit',
   });
 }
-
 export function formatTime(dateStr) {
   if (!dateStr) return '';
   const date = new Date(dateStr);
@@ -52,16 +51,15 @@ export function formatTime(dateStr) {
     second: '2-digit',
   });
 }
-
 export function getSeverity(status) {
   switch (status) {
     case 'Running': return 'success';
     case 'Stopped': return 'secondary';
     case 'Error': return 'danger';
+    case 'Paused': return 'warn';
     default: return 'info';
   }
 }
-
 export function getLogLevelColor(level) {
   switch (level) {
     case 'INFO': return 'text-green-400';
@@ -71,7 +69,6 @@ export function getLogLevelColor(level) {
     default: return 'text-gray-400';
   }
 }
-
 export function downloadBlob(data, filename) {
   const url = window.URL.createObjectURL(new Blob([data]));
   const link = document.createElement('a');
@@ -82,7 +79,6 @@ export function downloadBlob(data, filename) {
   link.remove();
   window.URL.revokeObjectURL(url);
 }
-
 export function formatUptime(seconds) {
   if (seconds < 60) {
     return `${Math.round(seconds)}s`;
@@ -96,7 +92,6 @@ export function formatUptime(seconds) {
   const mins = Math.floor((seconds % 3600) / 60);
   return `${hours}h ${mins}m`;
 }
-
 export function formatNumber(num) {
   if (num === null || num === undefined) return '0';
   const n = Number(num);
