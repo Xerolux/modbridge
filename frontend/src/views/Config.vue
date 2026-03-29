@@ -8,7 +8,7 @@
 
         <div v-else class="flex flex-col gap-6">
             <Tabs value="0">
-                <TabList class="bg-gray-800 text-gray-200 overflow-x-auto flex-nowrap whitespace-nowrap hide-scrollbar">
+                <TabList class="glass-card rounded-t-3xl text-gray-200 overflow-x-auto flex-nowrap whitespace-nowrap hide-scrollbar border border-white/10 border-b-0">
                     <Tab value="0" class="shrink-0">Proxies</Tab>
                     <Tab value="1" class="shrink-0">Logging</Tab>
                     <Tab v-if="auth.hasPermission('config:edit')" value="2" class="shrink-0">Security</Tab>
@@ -17,7 +17,7 @@
                     <Tab v-if="auth.hasPermission('config:edit')" value="5" class="shrink-0">Advanced</Tab>
                 </TabList>
 
-                <TabPanels class="bg-gray-800 text-white p-2 sm:p-4 rounded">
+                <TabPanels class="glass-card rounded-b-3xl text-white p-2 sm:p-4 border border-white/10 border-t-0">
                     <TabPanel value="0">
                         <ConfigForm />
                     </TabPanel>

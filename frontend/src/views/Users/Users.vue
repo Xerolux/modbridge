@@ -15,8 +15,8 @@
       <Button @click="loadUsers" label="Retry" class="mt-4" />
     </div>
 
+    <div v-else class="glass-card rounded-3xl border border-white/10 overflow-hidden">
     <DataTable
-      v-else
       :value="users"
       :paginator="users.length > 10"
       :rows="10"
@@ -102,9 +102,10 @@
           <p>No users found</p>
         </div>
       </template>
-    </DataTable>
+     </DataTable>
+     </div>
 
-    <Dialog
+     <Dialog
       v-model:visible="showModal"
       :header="isEditMode ? 'Edit User' : 'Create User'"
       modal

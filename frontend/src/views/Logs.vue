@@ -103,7 +103,7 @@
       <div
         v-else
         ref="logsContainer"
-        class="bg-gray-800 rounded-lg p-2 sm:p-4 font-mono text-base h-[60vh] sm:h-[600px] overflow-y-auto break-all sm:break-normal border border-gray-700"
+        class="glass-card rounded-3xl p-2 sm:p-4 font-mono text-base h-[60vh] sm:h-[600px] overflow-y-auto break-all sm:break-normal border border-white/10"
       >
         <div
           v-for="(log, index) in logs"
