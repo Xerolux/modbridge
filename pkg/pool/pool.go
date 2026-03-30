@@ -123,16 +123,19 @@ func (p *Pool) Get(ctx context.Context) (net.Conn, error) {
 	}
 
 	timeout := time.Until(deadline)
+	if timeout < 0 {
+		timeout = 0
+	}
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 
 	for {
 		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-timer.C:
-			return nil, ErrPoolExhausted
-		case pc := <-p.conns:
+		case pc, ok := <-p.conns:
+			if !ok {
+				return nil, ErrPoolClosed
+			}
+
 			if time.Since(pc.lastUsed) > p.maxIdleTime {
 				pc.conn.Close()
 				p.mu.Lock()
@@ -155,38 +158,71 @@ func (p *Pool) Get(ctx context.Context) (net.Conn, error) {
 				pool: p,
 				pc:   pc,
 			}, nil
-
 		default:
-			// Try to create new connection
-			p.mu.Lock()
-			if p.size < p.maxSize {
-				p.size++
-				p.mu.Unlock()
+		}
 
-				conn, err := p.factory(ctx)
-				if err != nil {
-					p.mu.Lock()
-					p.size--
-					p.mu.Unlock()
-					return nil, err
-				}
-
-				pc := &poolConn{
-					conn:     conn,
-					lastUsed: time.Now(),
-					inUse:    true,
-				}
-
-				return &WrappedConn{
-					Conn: conn,
-					pool: p,
-					pc:   pc,
-				}, nil
-			}
+		// Try to create a new connection before waiting.
+		p.mu.Lock()
+		if p.closed {
+			p.mu.Unlock()
+			return nil, ErrPoolClosed
+		}
+		if p.size < p.maxSize {
+			p.size++
 			p.mu.Unlock()
 
-			// Wait a bit before retrying
-			time.Sleep(10 * time.Millisecond)
+			conn, err := p.factory(ctx)
+			if err != nil {
+				p.mu.Lock()
+				p.size--
+				p.mu.Unlock()
+				return nil, err
+			}
+
+			pc := &poolConn{
+				conn:     conn,
+				lastUsed: time.Now(),
+				inUse:    true,
+			}
+
+			return &WrappedConn{
+				Conn: conn,
+				pool: p,
+				pc:   pc,
+			}, nil
+		}
+		p.mu.Unlock()
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-timer.C:
+			return nil, ErrPoolExhausted
+		case pc, ok := <-p.conns:
+			if !ok {
+				return nil, ErrPoolClosed
+			}
+			if time.Since(pc.lastUsed) > p.maxIdleTime {
+				pc.conn.Close()
+				p.mu.Lock()
+				p.size--
+				p.mu.Unlock()
+				continue
+			}
+			if !isConnHealthy(pc.conn) {
+				pc.conn.Close()
+				p.mu.Lock()
+				p.size--
+				p.mu.Unlock()
+				continue
+			}
+
+			pc.inUse = true
+			return &WrappedConn{
+				Conn: pc.conn,
+				pool: p,
+				pc:   pc,
+			}, nil
 		}
 	}
 }

@@ -98,19 +98,26 @@ var RolePermissions = map[Role][]Permission{
 	},
 }
 
+var rolePermissionSets = func() map[Role]map[Permission]struct{} {
+	sets := make(map[Role]map[Permission]struct{}, len(RolePermissions))
+	for role, permissions := range RolePermissions {
+		set := make(map[Permission]struct{}, len(permissions))
+		for _, permission := range permissions {
+			set[permission] = struct{}{}
+		}
+		sets[role] = set
+	}
+	return sets
+}()
+
 // HasPermission checks if a role has a specific permission
 func HasPermission(role Role, permission Permission) bool {
-	perms, ok := RolePermissions[role]
+	perms, ok := rolePermissionSets[role]
 	if !ok {
 		return false
 	}
-
-	for _, p := range perms {
-		if p == permission {
-			return true
-		}
-	}
-	return false
+	_, ok = perms[permission]
+	return ok
 }
 
 // ParseRole parses a role from string

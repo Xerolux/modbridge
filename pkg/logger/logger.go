@@ -39,6 +39,8 @@ type Logger struct {
 	files       map[string]*os.File
 	ringBuffer  []LogEntry
 	ringSize    int
+	ringStart   int
+	ringCount   int
 	subscribers map[chan LogEntry]struct{}
 	minLevel    LogLevel // Minimum log level to output
 }
@@ -144,11 +146,8 @@ func (l *Logger) Log(level LogLevel, proxyID, msg string) {
 			}
 		}
 
-		// 2. Add to ring buffer
-		if len(l.ringBuffer) >= l.ringSize {
-			l.ringBuffer = l.ringBuffer[1:]
-		}
-		l.ringBuffer = append(l.ringBuffer, entry)
+		// 2. Add to ring buffer without shifting the slice on every write.
+		l.appendRingEntry(entry)
 	}()
 
 	// Critical section 2: Get subscriber snapshot
@@ -197,15 +196,39 @@ func (l *Logger) GetRecent(limit int) []LogEntry {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if limit > len(l.ringBuffer) {
-		limit = len(l.ringBuffer)
+	if limit <= 0 || l.ringCount == 0 {
+		return nil
 	}
 
-	// Return a copy
+	if limit > l.ringCount {
+		limit = l.ringCount
+	}
+
 	out := make([]LogEntry, limit)
-	start := len(l.ringBuffer) - limit
-	copy(out, l.ringBuffer[start:])
+	start := l.ringCount - limit
+	for i := 0; i < limit; i++ {
+		idx := (l.ringStart + start + i) % l.ringSize
+		out[i] = l.ringBuffer[idx]
+	}
 	return out
+}
+
+func (l *Logger) appendRingEntry(entry LogEntry) {
+	if l.ringSize <= 0 {
+		return
+	}
+
+	if len(l.ringBuffer) < l.ringSize {
+		l.ringBuffer = append(l.ringBuffer, entry)
+		l.ringCount++
+		return
+	}
+
+	l.ringBuffer[l.ringStart] = entry
+	l.ringStart = (l.ringStart + 1) % l.ringSize
+	if l.ringCount < l.ringSize {
+		l.ringCount++
+	}
 }
 
 func (l *Logger) Info(proxyID, msg string) {
