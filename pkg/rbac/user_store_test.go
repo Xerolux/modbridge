@@ -117,6 +117,30 @@ func TestUserStore_UpdateUser(t *testing.T) {
 	}
 }
 
+func TestUserStore_UpdateUserReindexesUsername(t *testing.T) {
+	store := NewUserStore()
+
+	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleOperator)
+	if err != nil {
+		t.Fatalf("Failed to create user: %v", err)
+	}
+
+	err = store.UpdateUser(user.ID, func(u *User) error {
+		u.Username = "renamed-user"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Failed to update username: %v", err)
+	}
+
+	if _, err := store.GetUserByUsername("renamed-user"); err != nil {
+		t.Fatalf("Expected renamed user lookup to succeed: %v", err)
+	}
+	if _, err := store.GetUserByUsername("testuser"); err != ErrUserNotFound {
+		t.Fatalf("Expected old username lookup to fail, got: %v", err)
+	}
+}
+
 func TestUserStore_DeleteUser(t *testing.T) {
 	store := NewUserStore()
 
@@ -303,6 +327,14 @@ func TestUserStore_ValidateAPIToken(t *testing.T) {
 	_, err = store.ValidateAPIToken("invalid-token")
 	if err != ErrInvalidToken {
 		t.Errorf("Expected ErrInvalidToken, got: %v", err)
+	}
+
+	if err := store.SetUserActive(user.ID, false); err != nil {
+		t.Fatalf("Failed to deactivate user: %v", err)
+	}
+	_, err = store.ValidateAPIToken(token)
+	if err != ErrInvalidToken {
+		t.Errorf("Expected inactive user's token to be invalid, got: %v", err)
 	}
 }
 
