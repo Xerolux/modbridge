@@ -1,104 +1,170 @@
 <template>
-    <div class="dashboard-container p-2 sm:p-4 flex flex-col gap-4 w-full overflow-x-hidden">
-        <!-- Header -->
-        <div class="dashboard-header flex flex-col lg:flex-row justify-between items-start lg:items-center mb-2 sm:mb-6 gap-4 lg:gap-0">
-             <div class="flex items-center gap-3 sm:gap-4">
-                 <div class="header-icon">
-                     <i class="pi pi-th-large text-xl sm:text-2xl"></i>
-                 </div>
-                 <h1 class="text-lg sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                     Dashboard
-                 </h1>
-             </div>
-             <div class="flex flex-wrap sm:flex-nowrap gap-2 sm:gap-3 w-full lg:w-auto">
-                  <!-- Settings Button -->
-                  <Button
-                    icon="pi pi-cog"
-                    @click="showConfigPanel = true"
-                    class="flex-1 sm:flex-none animate-glow p-button-sm sm:p-button-md"
-                    v-tooltip.bottom="'Proxy-Konfiguration'"
-                    severity="secondary"
-                  />
-                  <Button label="Hinzufügen" icon="pi pi-plus" @click="openAddWidget" class="flex-1 sm:flex-none p-button-sm sm:p-button-md" />
-                  <Button label="Reset" icon="pi pi-refresh" @click="resetLayout" severity="secondary" class="flex-1 sm:flex-none p-button-sm sm:p-button-md" />
-             </div>
+  <div class="dashboard-container p-2 sm:p-4 flex flex-col gap-4 w-full overflow-x-hidden">
+    <section class="glass-hero dashboard-hero rounded-[28px] p-5 sm:p-6">
+      <div class="relative z-[1] flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div class="space-y-3">
+          <div class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.28em] text-[var(--text-muted)]">
+            <i class="pi pi-th-large"></i>
+            Live Dashboard
+          </div>
+          <div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-gradient">Glass Dashboard</h1>
+            <p class="mt-2 max-w-2xl text-sm sm:text-base text-[var(--text-secondary)]">
+              Widgets lassen sich frei anordnen. Ziehe Karten im Raster, speichere dein Layout lokal und blende Batch-Konfiguration bei Bedarf direkt daneben ein.
+            </p>
+          </div>
         </div>
 
-        <!-- Loading State -->
-        <div v-if="loading" class="flex justify-center items-center min-h-[500px]">
-             <div class="text-center loading-container">
-                  <div class="loading-spinner">
-                      <i class="pi pi-spin pi-spinner text-5xl"></i>
-                  </div>
-                  <p class="mt-4 text-gray-400 animate-pulse">Lade Dashboard...</p>
-             </div>
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div class="dashboard-stat">
+            <span class="dashboard-stat-label">Widgets</span>
+            <strong class="dashboard-stat-value">{{ widgets.length }}</strong>
+          </div>
+          <div class="dashboard-stat">
+            <span class="dashboard-stat-label">Proxies</span>
+            <strong class="dashboard-stat-value">{{ proxies.length }}</strong>
+          </div>
+          <div class="dashboard-stat">
+            <span class="dashboard-stat-label">Running</span>
+            <strong class="dashboard-stat-value">{{ runningProxyCount }}</strong>
+          </div>
+          <div class="dashboard-stat">
+            <span class="dashboard-stat-label">Layout</span>
+            <strong class="dashboard-stat-value">{{ isMobileLayout ? 'Locked' : 'Drag' }}</strong>
+          </div>
         </div>
+      </div>
+    </section>
 
-        <!-- Error State -->
-        <div v-else-if="error" class="flex justify-center items-center min-h-[500px]">
-             <div class="text-center error-container glass-effect rounded-2xl p-4 sm:p-8 mx-2 sm:mx-0 max-w-[95vw] sm:max-w-lg">
-                  <div class="error-icon mb-4">
-                      <i class="pi pi-exclamation-triangle text-5xl text-red-500 animate-shake"></i>
-                  </div>
-                  <p class="mt-4 text-red-400 font-semibold text-xs sm:text-base break-words whitespace-normal overflow-hidden">
-                      Fehler beim Laden: <span class="block text-gray-300 text-xs mt-2">{{ errorMessage }}</span>
-                  </p>
-                  <Button @click="fetchData" label="Erneut versuchen" class="mt-6 w-full sm:w-auto p-button-sm sm:p-button-md" />
-             </div>
-        </div>
+    <div class="dashboard-header flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+      <div class="space-y-1">
+        <h2 class="text-xl font-bold text-[var(--text-primary)]">Workspace</h2>
+        <p class="text-sm text-[var(--text-muted)]">
+          {{ isMobileLayout ? 'Auf kleinen Displays bleibt das Layout statisch.' : 'Widgets koennen per Drag-and-Drop neu angeordnet werden.' }}
+        </p>
+      </div>
 
-        <!-- Dashboard Grid -->
-        <div v-else class="grid-stack-dashboard grid-stack glass-effect rounded-xl sm:rounded-2xl min-h-[60vh] sm:min-h-[500px] border border-gray-700/50 relative overflow-hidden">
-            <Teleport v-for="widget in widgets" :key="widget.id" :to="'#mount_' + widget.id">
-                <div class="relative h-full w-full p-2 sm:p-3 flex flex-col justify-between animate-fade-in">
-                    <DashboardWidget
-                        :title="widget.title"
-                        :value="getWidgetValue(widget)"
-                        :unit="widget.unit"
-                        :status="getWidgetStatus(widget)"
-                        :activeConnections="getWidgetConnections(widget)"
-                    />
-                     <button
-                        type="button"
-                        class="absolute top-2 right-2 cursor-pointer text-gray-400 hover:text-red-400 z-10 transition-colors p-1 rounded hover:bg-red-500/20 bg-gray-800 shadow-sm"
-                        @click="removeWidget(widget.id)"
-                        aria-label="Remove widget"
-                        title="Widget entfernen"
-                    >
-                        <i class="pi pi-times text-sm"></i>
-                    </button>
-                </div>
-            </Teleport>
-        </div>
-
-        <Dialog v-model:visible="showAddWidget" header="Widget hinzufügen" :modal="true" class="w-11/12 sm:w-full max-w-[400px]">
-            <div class="flex flex-col gap-4">
-                <label class="text-sm font-medium">Proxy wählen</label>
-                <Dropdown
-                    v-model="selectedProxy"
-                    :options="proxyOptions"
-                    optionLabel="name"
-                    optionValue="id"
-                    placeholder="Wähle einen Proxy"
-                    filter
-                    class="w-full p-inputtext-sm sm:p-inputtext-md"
-                />
-                <Button label="Hinzufügen" @click="confirmAddWidget" :disabled="!selectedProxy" class="w-full p-button-sm sm:p-button-md" />
-            </div>
-        </Dialog>
-
-        <!-- Proxy Configuration Panel -->
-        <ProxyConfigPanel
-            :visible="showConfigPanel"
-            :proxies="proxies"
-            @close="showConfigPanel = false"
-            @refresh="fetchData"
+      <div class="flex flex-wrap gap-2 sm:gap-3 w-full lg:w-auto">
+        <Button
+          icon="pi pi-cog"
+          @click="showConfigPanel = true"
+          class="flex-1 sm:flex-none"
+          severity="secondary"
+          v-tooltip.bottom="'Proxy-Konfiguration'"
         />
+        <Button label="Widget hinzufügen" icon="pi pi-plus" @click="openAddWidget" class="flex-1 sm:flex-none" />
+        <Button label="Reset" icon="pi pi-refresh" @click="resetLayout" severity="secondary" class="flex-1 sm:flex-none" />
+      </div>
     </div>
+
+    <div v-if="loading" class="glass-panel rounded-[28px] p-10 sm:p-12">
+      <div class="relative z-[1] flex min-h-[360px] flex-col items-center justify-center text-center">
+        <div class="loading-spinner">
+          <i class="pi pi-spin pi-spinner text-5xl"></i>
+        </div>
+        <p class="mt-5 text-[var(--text-secondary)]">Lade Dashboard-Daten und stelle das Grid zusammen...</p>
+      </div>
+    </div>
+
+    <div v-else-if="error" class="glass-panel rounded-[28px] p-6 sm:p-8">
+      <div class="relative z-[1] flex min-h-[360px] flex-col items-center justify-center text-center">
+        <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/15 text-red-300">
+          <i class="pi pi-exclamation-triangle text-3xl"></i>
+        </div>
+        <h3 class="text-xl font-bold text-[var(--text-primary)]">Dashboard konnte nicht geladen werden</h3>
+        <p class="mt-2 max-w-lg text-sm text-[var(--text-muted)]">{{ errorMessage }}</p>
+        <Button @click="fetchData(true)" label="Erneut versuchen" class="mt-6" />
+      </div>
+    </div>
+
+    <section v-else class="dashboard-stage glass-panel rounded-[28px] p-3 sm:p-4">
+      <div class="relative z-[1]">
+        <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+            <span class="status-dot" :class="isMobileLayout ? 'status-dot--unknown' : 'status-dot--running'"></span>
+            <span>{{ isMobileLayout ? 'Mobile-Layout aktiv' : 'Drag-and-drop aktiv' }}</span>
+          </div>
+          <div class="text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">
+            {{ layoutHint }}
+          </div>
+        </div>
+
+        <div
+          v-if="widgets.length === 0"
+          class="empty-grid rounded-[24px] border border-dashed border-white/15 p-10 text-center"
+        >
+          <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5">
+            <i class="pi pi-plus-circle text-2xl text-[var(--text-secondary)]"></i>
+          </div>
+          <h3 class="text-xl font-semibold text-[var(--text-primary)]">Noch keine Widgets auf dem Board</h3>
+          <p class="mx-auto mt-2 max-w-md text-sm text-[var(--text-muted)]">
+            Fuege einen Proxy als Widget hinzu und ziehe die Karten anschliessend an die gewuenschte Position.
+          </p>
+        </div>
+
+        <div
+          v-else
+          class="grid-stack-dashboard grid-stack min-h-[60vh] sm:min-h-[520px] rounded-[24px] border border-white/10"
+          :class="{ 'grid-stack-dashboard--editing': layoutEditing }"
+        >
+          <div v-if="layoutEditing" class="layout-edit-banner">
+            <i class="pi pi-arrows-alt"></i>
+            Layout wird neu angeordnet
+          </div>
+
+          <Teleport v-for="widget in widgets" :key="widget.id" :to="'#mount_' + widget.id">
+            <div class="relative h-full w-full p-2 sm:p-3 flex">
+              <DashboardWidget
+                :title="widget.title"
+                :value="getWidgetValue(widget)"
+                :unit="widget.unit"
+                :status="getWidgetStatus(widget)"
+                :active-connections="getWidgetConnections(widget)"
+              />
+              <button
+                type="button"
+                class="widget-remove"
+                @click="removeWidget(widget.id)"
+                aria-label="Widget entfernen"
+                title="Widget entfernen"
+              >
+                <i class="pi pi-times text-sm"></i>
+              </button>
+            </div>
+          </Teleport>
+        </div>
+      </div>
+    </section>
+
+    <Dialog v-model:visible="showAddWidget" header="Widget hinzufügen" :modal="true" class="w-11/12 sm:w-full max-w-[440px]">
+      <div class="flex flex-col gap-4">
+        <p class="text-sm text-[var(--text-muted)]">
+          Verfuegbare Proxies koennen als Widgets auf das Board gelegt und danach frei positioniert werden.
+        </p>
+        <Dropdown
+          v-model="selectedProxy"
+          :options="availableProxyOptions"
+          optionLabel="name"
+          optionValue="id"
+          placeholder="Waehle einen Proxy"
+          filter
+          class="w-full"
+        />
+        <Button label="Hinzufügen" @click="confirmAddWidget" :disabled="!selectedProxy" class="w-full" />
+      </div>
+    </Dialog>
+
+    <ProxyConfigPanel
+      :visible="showConfigPanel"
+      :proxies="proxies"
+      @close="showConfigPanel = false"
+      @refresh="fetchData"
+    />
+  </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { GridStack } from 'gridstack';
 import 'gridstack/dist/gridstack.min.css';
 import axios from '../axios.js';
@@ -108,8 +174,10 @@ import Dropdown from 'primevue/dropdown';
 import DashboardWidget from '../components/DashboardWidget.vue';
 import ProxyConfigPanel from '../components/ProxyConfigPanel.vue';
 import { useEventSource } from '../utils/eventSource';
-import { DASHBOARD_CONFIG, BREAKPOINTS, GRID_CONFIG } from '../utils/constants';
+import { BREAKPOINTS, DASHBOARD_CONFIG, GRID_CONFIG } from '../utils/constants';
 import { debounce, formatNumber } from '../utils/helpers';
+
+const STORAGE_KEY = 'dashboard_layout_v2';
 
 const grid = ref(null);
 const proxies = ref([]);
@@ -117,489 +185,454 @@ const widgets = ref([]);
 const showAddWidget = ref(false);
 const showConfigPanel = ref(false);
 const selectedProxy = ref(null);
-const proxyOptions = ref([]);
 const loading = ref(true);
 const error = ref(null);
 const errorMessage = ref('');
+const layoutEditing = ref(false);
+const isMobileLayout = ref(window.innerWidth <= BREAKPOINTS.MOBILE);
 let sseDisconnect = null;
 
-onMounted(async () => {
-    try {
-        await fetchData(true);
+const runningProxyCount = computed(() => proxies.value.filter(proxy => proxy.status === 'Running').length);
+const availableProxyOptions = computed(() => {
+  const usedIds = new Set(widgets.value.map(widget => widget.proxy_id));
+  return proxies.value
+    .filter(proxy => !usedIds.has(proxy.id))
+    .map(proxy => ({ name: proxy.name, id: proxy.id }));
+});
+const layoutHint = computed(() => {
+  if (isMobileLayout.value) return 'Touch first';
+  if (layoutEditing.value) return 'Drop zone open';
+  return 'Drag widgets';
+});
 
-        const isMobile = window.innerWidth <= BREAKPOINTS.MOBILE;
+const buildDefaultLayout = (proxyList) => proxyList.map((proxy, index) => ({
+  x: (index % 3) * 2,
+  y: Math.floor(index / 3) * 2,
+  w: 2,
+  h: 2,
+  id: `w_default_${proxy.id}`,
+  proxy_id: proxy.id,
+  title: proxy.name,
+  unit: 'req',
+  status: proxy.status
+}));
 
-        grid.value = GridStack.init({
-            float: DASHBOARD_CONFIG.FLOATING,
-            cellHeight: DASHBOARD_CONFIG.MIN_WIDGET_WIDTH,
-            minRow: GRID_CONFIG.MIN_ROW,
-            margin: GRID_CONFIG.MARGIN,
-            column: 6,
-            disableDrag: isMobile,
-            disableResize: isMobile,
-            columnOpts: {
-                breakpoints: [
-                    { w: 640, c: 1 },
-                    { w: 768, c: 2 },
-                    { w: 1024, c: 3 },
-                    { w: 1280, c: 4 },
-                    { w: 1536, c: 6 }
-                ]
-            }
-        });
+const getStoredLayout = () => {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return [];
 
-        // Add resize listener to update drag/resize state
-        window.addEventListener('resize', handleResize);
+  try {
+    return JSON.parse(raw);
+  } catch (parseError) {
+    console.error(parseError);
+    return [];
+  }
+};
 
-        const savedLayout = localStorage.getItem('dashboard_layout');
-        let layoutToLoad = [];
+const syncGridInteractivity = () => {
+  if (!grid.value) return;
 
-        if (savedLayout) {
-            try {
-                layoutToLoad = JSON.parse(savedLayout);
-            } catch (e) {
-                console.error(e);
-            }
-        }
+  if (isMobileLayout.value) {
+    grid.value.enableMove(false);
+    grid.value.enableResize(false);
+    grid.value.setStatic(true);
+  } else {
+    grid.value.setStatic(false);
+    grid.value.enableMove(true);
+    grid.value.enableResize(true);
+  }
+};
 
-        if (!layoutToLoad || layoutToLoad.length === 0) {
-            const defaults = proxies.value.map((p, index) => ({
-                x: (index % 3) * 2,
-                y: Math.floor(index / 3) * 2,
-                w: 2,
-                h: 2,
-                id: `w_default_${p.id}`,
-                proxy_id: p.id,
-                title: p.name,
-                unit: 'req',
-                status: p.status
-            }));
-            layoutToLoad = defaults;
-        }
-
-        loadGrid(layoutToLoad);
-
-        grid.value.on('change', saveLayout);
-        grid.value.on('dragstop', saveLayout);
-        grid.value.on('resizestop', saveLayout);
-
-        const { data, disconnect } = useEventSource('/api/proxies/stream');
-        sseDisconnect = disconnect;
-
-        watch(data, (eventData) => {
-            if (!eventData) return;
-
-            const eventType = eventData.type;
-            const proxyData = eventData.proxy;
-
-            switch (eventType) {
-                case 'proxy_added':
-                case 'proxy_updated':
-                case 'proxy_started':
-                case 'proxy_stopped':
-                    if (proxyData) {
-                        const index = proxies.value.findIndex(p => p.id === proxyData.id);
-                        if (index !== -1) {
-                            proxies.value[index] = proxyData;
-                        } else {
-                            proxies.value.push(proxyData);
-                            proxyOptions.value.push({ name: proxyData.name, id: proxyData.id });
-                        }
-                    }
-                    break;
-                case 'proxy_removed':
-                    if (eventData.proxy_id) {
-                        proxies.value = proxies.value.filter(p => p.id !== eventData.proxy_id);
-                        proxyOptions.value = proxyOptions.value.filter(p => p.id !== eventData.proxy_id);
-                    }
-                    break;
-            }
-        });
-
-    } catch (err) {
-        error.value = true;
-        errorMessage.value = err.message || 'Fehler beim Initialisieren des Dashboards';
-        loading.value = false; // Ensure loading is always cleared on error
+const initializeGrid = () => {
+  grid.value = GridStack.init({
+    float: DASHBOARD_CONFIG.FLOATING,
+    cellHeight: DASHBOARD_CONFIG.MIN_WIDGET_WIDTH,
+    minRow: GRID_CONFIG.MIN_ROW,
+    margin: GRID_CONFIG.MARGIN,
+    column: 6,
+    disableDrag: isMobileLayout.value,
+    disableResize: isMobileLayout.value,
+    columnOpts: {
+      breakpoints: [
+        { w: 640, c: 1 },
+        { w: 768, c: 2 },
+        { w: 1024, c: 3 },
+        { w: 1280, c: 4 },
+        { w: 1536, c: 6 }
+      ]
     }
+  });
+
+  syncGridInteractivity();
+
+  grid.value.on('change', saveLayout);
+  grid.value.on('dragstart', () => {
+    layoutEditing.value = true;
+  });
+  grid.value.on('dragstop', () => {
+    layoutEditing.value = false;
+    saveLayout();
+  });
+  grid.value.on('resizestart', () => {
+    layoutEditing.value = true;
+  });
+  grid.value.on('resizestop', () => {
+    layoutEditing.value = false;
+    saveLayout();
+  });
+};
+
+onMounted(async () => {
+  try {
+    await fetchData(true);
+    initializeGrid();
+    window.addEventListener('resize', handleResize);
+
+    let layoutToLoad = getStoredLayout();
+    if (!layoutToLoad.length) {
+      layoutToLoad = buildDefaultLayout(proxies.value);
+    }
+
+    loadGrid(layoutToLoad);
+
+    const { data, disconnect } = useEventSource('/api/proxies/stream');
+    sseDisconnect = disconnect;
+
+    watch(data, (eventData) => {
+      if (!eventData) return;
+
+      const proxyData = eventData.proxy;
+
+      switch (eventData.type) {
+        case 'proxy_added':
+        case 'proxy_updated':
+        case 'proxy_started':
+        case 'proxy_stopped':
+          if (!proxyData) return;
+          updateProxyCollection(proxyData);
+          break;
+        case 'proxy_removed':
+          if (!eventData.proxy_id) return;
+          proxies.value = proxies.value.filter(proxy => proxy.id !== eventData.proxy_id);
+          widgets.value = widgets.value.filter(widget => widget.proxy_id !== eventData.proxy_id);
+          saveLayout();
+          break;
+      }
+    });
+  } catch (err) {
+    error.value = true;
+    errorMessage.value = err.message || 'Fehler beim Initialisieren des Dashboards';
+    loading.value = false;
+  }
 });
 
 const handleResize = debounce(() => {
-    if (grid.value) {
-        const isMobile = window.innerWidth <= 640;
-        grid.value.setStatic(isMobile);
-    }
+  isMobileLayout.value = window.innerWidth <= BREAKPOINTS.MOBILE;
+  syncGridInteractivity();
 }, 150);
 
 onUnmounted(() => {
-    window.removeEventListener('resize', handleResize);
-    if (grid.value) {
-        grid.value.destroy();
-    }
-    if (sseDisconnect) {
-        sseDisconnect();
-    }
+  window.removeEventListener('resize', handleResize);
+  if (grid.value) {
+    grid.value.destroy(false);
+  }
+  if (sseDisconnect) {
+    sseDisconnect();
+  }
 });
 
-const loadGrid = (layout) => {
-    grid.value.removeAll();
-    widgets.value = [];
+const updateProxyCollection = (proxyData) => {
+  const index = proxies.value.findIndex(proxy => proxy.id === proxyData.id);
+  if (index >= 0) {
+    proxies.value[index] = proxyData;
+    return;
+  }
 
-    layout.forEach(item => {
-        addWidgetToGrid(item);
-    });
+  proxies.value.push(proxyData);
+};
+
+const loadGrid = (layout) => {
+  if (!grid.value) return;
+  grid.value.removeAll();
+  widgets.value = [];
+  layout.forEach(addWidgetToGrid);
 };
 
 const addWidgetToGrid = (item) => {
-    const id = item.id || `w_${Date.now()}`;
-    const contentHtml = `<div id="mount_${id}" class="h-full w-full relative"></div>`;
+  if (!grid.value) return;
 
-    const el = grid.value.addWidget({
-        x: item.x,
-        y: item.y,
-        w: item.w,
-        h: item.h,
-        id: id,
-        content: ''
-    });
+  const id = item.id || `w_${item.proxy_id || Date.now()}`;
+  const contentHtml = `<div id="mount_${id}" class="h-full w-full relative"></div>`;
+  const el = grid.value.addWidget({
+    x: item.x ?? 0,
+    y: item.y ?? 0,
+    w: item.w ?? 2,
+    h: item.h ?? 2,
+    id,
+    content: ''
+  });
 
-    if (el) {
-        const contentEl = el.querySelector('.grid-stack-item-content');
-        if (contentEl) {
-            contentEl.innerHTML = contentHtml;
-        }
+  if (el) {
+    const contentEl = el.querySelector('.grid-stack-item-content');
+    if (contentEl) {
+      contentEl.innerHTML = contentHtml;
     }
+  }
 
-    nextTick(() => {
-        widgets.value.push({
-            ...item,
-            id: id
-        });
-    });
+  nextTick(() => {
+    widgets.value.push({ ...item, id });
+  });
 };
 
 const saveLayout = () => {
-    const items = grid.value.getGridItems();
-    const layout = items.map(item => {
-        const w = widgets.value.find(x => x.id == item.gridstackNode.id);
-        return {
-            x: item.gridstackNode.x,
-            y: item.gridstackNode.y,
-            w: item.gridstackNode.w,
-            h: item.gridstackNode.h,
-            id: item.gridstackNode.id,
-            proxy_id: w ? w.proxy_id : '',
-            title: w ? w.title : '',
-            unit: w ? w.unit : '',
-            status: w ? w.status : ''
-        };
-    });
-    localStorage.setItem('dashboard_layout', JSON.stringify(layout));
+  if (!grid.value) return;
+
+  const items = grid.value.getGridItems();
+  const layout = items.map((item) => {
+    const widget = widgets.value.find(entry => entry.id === item.gridstackNode.id);
+    return {
+      x: item.gridstackNode.x,
+      y: item.gridstackNode.y,
+      w: item.gridstackNode.w,
+      h: item.gridstackNode.h,
+      id: item.gridstackNode.id,
+      proxy_id: widget?.proxy_id || '',
+      title: widget?.title || '',
+      unit: widget?.unit || '',
+      status: widget?.status || ''
+    };
+  });
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
 };
 
 const fetchData = async (isInitial = false) => {
-    try {
-        if (isInitial) {
-            loading.value = true;
-        }
-        error.value = null;
-        errorMessage.value = '';
-        const res = await axios.get('/api/proxies');
-        proxies.value = res.data;
-        proxyOptions.value = res.data.map(p => ({ name: p.name, id: p.id }));
-        if (isInitial) {
-            loading.value = false;
-        }
-    } catch (e) {
-        const errorData = e.response?.data;
-        let msg = 'Unbekannter Fehler';
-
-        if (typeof errorData === 'string') {
-            msg = errorData;
-        } else if (e.message) {
-            msg = e.message;
-        }
-
-        error.value = true;
-        errorMessage.value = msg;
-        if (isInitial) {
-            loading.value = false;
-        }
-    }
+  try {
+    if (isInitial) loading.value = true;
+    error.value = null;
+    errorMessage.value = '';
+    const res = await axios.get('/api/proxies');
+    proxies.value = res.data;
+    if (isInitial) loading.value = false;
+  } catch (requestError) {
+    const errorData = requestError.response?.data;
+    error.value = true;
+    errorMessage.value = typeof errorData === 'string' ? errorData : requestError.message || 'Unbekannter Fehler';
+    if (isInitial) loading.value = false;
+  }
 };
 
 const getWidgetValue = (widget) => {
-    const p = proxies.value.find(x => x.id === widget.proxy_id);
-    if (!p) return 'Unbekannt';
-    if (p.status === 'Running') {
-        return `${formatNumber(p.requests || 0)} Anfragen`;
-    }
-    return p.status;
+  const proxy = proxies.value.find(entry => entry.id === widget.proxy_id);
+  if (!proxy) return 'Unbekannt';
+  if (proxy.status === 'Running') {
+    return `${formatNumber(proxy.requests || 0)} Anfragen`;
+  }
+  return proxy.status;
 };
 
 const getWidgetConnections = (widget) => {
-    const p = proxies.value.find(x => x.id === widget.proxy_id);
-    if (!p) return null;
-    return p.active_connections ?? 0;
+  const proxy = proxies.value.find(entry => entry.id === widget.proxy_id);
+  return proxy ? proxy.active_connections ?? 0 : null;
 };
 
 const getWidgetStatus = (widget) => {
-    const p = proxies.value.find(x => x.id === widget.proxy_id);
-    return p ? p.status : widget.status || 'Unbekannt';
+  const proxy = proxies.value.find(entry => entry.id === widget.proxy_id);
+  return proxy ? proxy.status : widget.status || 'Unbekannt';
 };
 
 const openAddWidget = () => {
-    showAddWidget.value = true;
+  selectedProxy.value = availableProxyOptions.value[0]?.id || null;
+  showAddWidget.value = true;
 };
 
 const confirmAddWidget = () => {
-    if (selectedProxy.value) {
-        const p = proxies.value.find(x => x.id === selectedProxy.value);
-        addWidgetToGrid({
-            x: 0, y: 0, w: 2, h: 2,
-            proxy_id: selectedProxy.value,
-            title: p.name,
-            unit: 'req',
-            status: p.status
-        });
-        showAddWidget.value = false;
-        selectedProxy.value = null;
-        saveLayout();
-    }
+  if (!selectedProxy.value) return;
+
+  const existing = widgets.value.find(widget => widget.proxy_id === selectedProxy.value);
+  if (existing) {
+    showAddWidget.value = false;
+    selectedProxy.value = null;
+    return;
+  }
+
+  const proxy = proxies.value.find(entry => entry.id === selectedProxy.value);
+  if (!proxy) return;
+
+  addWidgetToGrid({
+    x: 0,
+    y: 0,
+    w: 2,
+    h: 2,
+    proxy_id: selectedProxy.value,
+    title: proxy.name,
+    unit: 'req',
+    status: proxy.status
+  });
+
+  showAddWidget.value = false;
+  selectedProxy.value = null;
+  saveLayout();
 };
 
 const removeWidget = (id) => {
-    const el = document.getElementById(`mount_${id}`);
-    if (el) {
-        const gridItem = el.closest('.grid-stack-item');
-        if (gridItem) {
-            grid.value.removeWidget(gridItem);
-        }
+  const mount = document.getElementById(`mount_${id}`);
+  if (mount) {
+    const gridItem = mount.closest('.grid-stack-item');
+    if (gridItem && grid.value) {
+      grid.value.removeWidget(gridItem);
     }
+  }
 
-    widgets.value = widgets.value.filter(w => w.id !== id);
-    saveLayout();
+  widgets.value = widgets.value.filter(widget => widget.id !== id);
+  saveLayout();
 };
 
 const resetLayout = () => {
-    localStorage.removeItem('dashboard_layout');
-    location.reload();
+  localStorage.removeItem(STORAGE_KEY);
+  loadGrid(buildDefaultLayout(proxies.value));
+  saveLayout();
 };
 </script>
 
 <style scoped>
-/* Dashboard Container */
 .dashboard-container {
-    background: transparent;
-    min-height: 100vh;
+  background: transparent;
+  min-height: 100vh;
 }
 
-/* Header Styles */
-.dashboard-header {
-    position: relative;
-    z-index: 10;
+.dashboard-hero,
+.dashboard-stage,
+.dashboard-stat {
+  position: relative;
+  overflow: hidden;
 }
 
-.header-icon {
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%);
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: white;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+.dashboard-stat {
+  border-radius: 20px;
+  padding: 0.9rem 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* Glass Effect */
-.glass-effect {
-    background: rgba(17, 24, 39, 0.4);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+.dashboard-stat-label {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--text-muted);
 }
 
-/* Loading Animation */
-.loading-container {
-    padding: 40px;
+.dashboard-stat-value {
+  display: block;
+  margin-top: 0.45rem;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--text-primary);
 }
 
 .loading-spinner {
-    position: relative;
-    width: 80px;
-    height: 80px;
-    margin: 0 auto;
+  position: relative;
+  display: flex;
+  height: 5.5rem;
+  width: 5.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .loading-spinner::before {
-    content: '';
-    position: absolute;
-    inset: -8px;
-    border-radius: 50%;
-    background: conic-gradient(from 0deg, transparent, #a855f7, transparent);
-    animation: spin 2s linear infinite;
-    opacity: 0.3;
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 211, 252, 0.25);
 }
 
-.loading-spinner i {
-    color: #a855f7;
-    filter: drop-shadow(0 0 12px rgba(168, 85, 247, 0.6));
-}
-
-/* Error Animation */
-.error-container {
-    max-width: 400px;
-    margin: 0 auto;
-}
-
-.error-icon {
-    display: inline-block;
-    animation: shake 0.5s ease-in-out;
-}
-
-/* Grid Stack */
 .grid-stack-dashboard {
-    position: relative;
+  position: relative;
+  padding: 0.35rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015)),
+    rgba(15, 23, 42, 0.18);
+}
+
+.grid-stack-dashboard--editing {
+  border-color: rgba(125, 211, 252, 0.28);
+}
+
+.layout-edit-banner {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  background: rgba(15, 23, 42, 0.7);
+  padding: 0.45rem 0.8rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.widget-remove {
+  position: absolute;
+  top: 0.8rem;
+  right: 0.8rem;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.widget-remove:hover {
+  background: rgba(244, 63, 94, 0.22);
+  color: #fecdd3;
+  transform: scale(1.05);
+}
+
+.empty-grid {
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .grid-stack-item-content {
-    background: rgba(31, 41, 55, 0.5);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    color: white;
-    border-radius: 24px;
-    box-shadow:
-        0 4px 6px -1px rgba(0, 0, 0, 0.3),
-        0 2px 4px -1px rgba(0, 0, 0, 0.06),
-        inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    overflow: hidden;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    position: relative;
+  height: 100%;
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03)),
+    rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 18px 45px rgba(2, 6, 23, 0.35);
+  overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 .grid-stack-item:hover .grid-stack-item-content {
-    box-shadow:
-        0 20px 25px -5px rgba(0, 0, 0, 0.5),
-        0 10px 10px -5px rgba(0, 0, 0, 0.04),
-        0 0 0 1px rgba(168, 85, 247, 0.3),
-        0 0 20px rgba(168, 85, 247, 0.1);
-    border-color: rgba(168, 85, 247, 0.4);
-    transform: translateY(-4px) scale(1.02);
-    z-index: 10 !important;
+  transform: translateY(-2px);
+  border-color: rgba(125, 211, 252, 0.22);
+  box-shadow: 0 28px 60px rgba(2, 6, 23, 0.42);
 }
 
-/* Animations */
-.animate-fade-in {
-    animation: fadeIn 0.4s ease-out;
-}
-
-.animate-pulse {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-.animate-shake {
-    animation: shake 0.5s ease-in-out;
-}
-
-.animate-glow {
-    animation: glow 2s ease-in-out infinite;
-}
-
-.animate-spin-slow {
-    animation: spin 3s linear infinite;
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes pulse {
-    0%, 100% {
-        opacity: 1;
-    }
-    50% {
-        opacity: 0.5;
-    }
-}
-
-@keyframes shake {
-    0%, 100% {
-        transform: translateX(0);
-    }
-    10%, 30%, 50%, 70%, 90% {
-        transform: translateX(-4px);
-    }
-    20%, 40%, 60%, 80% {
-        transform: translateX(4px);
-    }
-}
-
-@keyframes glow {
-    0%, 100% {
-        box-shadow: 0 0 5px rgba(168, 85, 247, 0.3);
-    }
-    50% {
-        box-shadow: 0 0 20px rgba(168, 85, 247, 0.6), 0 0 30px rgba(168, 85, 247, 0.3);
-    }
-}
-
-@keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-/* Button Enhancements */
-:deep(.p-button-rounded) {
-    width: 44px;
-    height: 44px;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-:deep(.p-button-rounded:hover) {
-    transform: rotate(90deg) scale(1.1);
-    box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
-}
-
-/* Dialog Enhancements */
-:deep(.p-dialog) {
-    backdrop-filter: blur(24px);
-    background: rgba(31, 41, 55, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 24px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-}
-
-:deep(.p-dialog-header) {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* Responsive Design */
 @media (max-width: 640px) {
-    .dashboard-header {
-        gap: 12px;
-    }
+  .grid-stack-item-content {
+    border-radius: 18px;
+  }
 
-    .header-icon {
-        width: 40px;
-        height: 40px;
-    }
-
-    .grid-stack-item-content {
-        border-radius: 16px;
-    }
+  .layout-edit-banner {
+    left: 0.75rem;
+    right: 0.75rem;
+    justify-content: center;
+  }
 }
 </style>

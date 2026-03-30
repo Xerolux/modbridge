@@ -1,239 +1,588 @@
 <template>
-  <div class="space-y-6">
-    <!-- Global Config -->
-    <div class="grid grid-cols-1 gap-4">
-      <div>
-        <label class="block text-sm font-medium text-gray-300 dark:text-gray-200">Web Interface Address</label>
-        <div class="flex space-x-2 mt-1">
-             <input
-               v-model="store.webPort"
-               type="text"
-               class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 text-base p-2 border"
-               placeholder=":8080"
-             >
-            <button
-                @click="savePort"
-                class="px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-            >
-                Save
-            </button>
+  <section class="config-shell space-y-6">
+    <div class="glass-hero rounded-[28px] p-5 sm:p-6">
+      <div class="relative z-[1] flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div class="space-y-3">
+          <div class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.3em] text-[var(--text-muted)]">
+            <i class="pi pi-sparkles"></i>
+            Proxy Studio
+          </div>
+          <div class="space-y-2">
+            <h2 class="text-2xl sm:text-3xl font-bold text-gradient">Glass WebUI mit Drag and Drop</h2>
+            <p class="max-w-2xl text-sm sm:text-base text-[var(--text-secondary)]">
+              Reordne Proxies per Drag-and-Drop, bearbeite Parameter direkt in Karten und speichere nur die Einträge,
+              die sich wirklich geändert haben.
+            </p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div class="hero-stat">
+            <span class="hero-stat-label">Proxies</span>
+            <strong class="hero-stat-value">{{ store.proxies.length }}</strong>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat-label">Unsaved</span>
+            <strong class="hero-stat-value">{{ dirtyCount }}</strong>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat-label">Running</span>
+            <strong class="hero-stat-value">{{ runningCount }}</strong>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat-label">Port</span>
+            <strong class="hero-stat-value">{{ store.webPort || ':8080' }}</strong>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="border-t border-gray-700 pt-4">
-      <div class="flex justify-between items-center mb-4">
-        <h4 class="text-md font-medium text-gray-200">Proxies</h4>
-        <button
-          @click="addProxy"
-          class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-        >
-          Add Proxy
-        </button>
-      </div>
-
-      <VueDraggable
-        v-model="store.proxies"
-        :animation="150"
-        handle=".proxy-handle"
-        class="space-y-4"
-        @end="onReorder"
-      >
-        <div
-          v-for="(proxy, index) in store.proxies"
-          :key="proxy.id || index"
-          class="border border-gray-600 rounded-md p-4 bg-gray-700 relative group"
-          :class="{'border-blue-500 ring-1 ring-blue-500': proxy._isNew || proxy._isDirty}"
-        >
-          <div class="absolute right-2 top-2 flex space-x-2">
-            <button
-               @click="removeProxy(proxy.id)"
-               class="text-red-400 hover:text-red-300 p-1"
-               title="Remove Proxy"
-            >
-              <TrashIcon class="w-4 h-4" />
-            </button>
-             <div class="cursor-move proxy-handle text-gray-400 hover:text-gray-300 p-1">
-              <GripVerticalIcon class="w-4 h-4" />
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pr-8">
+    <div class="glass-panel rounded-[28px] p-5 sm:p-6">
+      <div class="relative z-[1] grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_360px]">
+        <div class="space-y-4">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <label class="block text-xs font-medium text-gray-400">Name</label>
-              <input v-model="proxy.name" @input="markDirty(proxy)" type="text" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white text-base p-2 min-h-[44px] border">
+              <h3 class="text-xl font-bold text-[var(--text-primary)]">Proxy-Liste</h3>
+              <p class="text-sm text-[var(--text-muted)]">
+                Ziehe die Karten an der Griffleiste, um deine Arbeitsreihenfolge visuell zu organisieren.
+              </p>
             </div>
-             <div>
-              <label class="block text-xs font-medium text-gray-400">Listen Addr</label>
-              <input v-model="proxy.listen_addr" @input="markDirty(proxy)" type="text" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white text-base p-2 min-h-[44px] border" placeholder=":502">
-            </div>
-             <div>
-              <label class="block text-xs font-medium text-gray-400">Target Addr</label>
-              <input v-model="proxy.target_addr" @input="markDirty(proxy)" type="text" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white text-base p-2 min-h-[44px] border" placeholder="192.168.1.100:502">
-            </div>
-             <div>
-                <label class="block text-xs font-medium text-gray-400">Description</label>
-                <input v-model="proxy.description" @input="markDirty(proxy)" type="text" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white text-base p-2 min-h-[44px] border">
-             </div>
-              <div class="flex items-center space-x-4 mt-4">
-                 <label class="inline-flex items-center">
-                   <input type="checkbox" v-model="proxy.enabled" @change="markDirty(proxy)" class="rounded border-gray-600 text-blue-600 bg-gray-700 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
-                   <span class="ml-2 text-sm text-gray-300">Enabled</span>
-                </label>
-                 <label class="inline-flex items-center">
-                  <input type="checkbox" v-model="proxy.paused" @change="markDirty(proxy)" class="rounded border-gray-600 text-blue-600 bg-gray-700 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
-                  <span class="ml-2 text-sm text-gray-300">Paused</span>
-                </label>
-             </div>
-             <div class="mt-2">
-                 <label class="block text-xs font-medium text-gray-400">Tags</label>
-                 <input v-model="proxy.tags" @input="markDirty(proxy)" type="text" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white text-base p-2 min-h-[44px] border" placeholder="comma,separated,tags">
-             </div>
+            <Button
+              label="Proxy hinzufügen"
+              icon="pi pi-plus"
+              @click="addProxy"
+              class="w-full sm:w-auto"
+            />
           </div>
 
-           <div class="mt-2 flex justify-between items-center">
-                <div class="text-xs text-gray-400 cursor-pointer hover:text-gray-300" @click="proxy._showAdvanced = !proxy._showAdvanced">
-                    {{ proxy._showAdvanced ? 'Hide Advanced' : 'Show Advanced' }}
+          <div v-if="store.proxies.length === 0" class="empty-state rounded-[24px] border border-dashed border-white/15 p-8 text-center">
+            <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5">
+              <i class="pi pi-inbox text-2xl text-[var(--text-secondary)]"></i>
+            </div>
+            <h4 class="text-lg font-semibold text-[var(--text-primary)]">Noch keine Proxies angelegt</h4>
+            <p class="mx-auto mt-2 max-w-md text-sm text-[var(--text-muted)]">
+              Lege deinen ersten Proxy an und verwalte danach Reihenfolge, Status und Zeitlimits direkt in dieser Oberfläche.
+            </p>
+          </div>
+
+          <VueDraggable
+            v-else
+            v-model="store.proxies"
+            :animation="180"
+            handle=".proxy-drag-handle"
+            ghostClass="proxy-ghost"
+            chosenClass="proxy-chosen"
+            dragClass="proxy-drag"
+            class="space-y-4"
+            @end="onReorder"
+          >
+            <article
+              v-for="(proxy, index) in store.proxies"
+              :key="getProxyKey(proxy, index)"
+              class="proxy-card rounded-[24px] p-4 sm:p-5"
+              :class="{ 'proxy-card--dirty': isProxyDirty(proxy), 'proxy-card--selected': activeProxyKey === getProxyKey(proxy, index) }"
+              @click="activeProxyKey = getProxyKey(proxy, index)"
+            >
+              <div class="flex flex-col gap-4">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div class="flex items-start gap-3">
+                    <button
+                      type="button"
+                      class="proxy-drag-handle mt-1 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-[var(--text-secondary)] transition hover:border-white/20 hover:text-[var(--text-primary)]"
+                      title="Proxy verschieben"
+                    >
+                      <GripVerticalIcon class="h-5 w-5" />
+                    </button>
+
+                    <div class="space-y-2">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">
+                          <span class="status-dot" :class="statusDotClass(proxy.status)"></span>
+                          {{ proxy.status || 'Draft' }}
+                        </span>
+                        <span v-if="proxy._isNew" class="proxy-pill proxy-pill--info">Neu</span>
+                        <span v-if="proxy._isDirty" class="proxy-pill proxy-pill--warning">Geändert</span>
+                        <span class="proxy-pill">{{ normalizeTags(proxy).length }} Tags</span>
+                      </div>
+                      <div>
+                        <h4 class="text-lg font-semibold text-[var(--text-primary)]">
+                          {{ proxy.name || `Proxy ${index + 1}` }}
+                        </h4>
+                        <p class="text-sm text-[var(--text-muted)]">
+                          {{ proxy.listen_addr || ':5020' }} -> {{ proxy.target_addr || '127.0.0.1:502' }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="flex flex-wrap items-center gap-2">
+                    <Button
+                      v-if="proxy._isDirty || proxy._isNew"
+                      :label="proxy._isNew ? 'Erstellen' : 'Speichern'"
+                      icon="pi pi-save"
+                      @click.stop="saveProxy(proxy, index)"
+                      :loading="store.isLoading && activeSaveKey === getProxyKey(proxy, index)"
+                      size="small"
+                    />
+                    <Button
+                      :label="proxy._showAdvanced ? 'Weniger' : 'Mehr'"
+                      :icon="proxy._showAdvanced ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
+                      severity="secondary"
+                      text
+                      @click.stop="proxy._showAdvanced = !proxy._showAdvanced"
+                      size="small"
+                    />
+                    <Button
+                      icon="pi pi-trash"
+                      severity="danger"
+                      text
+                      rounded
+                      @click.stop="removeProxy(proxy.id, index)"
+                      size="small"
+                    />
+                  </div>
                 </div>
-                <button
-                    v-if="proxy._isDirty || proxy._isNew"
-                    @click="saveProxy(proxy)"
-                    class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
-                >
-                    {{ proxy._isNew ? 'Create' : 'Update' }}
-                </button>
-           </div>
 
-           <div v-if="proxy._showAdvanced" class="mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-gray-600 pt-2">
-              <div>
-                <label class="block text-xs font-medium text-gray-400">Conn Timeout (s)</label>
-                <input v-model.number="proxy.connection_timeout" @input="markDirty(proxy)" type="number" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white text-base p-2 min-h-[44px] border">
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-400">Read Timeout (s)</label>
-                <input v-model.number="proxy.read_timeout" @input="markDirty(proxy)" type="number" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white text-base p-2 min-h-[44px] border">
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-400">Max Retries</label>
-                <input v-model.number="proxy.max_retries" @input="markDirty(proxy)" type="number" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white text-base p-2 min-h-[44px] border">
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-400">Max Read Size (0=unlimited)</label>
-                <input v-model.number="proxy.max_read_size" @input="markDirty(proxy)" type="number" class="mt-1 block w-full rounded border-gray-600 bg-gray-600 text-white text-base p-2 min-h-[44px] border">
-              </div>
-           </div>
+                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-12">
+                  <div class="field-group xl:col-span-4">
+                    <label>Name</label>
+                    <input v-model="proxy.name" type="text" placeholder="Factory Line A" @input="markDirty(proxy, index)" />
+                    <small v-if="getFieldError(proxy, index, 'name')" class="field-error">{{ getFieldError(proxy, index, 'name') }}</small>
+                  </div>
 
+                  <div class="field-group xl:col-span-4">
+                    <label>Listen Addr</label>
+                    <input v-model="proxy.listen_addr" type="text" placeholder=":5020" @input="markDirty(proxy, index)" />
+                    <small v-if="getFieldError(proxy, index, 'listen_addr')" class="field-error">{{ getFieldError(proxy, index, 'listen_addr') }}</small>
+                  </div>
+
+                  <div class="field-group xl:col-span-4">
+                    <label>Target Addr</label>
+                    <input v-model="proxy.target_addr" type="text" placeholder="192.168.1.100:502" @input="markDirty(proxy, index)" />
+                    <small v-if="getFieldError(proxy, index, 'target_addr')" class="field-error">{{ getFieldError(proxy, index, 'target_addr') }}</small>
+                  </div>
+
+                  <div class="field-group xl:col-span-6">
+                    <label>Beschreibung</label>
+                    <input v-model="proxy.description" type="text" placeholder="Optionaler Hinweis zur Anlage" @input="markDirty(proxy, index)" />
+                  </div>
+
+                  <div class="field-group xl:col-span-6">
+                    <label>Tags</label>
+                    <input
+                      v-model="proxy.tags"
+                      type="text"
+                      placeholder="production, critical, plc"
+                      @input="markDirty(proxy, index)"
+                    />
+                  </div>
+                </div>
+
+                <div class="flex flex-col gap-3 rounded-[20px] border border-white/10 bg-black/10 p-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div class="flex flex-wrap gap-3">
+                    <label class="toggle-chip">
+                      <input type="checkbox" v-model="proxy.enabled" @change="markDirty(proxy, index)" />
+                      <span>Aktiviert</span>
+                    </label>
+                    <label class="toggle-chip">
+                      <input type="checkbox" v-model="proxy.paused" @change="markDirty(proxy, index)" />
+                      <span>Pausiert</span>
+                    </label>
+                  </div>
+
+                  <div class="flex flex-wrap gap-2">
+                    <span v-for="tag in normalizeTags(proxy)" :key="`${getProxyKey(proxy, index)}-${tag}`" class="proxy-pill">
+                      {{ tag }}
+                    </span>
+                    <span v-if="normalizeTags(proxy).length === 0" class="text-xs text-[var(--text-muted)]">
+                      Keine Tags gesetzt
+                    </span>
+                  </div>
+                </div>
+
+                <div v-if="proxy._showAdvanced" class="advanced-grid rounded-[20px] border border-white/10 bg-black/10 p-4">
+                  <div class="field-group">
+                    <label>Conn Timeout (s)</label>
+                    <input v-model.number="proxy.connection_timeout" type="number" min="1" max="300" @input="markDirty(proxy, index)" />
+                    <small v-if="getFieldError(proxy, index, 'connection_timeout')" class="field-error">{{ getFieldError(proxy, index, 'connection_timeout') }}</small>
+                  </div>
+                  <div class="field-group">
+                    <label>Read Timeout (s)</label>
+                    <input v-model.number="proxy.read_timeout" type="number" min="1" max="300" @input="markDirty(proxy, index)" />
+                    <small v-if="getFieldError(proxy, index, 'read_timeout')" class="field-error">{{ getFieldError(proxy, index, 'read_timeout') }}</small>
+                  </div>
+                  <div class="field-group">
+                    <label>Max Retries</label>
+                    <input v-model.number="proxy.max_retries" type="number" min="0" max="10" @input="markDirty(proxy, index)" />
+                    <small v-if="getFieldError(proxy, index, 'max_retries')" class="field-error">{{ getFieldError(proxy, index, 'max_retries') }}</small>
+                  </div>
+                  <div class="field-group">
+                    <label>Max Read Size</label>
+                    <input v-model.number="proxy.max_read_size" type="number" min="0" max="65535" @input="markDirty(proxy, index)" />
+                    <small v-if="getFieldError(proxy, index, 'max_read_size')" class="field-error">{{ getFieldError(proxy, index, 'max_read_size') }}</small>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </VueDraggable>
         </div>
-      </VueDraggable>
+
+        <aside class="space-y-4">
+          <div class="side-card rounded-[24px] p-5">
+            <div class="space-y-3">
+              <div>
+                <p class="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Web Interface</p>
+                <h3 class="mt-1 text-xl font-bold text-[var(--text-primary)]">Port und Zugriff</h3>
+              </div>
+              <div class="field-group">
+                <label>Web Interface Address</label>
+                <div class="flex gap-2">
+                  <input
+                    v-model="store.webPort"
+                    type="text"
+                    class="flex-1"
+                    placeholder=":8080"
+                  >
+                  <Button
+                    label="Speichern"
+                    icon="pi pi-check"
+                    @click="savePort"
+                    :loading="store.isLoading"
+                  />
+                </div>
+              </div>
+              <p class="text-sm text-[var(--text-muted)]">
+                Eine Port-Änderung benötigt einen Neustart des Dienstes. Die Eingabe akzeptiert `:8080` oder `host:8080`.
+              </p>
+            </div>
+          </div>
+
+          <div class="side-card rounded-[24px] p-5">
+            <div class="space-y-3">
+              <h3 class="text-xl font-bold text-[var(--text-primary)]">Workflow</h3>
+              <ol class="space-y-3 text-sm text-[var(--text-secondary)]">
+                <li class="workflow-step">
+                  <span class="workflow-badge">1</span>
+                  Karten verschieben, um deine bevorzugte Arbeitsreihenfolge zu setzen.
+                </li>
+                <li class="workflow-step">
+                  <span class="workflow-badge">2</span>
+                  Änderungen pro Karte prüfen und nur betroffene Einträge speichern.
+                </li>
+                <li class="workflow-step">
+                  <span class="workflow-badge">3</span>
+                  Erweiterte Timeout- und Retry-Werte bei Bedarf ausklappen.
+                </li>
+              </ol>
+            </div>
+          </div>
+        </aside>
+      </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <script setup>
- import { ref } from 'vue';
- import { useAppStore } from '../stores/appStore';
- import { VueDraggable } from 'vue-draggable-plus';
- import { TrashIcon, GripVerticalIcon } from 'lucide-vue-next';
- import validators from '../utils/validators';
+import { computed, ref } from 'vue';
+import Button from 'primevue/button';
+import { VueDraggable } from 'vue-draggable-plus';
+import { GripVerticalIcon } from 'lucide-vue-next';
+import { useAppStore } from '../stores/appStore';
+import validators from '../utils/validators';
 
- const store = useAppStore();
+const store = useAppStore();
 
- const validationErrors = ref({});
+const validationErrors = ref({});
+const activeProxyKey = ref(null);
+const activeSaveKey = ref(null);
 
- const addProxy = () => {
-   store.proxies.push({
-     id: '',
-     name: 'New Proxy',
-     listen_addr: ':5020',
-     target_addr: '127.0.0.1:502',
-     enabled: true,
-     paused: false,
-     connection_timeout: 10,
-     read_timeout: 30,
-     max_retries: 3,
-     max_read_size: 0,
-     description: '',
-     tags: [],
-     _isNew: true,
-     _showAdvanced: false
-   });
- };
+const dirtyCount = computed(() => store.proxies.filter(proxy => proxy._isDirty || proxy._isNew).length);
+const runningCount = computed(() => store.proxies.filter(proxy => proxy.status === 'Running').length);
 
- const removeProxy = async (id) => {
-   if (!id) {
-     // Removing an unsaved new proxy
-     const idx = store.proxies.findIndex(p => !p.id);
-     if (idx !== -1) store.proxies.splice(idx, 1);
-     return;
-     }
-   if (confirm('Are you sure you want to remove this proxy?')) {
-     await store.deleteProxy(id);
-     }
- };
+const getProxyKey = (proxy, index) => proxy.id || proxy._tempId || `proxy-${index}`;
 
- const saveProxy = async (proxy) => {
-   // Validate before saving
-   const errors = validators.validateProxyConfig(proxy);
+const getValidationKey = (proxy, index) => getProxyKey(proxy, index);
 
-   if (errors) {
-     validationErrors.value = errors;
-     return;
-   }
+const isProxyDirty = (proxy) => Boolean(proxy._isDirty || proxy._isNew);
 
-   validationErrors.value = {};
+const normalizeTags = (proxy) => {
+  if (Array.isArray(proxy.tags)) return proxy.tags.filter(Boolean);
+  if (typeof proxy.tags !== 'string') return [];
+  return proxy.tags.split(',').map(tag => tag.trim()).filter(Boolean);
+};
 
-   // Convert tags from string to array before sending to backend
-   const proxyData = { ...proxy };
-   if (typeof proxyData.tags === 'string') {
-     // Split comma-separated string into array, trim whitespace, filter empty
-     proxyData.tags = proxyData.tags
-       .split(',')
-       .map(t => t.trim())
-       .filter(t => t.length > 0);
-   }
+const getFieldError = (proxy, index, field) => {
+  return validationErrors.value[getValidationKey(proxy, index)]?.[field] || '';
+};
 
-   let success = false;
-   if (proxy._isNew) {
-     success = await store.addProxy(proxyData);
-   } else {
-     success = await store.updateProxy(proxyData);
-   }
-   if (success) {
-     // Refresh handled by store, but we might want to clear dirty flags if we kept the object
-     // Store re-fetch replaces the list, so flags are gone.
-   }
- };
+const statusDotClass = (status) => {
+  switch (status) {
+    case 'Running':
+      return 'status-dot--running';
+    case 'Stopped':
+      return 'status-dot--stopped';
+    case 'Error':
+      return 'status-dot--error';
+    default:
+      return 'status-dot--unknown';
+  }
+};
 
- const savePort = async () => {
-   if (confirm('Changing the port requires a system restart. Continue?')) {
-     await store.saveWebPort(store.webPort);
-     }
- };
+const addProxy = () => {
+  const tempId = `tmp_${Date.now()}`;
+  store.proxies.unshift({
+    id: '',
+    _tempId: tempId,
+    name: 'New Proxy',
+    listen_addr: ':5020',
+    target_addr: '127.0.0.1:502',
+    enabled: true,
+    paused: false,
+    connection_timeout: 10,
+    read_timeout: 30,
+    max_retries: 3,
+    max_read_size: 0,
+    description: '',
+    tags: '',
+    _isNew: true,
+    _showAdvanced: true
+  });
+  activeProxyKey.value = tempId;
+};
 
- const markDirty = (proxy) => {
-   if (!proxy._isNew) {
-     proxy._isDirty = true;
-     // Clear validation error on input
-     if (validationErrors.value[proxy.id]) {
-       delete validationErrors.value[proxy.id];
-     }
-   }
- };
+const removeProxy = async (id, index) => {
+  const proxy = store.proxies[index];
+  if (!id) {
+    store.proxies.splice(index, 1);
+    delete validationErrors.value[getValidationKey(proxy, index)];
+    return;
+  }
 
- const validateField = (proxy, field, value) => {
-   const errors = validators.validateProxyConfig({ ...proxy, [field]: value });
+  if (confirm('Moechtest du diesen Proxy wirklich entfernen?')) {
+    await store.deleteProxy(id);
+  }
+};
 
-   if (errors && errors[field]) {
-     validationErrors.value[proxy.id || proxy._tempId] = {
-       ...validationErrors.value[proxy.id || proxy._tempId],
-       [field]: errors[field]
-     };
-   } else if (validationErrors.value[proxy.id || proxy._tempId]) {
-     delete validationErrors.value[proxy.id || proxy._tempId][field];
-   }
- };
+const saveProxy = async (proxy, index) => {
+  const errors = validators.validateProxyConfig(proxy);
+  const validationKey = getValidationKey(proxy, index);
 
- const onReorder = () => {
-   // Backend doesn't support reordering yet (ID based list), but visually it works.
- };
+  if (errors) {
+    validationErrors.value[validationKey] = errors;
+    activeProxyKey.value = validationKey;
+    return;
+  }
+
+  delete validationErrors.value[validationKey];
+  activeSaveKey.value = validationKey;
+
+  const proxyData = {
+    ...proxy,
+    tags: normalizeTags(proxy)
+  };
+
+  let success = false;
+  if (proxy._isNew) {
+    success = await store.addProxy(proxyData);
+  } else {
+    success = await store.updateProxy(proxyData);
+  }
+
+  if (success) {
+    activeProxyKey.value = null;
+  }
+
+  activeSaveKey.value = null;
+};
+
+const savePort = async () => {
+  if (confirm('Eine Port-Aenderung erfordert einen Neustart. Fortfahren?')) {
+    await store.saveWebPort(store.webPort);
+  }
+};
+
+const markDirty = (proxy, index) => {
+  if (!proxy._isNew) {
+    proxy._isDirty = true;
+  }
+  activeProxyKey.value = getProxyKey(proxy, index);
+  delete validationErrors.value[getValidationKey(proxy, index)];
+};
+
+const onReorder = () => {
+  activeProxyKey.value = null;
+};
 </script>
+
+<style scoped>
+.config-shell {
+  color: var(--text-primary);
+}
+
+.hero-stat,
+.side-card,
+.proxy-card,
+.empty-state {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.hero-stat {
+  min-width: 0;
+  border-radius: 20px;
+  padding: 0.9rem 1rem;
+}
+
+.hero-stat-label {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+.hero-stat-value {
+  display: block;
+  margin-top: 0.45rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.proxy-card {
+  transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+.proxy-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.proxy-card--dirty {
+  border-color: rgba(125, 211, 252, 0.32);
+  box-shadow: 0 20px 50px rgba(56, 189, 248, 0.12);
+}
+
+.proxy-card--selected {
+  border-color: rgba(192, 132, 252, 0.34);
+}
+
+.proxy-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.3rem 0.65rem;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.proxy-pill--info {
+  color: #c4b5fd;
+}
+
+.proxy-pill--warning {
+  color: #fde68a;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.field-group label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+}
+
+.field-group input {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.4);
+  color: var(--text-primary);
+  padding: 0.9rem 1rem;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.field-group input:focus {
+  border-color: rgba(125, 211, 252, 0.4);
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.12);
+}
+
+.field-error {
+  color: #fda4af;
+  font-size: 0.8rem;
+}
+
+.toggle-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.65rem 0.95rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.toggle-chip input {
+  accent-color: var(--accent-strong);
+}
+
+.advanced-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.workflow-step {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+}
+
+.workflow-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+:deep(.proxy-ghost) {
+  opacity: 0.4;
+}
+
+:deep(.proxy-chosen) {
+  transform: scale(1.01);
+}
+
+:deep(.proxy-drag) {
+  cursor: grabbing;
+}
+
+@media (max-width: 768px) {
+  .hero-stat {
+    padding: 0.8rem 0.9rem;
+  }
+}
+</style>
