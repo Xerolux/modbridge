@@ -279,6 +279,8 @@ func (p *ProxyInstance) acceptLoop() {
 			}
 		}
 
+		configureTCPConn(conn)
+
 		// Check GLOBAL connection limit first (system-wide across all proxies).
 		// Use Add+check to avoid a CAS retry-loop that drops connections on contention.
 		maxConns := atomic.LoadInt64(&globalMaxConnections)
@@ -317,6 +319,17 @@ func (p *ProxyInstance) acceptLoop() {
 		p.wg.Add(1)
 		go p.handleClient(conn, sem, globalLimitApplied)
 	}
+}
+
+func configureTCPConn(conn net.Conn) {
+	tcpConn, ok := conn.(*net.TCPConn)
+	if !ok {
+		return
+	}
+
+	_ = tcpConn.SetKeepAlive(true)
+	_ = tcpConn.SetKeepAlivePeriod(30 * time.Second)
+	_ = tcpConn.SetNoDelay(true)
 }
 
 func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}, globalLimitApplied bool) {

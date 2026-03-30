@@ -12,6 +12,7 @@ import (
 	"modbridge/pkg/auth"
 	"modbridge/pkg/database"
 	"modbridge/pkg/rbac"
+	"strings"
 	"time"
 )
 
@@ -47,6 +48,11 @@ type UpdateUserRequest struct {
 }
 
 func (m *Manager) CreateUser(req *CreateUserRequest, createdBy string) (*database.User, error) {
+	req.Username = strings.TrimSpace(req.Username)
+	req.FullName = strings.TrimSpace(req.FullName)
+	req.Email = strings.TrimSpace(req.Email)
+	req.Description = strings.TrimSpace(req.Description)
+
 	if req.Username == "" {
 		return nil, errors.New("username is required")
 	}
@@ -137,6 +143,13 @@ func (m *Manager) GetAllUsers() ([]*database.User, error) {
 	return m.db.GetAllUsers()
 }
 
+func (m *Manager) GetUser(id string) (*database.User, error) {
+	if id == "" {
+		return nil, errors.New("user id is required")
+	}
+	return m.db.GetUser(id)
+}
+
 func (m *Manager) UpdateUser(id string, req *UpdateUserRequest) error {
 	user, err := m.db.GetUser(id)
 	if err != nil {
@@ -147,10 +160,20 @@ func (m *Manager) UpdateUser(id string, req *UpdateUserRequest) error {
 	}
 
 	if req.Username != "" {
+		req.Username = strings.TrimSpace(req.Username)
+		if req.Username != user.Username {
+			existing, err := m.db.GetUserByUsername(req.Username)
+			if err != nil {
+				return err
+			}
+			if existing != nil && existing.ID != id {
+				return errors.New("username already exists")
+			}
+		}
 		user.Username = req.Username
 	}
-	user.FullName = req.FullName
-	user.Email = req.Email
+	user.FullName = strings.TrimSpace(req.FullName)
+	user.Email = strings.TrimSpace(req.Email)
 	if req.Role != "" {
 		_, err := rbac.ParseRole(req.Role)
 		if err != nil {

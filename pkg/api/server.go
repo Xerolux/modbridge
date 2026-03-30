@@ -414,14 +414,17 @@ func (s *Server) handleUserByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodGet {
-		user, err := s.userMgr.GetAllUsers()
-		_ = user
+		user, err := s.userMgr.GetUser(id)
 		if err != nil {
 			http.Error(w, "Failed to get user", http.StatusInternalServerError)
 			return
 		}
+		if user == nil {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(nil)
+		json.NewEncoder(w).Encode(user)
 		return
 	}
 
@@ -480,7 +483,10 @@ func (s *Server) handleProxiesStream(w http.ResponseWriter, r *http.Request) {
 		case <-timeout.C:
 			s.log.Info("SSE stream timeout, closing connection", "")
 			return
-		case event := <-ch:
+		case event, ok := <-ch:
+			if !ok {
+				return
+			}
 			data, err := json.Marshal(event)
 			if err != nil {
 				s.log.Error("API", fmt.Sprintf("Failed to marshal SSE event: %v", err))
@@ -729,7 +735,10 @@ func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
 			return
 		case <-timeout.C:
 			return
-		case entry := <-ch:
+		case entry, ok := <-ch:
+			if !ok {
+				return
+			}
 			data, err := json.Marshal(entry)
 			if err != nil {
 				s.log.Error("API", fmt.Sprintf("Failed to marshal log entry: %v", err))

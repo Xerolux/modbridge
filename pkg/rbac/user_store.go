@@ -47,16 +47,20 @@ type User struct {
 
 // UserStore manages users
 type UserStore struct {
-	users       map[string]*User
-	usersByName map[string]*User
-	mu          sync.RWMutex
+	users        map[string]*User
+	usersByName  map[string]*User
+	usersByEmail map[string]*User
+	tokenOwners  map[string]string
+	mu           sync.RWMutex
 }
 
 // NewUserStore creates a new user store
 func NewUserStore() *UserStore {
 	store := &UserStore{
-		users:       make(map[string]*User),
-		usersByName: make(map[string]*User),
+		users:        make(map[string]*User),
+		usersByName:  make(map[string]*User),
+		usersByEmail: make(map[string]*User),
+		tokenOwners:  make(map[string]string),
 	}
 
 	// Create default admin user
@@ -74,6 +78,7 @@ func NewUserStore() *UserStore {
 
 	store.users[admin.ID] = admin
 	store.usersByName[admin.Username] = admin
+	store.usersByEmail[admin.Email] = admin
 
 	return store
 }
@@ -89,10 +94,8 @@ func (s *UserStore) CreateUser(username, email, password string, role Role) (*Us
 	}
 
 	// Check if email already exists
-	for _, user := range s.users {
-		if user.Email == email {
-			return nil, ErrUserExists
-		}
+	if _, exists := s.usersByEmail[email]; exists {
+		return nil, ErrUserExists
 	}
 
 	// Generate user ID
@@ -120,6 +123,7 @@ func (s *UserStore) CreateUser(username, email, password string, role Role) (*Us
 
 	s.users[id] = user
 	s.usersByName[username] = user
+	s.usersByEmail[email] = user
 
 	return user, nil
 }
@@ -163,10 +167,38 @@ func (s *UserStore) UpdateUser(id string, updates func(*User) error) error {
 		return ErrUserNotFound
 	}
 
-	if err := updates(user); err != nil {
+	updated := *user
+	oldUsername := user.Username
+	oldEmail := user.Email
+	if err := updates(&updated); err != nil {
 		return err
 	}
 
+	if oldUsername != updated.Username {
+		if existing, exists := s.usersByName[updated.Username]; exists && existing.ID != user.ID {
+			return ErrUserExists
+		}
+	}
+
+	if oldEmail != updated.Email && updated.Email != "" {
+		if existing, exists := s.usersByEmail[updated.Email]; exists && existing.ID != user.ID {
+			return ErrUserExists
+		}
+	}
+
+	if oldUsername != updated.Username {
+		delete(s.usersByName, oldUsername)
+		s.usersByName[updated.Username] = user
+	}
+
+	if oldEmail != updated.Email {
+		delete(s.usersByEmail, oldEmail)
+		if updated.Email != "" {
+			s.usersByEmail[updated.Email] = user
+		}
+	}
+
+	*user = updated
 	user.UpdatedAt = time.Now()
 
 	// Update permissions based on role
@@ -192,6 +224,10 @@ func (s *UserStore) DeleteUser(id string) error {
 
 	delete(s.users, id)
 	delete(s.usersByName, user.Username)
+	delete(s.usersByEmail, user.Email)
+	for _, token := range user.APITokens {
+		delete(s.tokenOwners, token)
+	}
 
 	return nil
 }
@@ -266,6 +302,7 @@ func (s *UserStore) GenerateAPIToken(userID string) (string, error) {
 
 	err = s.UpdateUser(userID, func(u *User) error {
 		u.APITokens = append(u.APITokens, token)
+		s.tokenOwners[token] = u.ID
 		return nil
 	})
 
@@ -282,6 +319,7 @@ func (s *UserStore) RevokeAPIToken(userID, token string) error {
 		for i, t := range u.APITokens {
 			if t == token {
 				u.APITokens = append(u.APITokens[:i], u.APITokens[i+1:]...)
+				delete(s.tokenOwners, token)
 				break
 			}
 		}
@@ -294,20 +332,18 @@ func (s *UserStore) ValidateAPIToken(token string) (*User, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	for _, user := range s.users {
-		if !user.Active {
-			continue
-		}
-
-		for _, t := range user.APITokens {
-			if t == token {
-				copy := *user
-				return &copy, nil
-			}
-		}
+	userID, ok := s.tokenOwners[token]
+	if !ok {
+		return nil, ErrInvalidToken
 	}
 
-	return nil, ErrInvalidToken
+	user, ok := s.users[userID]
+	if !ok || !user.Active {
+		return nil, ErrInvalidToken
+	}
+
+	copy := *user
+	return &copy, nil
 }
 
 // CheckPermission checks if a user has a specific permission
@@ -397,14 +433,7 @@ func (rp *RequirePermission) Check(user *User) bool {
 	if !user.Active {
 		return false
 	}
-
-	for _, p := range user.Permissions {
-		if p == rp.permission {
-			return true
-		}
-	}
-
-	return false
+	return HasPermission(user.Role, rp.permission)
 }
 
 // CheckPermission is a convenience function to check permissions
@@ -421,17 +450,9 @@ func CheckPermission(store *UserStore, userID string, permission Permission) (*P
 		Role:       user.Role,
 	}
 
-	hasPerm := false
-	for _, p := range user.Permissions {
-		if p == permission {
-			hasPerm = true
-			break
-		}
-	}
+	result.Allowed = HasPermission(user.Role, permission)
 
-	result.Allowed = hasPerm
-
-	if !hasPerm {
+	if !result.Allowed {
 		now := time.Now()
 		result.DeniedAt = now
 	}

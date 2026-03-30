@@ -32,14 +32,23 @@ type User struct {
 
 // UserStore manages users.
 type UserStore struct {
-	mu    sync.RWMutex
-	users map[string]*User
+	mu              sync.RWMutex
+	users           map[string]*User
+	usersByUsername map[string]*User
+}
+
+var roleHierarchy = map[UserRole]int{
+	RoleAdmin:    4,
+	RoleEditor:   3,
+	RoleViewer:   2,
+	RoleReadOnly: 1,
 }
 
 // NewUserStore creates a new user store.
 func NewUserStore() *UserStore {
 	return &UserStore{
-		users: make(map[string]*User),
+		users:           make(map[string]*User),
+		usersByUsername: make(map[string]*User),
 	}
 }
 
@@ -51,8 +60,12 @@ func (s *UserStore) AddUser(user *User) error {
 	if _, exists := s.users[user.ID]; exists {
 		return errors.New("user already exists")
 	}
+	if _, exists := s.usersByUsername[user.Username]; exists {
+		return errors.New("user already exists")
+	}
 
 	s.users[user.ID] = user
+	s.usersByUsername[user.Username] = user
 	return nil
 }
 
@@ -61,7 +74,10 @@ func (s *UserStore) RemoveUser(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	delete(s.users, id)
+	if user, exists := s.users[id]; exists {
+		delete(s.usersByUsername, user.Username)
+		delete(s.users, id)
+	}
 }
 
 // GetUser retrieves a user by ID.
@@ -78,12 +94,8 @@ func (s *UserStore) GetByUsername(username string) (*User, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	for _, user := range s.users {
-		if user.Username == username {
-			return user, true
-		}
-	}
-	return nil, false
+	user, exists := s.usersByUsername[username]
+	return user, exists
 }
 
 // GetAllUsers returns all users.
@@ -107,7 +119,20 @@ func (s *UserStore) UpdateUser(user *User) error {
 		return errors.New("user not found")
 	}
 
+	existing, exists := s.users[user.ID]
+	if !exists {
+		return errors.New("user not found")
+	}
+
+	if existing.Username != user.Username {
+		if _, taken := s.usersByUsername[user.Username]; taken {
+			return errors.New("user already exists")
+		}
+		delete(s.usersByUsername, existing.Username)
+	}
+
 	s.users[user.ID] = user
+	s.usersByUsername[user.Username] = user
 	return nil
 }
 
@@ -115,13 +140,6 @@ func (s *UserStore) UpdateUser(user *User) error {
 func (u *User) HasPermission(requiredRole UserRole) bool {
 	if u.Role == RoleAdmin {
 		return true
-	}
-
-	roleHierarchy := map[UserRole]int{
-		RoleAdmin:    4,
-		RoleEditor:   3,
-		RoleViewer:   2,
-		RoleReadOnly: 1,
 	}
 
 	return roleHierarchy[u.Role] >= roleHierarchy[requiredRole]
