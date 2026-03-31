@@ -419,6 +419,7 @@ const fetchData = async (isInitial = false) => {
     error.value = true;
     errorMessage.value = typeof errorData === 'string' ? errorData : requestError.message || 'Unbekannter Fehler';
     if (isInitial) loading.value = false;
+    throw requestError;
   }
 };
 
