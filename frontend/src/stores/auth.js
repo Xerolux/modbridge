@@ -34,14 +34,14 @@ export const useAuthStore = defineStore('auth', () => {
       }
       isAuthenticated.value = true
     } catch {
+      // Let router handle setup logic by redirecting unauthenticated users
       try {
         await axios.get('/api/status')
-        isAuthenticated.value = true
-        user.value = { userId: 'admin', username: 'admin', role: 'admin', permissions: [] }
       } catch {
-        isAuthenticated.value = false
-        user.value = { userId: '', username: '', role: '', permissions: [] }
+        // Ignore error
       }
+      isAuthenticated.value = false
+      user.value = { userId: '', username: '', role: '', permissions: [] }
     } finally {
       checking.value = false
     }
