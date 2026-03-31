@@ -52,3 +52,4 @@ node_modules/
 modbridge.db*
 test_db.sqlite*
 test_config.json
+venv/

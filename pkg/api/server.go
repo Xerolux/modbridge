@@ -128,6 +128,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	}
 
 	// Protected routes
+	mux.HandleFunc("/api/me", authMW(s.handleMe))
 	mux.HandleFunc("/api/users", authMW(s.handleUsers))
 	mux.HandleFunc("/api/users/", authMW(s.handleUserByID))
 	mux.HandleFunc("/api/proxies", authMW(s.handleProxies))
@@ -750,6 +751,35 @@ func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 			timeout.Reset(30 * time.Minute)
 		}
+	}
+}
+
+func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	c, err := r.Cookie("session_token")
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	session := s.auth.GetSession(c.Value)
+	if session == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"user_id":     session.UserID,
+		"username":    session.Username,
+		"role":        session.Role,
+		"permissions": []string{},
+	}); err != nil {
+		s.log.Error("API", fmt.Sprintf("Failed to encode /api/me response: %v", err))
 	}
 }
 
