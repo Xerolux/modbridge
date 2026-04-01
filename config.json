@@ -15,7 +15,8 @@
       "max_retries": 3,
       "description": "Verbindet sich mit SolarEdge Anlage und verteilt Daten an mehrere Clients",
       "max_read_size": 0,
-      "tags": []
+      "tags": [],
+      "protocol": ""
     }
   ],
   "log_level": "DEBUG",

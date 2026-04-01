@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"modbridge/pkg/config"
+	"modbridge/pkg/database"
 	"modbridge/pkg/logger"
 	"modbridge/pkg/portmanager"
 	"net"
@@ -377,4 +378,66 @@ func (s *Server) handleProxyConnectivityCheck(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(results)
+}
+
+func (s *Server) handleAuditLogs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.auditor == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]interface{}{})
+		return
+	}
+
+	limit := 50
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	offset := 0
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+
+	logs, err := s.auditor.GetLogs(limit, offset)
+	if err != nil {
+		http.Error(w, "Failed to load audit logs", http.StatusInternalServerError)
+		return
+	}
+
+	if logs == nil {
+		logs = []*database.AuditLogEntry{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(logs)
+}
+
+func (s *Server) handleAuditLogsExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.auditor == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]interface{}{})
+		return
+	}
+
+	data, err := s.auditor.ExportLogsJSON(10000)
+	if err != nil {
+		http.Error(w, "Failed to export audit logs", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", "attachment; filename=audit_logs.json")
+	_, _ = w.Write([]byte(data))
 }

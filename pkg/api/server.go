@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"modbridge/pkg/audit"
 	"modbridge/pkg/auth"
 	"modbridge/pkg/config"
 	"modbridge/pkg/database"
@@ -52,6 +53,7 @@ type Server struct {
 	validator        *middleware.Validator
 	metrics          *metrics.Metrics
 	userMgr          *users.Manager
+	auditor          *audit.Auditor
 }
 
 // NewServer creates a new API server.
@@ -79,6 +81,11 @@ func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator,
 		userMgr = users.NewManager(db)
 	}
 
+	var auditorInstance *audit.Auditor
+	if db != nil {
+		auditorInstance = audit.NewAuditor(db)
+	}
+
 	return &Server{
 		cfgMgr:           cfg,
 		mgr:              mgr,
@@ -92,6 +99,7 @@ func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator,
 		validator:        validator,
 		metrics:          metrics.NewMetrics(),
 		userMgr:          userMgr,
+		auditor:          auditorInstance,
 	}
 }
 
@@ -179,6 +187,8 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/logs", authMW(s.handleLogs))
 	mux.HandleFunc("/api/logs/download", authMW(s.handleLogDownload))
 	mux.HandleFunc("/api/logs/stream", authMW(s.handleLogStream))
+	mux.HandleFunc("/api/audit/logs", authMW(s.handleAuditLogs))
+	mux.HandleFunc("/api/audit/logs/export", authMW(s.handleAuditLogsExport))
 	mux.HandleFunc("/api/config/export", authMW(s.handleConfigExport))
 	mux.HandleFunc("/api/config/import", csrfMW(s.handleConfigImport))
 	mux.HandleFunc("/api/config/webport", csrfMW(s.handleWebPort))
