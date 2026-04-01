@@ -2,23 +2,7 @@
   "web_port": ":8080",
   "admin_pass_hash": "",
   "force_password_change": false,
-  "proxies": [
-    {
-      "id": "test-id",
-      "name": "Test Proxy",
-      "listen_addr": ":5020",
-      "target_addr": "192.168.1.100:502",
-      "enabled": false,
-      "paused": false,
-      "connection_timeout": 5,
-      "read_timeout": 5,
-      "max_retries": 3,
-      "description": "",
-      "max_read_size": 100,
-      "tags": [],
-      "protocol": ""
-    }
-  ],
+  "proxies": [],
   "log_level": "INFO",
   "log_max_size": 100,
   "log_max_files": 10,
@@ -28,8 +12,7 @@
   "tls_key_file": "",
   "session_timeout": 24,
   "cors_allowed_origins": [
-    "http://localhost:3000",
-    "http://localhost:8080"
+    "https://example.com"
   ],
   "cors_allowed_methods": [
     "GET",
