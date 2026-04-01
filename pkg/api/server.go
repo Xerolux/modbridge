@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,16 +56,18 @@ type Server struct {
 
 // NewServer creates a new API server.
 func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator, l *logger.Logger, db *database.DB) *Server {
-	// Generate random CSRF secret at startup
-	csrfSecretBytes := make([]byte, 32)
-	if _, err := rand.Read(csrfSecretBytes); err != nil {
-		l.Error("SYSTEM", "Failed to generate CSRF secret, using fallback")
-		csrfSecretBytes = []byte("fallback-secret-change-in-production")
+	csrfSecret, err := buildCSRFSecret()
+	if err != nil {
+		panic(fmt.Sprintf("failed to initialize CSRF secret: %v", err))
 	}
-	csrfSecret := hex.EncodeToString(csrfSecretBytes)
+
+	corsAllowedOrigins := []string{}
+	if cfg != nil {
+		corsAllowedOrigins = cfg.Get().CORSAllowedOrigins
+	}
 
 	// Initialize middlewares
-	corsMW := middleware.NewCORSMiddleware([]string{})
+	corsMW := middleware.NewCORSMiddleware(corsAllowedOrigins)
 	secMW := middleware.NewSecurityMiddleware()
 	rateLimiter := middleware.NewRateLimiter(60, 100)
 	loginRateLimiter := middleware.NewRateLimiter(5, 10)
@@ -92,6 +95,25 @@ func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator,
 	}
 }
 
+func buildCSRFSecret() (string, error) {
+	if configured := strings.TrimSpace(os.Getenv("MODBRIDGE_CSRF_SECRET")); configured != "" {
+		return configured, nil
+	}
+
+	goEnv := strings.ToLower(strings.TrimSpace(os.Getenv("GO_ENV")))
+	modbridgeEnv := strings.ToLower(strings.TrimSpace(os.Getenv("MODBRIDGE_ENV")))
+	if goEnv == "production" || modbridgeEnv == "production" {
+		return "", fmt.Errorf("MODBRIDGE_CSRF_SECRET is required in production")
+	}
+
+	csrfSecretBytes := make([]byte, 32)
+	if _, err := rand.Read(csrfSecretBytes); err != nil {
+		return "", fmt.Errorf("crypto/rand failed: %w", err)
+	}
+
+	return hex.EncodeToString(csrfSecretBytes), nil
+}
+
 // Routes registers routes.
 func (s *Server) Routes(mux *http.ServeMux) {
 	// Helper function to compose middlewares
@@ -105,9 +127,27 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	}
 
 	// Common middlewares
+	authMiddleware := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		}
+	}
+	if s.auth != nil {
+		authMiddleware = s.auth.Middleware
+	}
+
+	csrfMiddleware := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "CSRF protection unavailable", http.StatusServiceUnavailable)
+		}
+	}
+	if s.csrf != nil {
+		csrfMiddleware = s.csrf.Middleware
+	}
+
 	publicMW := compose(s.cors.Middleware, s.security.Middleware, s.rateLimiter.Middleware)
-	authMW := compose(s.cors.Middleware, s.security.Middleware, s.auth.Middleware)
-	csrfMW := compose(s.cors.Middleware, s.security.Middleware, s.auth.Middleware, s.csrf.Middleware)
+	authMW := compose(s.cors.Middleware, s.security.Middleware, authMiddleware)
+	csrfMW := compose(s.cors.Middleware, s.security.Middleware, authMiddleware, csrfMiddleware)
 
 	// Public routes
 	mux.HandleFunc("/api/health", publicMW(s.handleHealth))
@@ -119,7 +159,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 
 	// Pprof endpoints (debug mode only)
 	if os.Getenv("DEBUG") == "true" {
-		debugMW := compose(s.cors.Middleware, s.security.Middleware, s.auth.Middleware)
+		debugMW := compose(s.cors.Middleware, s.security.Middleware, authMiddleware)
 		mux.Handle("/debug/pprof/", debugMW(pprof.Index))
 		mux.Handle("/debug/pprof/cmdline", debugMW(pprof.Cmdline))
 		mux.Handle("/debug/pprof/profile", debugMW(pprof.Profile))
@@ -128,6 +168,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	}
 
 	// Protected routes
+	mux.HandleFunc("/api/me", authMW(s.handleMe))
 	mux.HandleFunc("/api/users", authMW(s.handleUsers))
 	mux.HandleFunc("/api/users/", authMW(s.handleUserByID))
 	mux.HandleFunc("/api/proxies", authMW(s.handleProxies))
@@ -165,23 +206,42 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	ready := map[string]interface{}{
-		"ready": true,
-		"checks": map[string]interface{}{
-			"server": "ok",
-		},
+	checks := map[string]string{
+		"server": "ok",
+	}
+	ready := true
+
+	if s.cfgMgr == nil {
+		checks["config"] = "missing"
+		ready = false
+	} else {
+		cfg := s.cfgMgr.Get()
+		if strings.TrimSpace(cfg.WebPort) == "" {
+			checks["config"] = "invalid"
+			ready = false
+		} else {
+			checks["config"] = "ok"
+		}
 	}
 
-	// Basic readiness check - server is ready if it's running
-	// More sophisticated checks can be added here (database, modbus targets, etc.)
-	statusCode := http.StatusOK
+	if s.mgr == nil {
+		checks["manager"] = "missing"
+		ready = false
+	} else {
+		checks["manager"] = "ok"
+	}
 
-	if !ready["ready"].(bool) {
+	statusCode := http.StatusOK
+	if !ready {
 		statusCode = http.StatusServiceUnavailable
 	}
 
 	w.WriteHeader(statusCode)
-	if err := json.NewEncoder(w).Encode(ready); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"ready":     ready,
+		"checks":    checks,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
 		s.log.Error("API", fmt.Sprintf("Failed to encode ready response: %v", err))
 	}
 }
@@ -189,14 +249,103 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 // handleMetrics returns Prometheus metrics.
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-	w.Write([]byte(s.metrics.GetPrometheusMetrics()))
+	var output strings.Builder
+	output.WriteString(s.metrics.GetPrometheusMetrics())
+
+	if s.mgr != nil {
+		proxies := s.mgr.GetProxies()
+		if len(proxies) > 0 {
+			output.WriteString("# HELP modbridge_proxy_requests_current Current request counter snapshot per proxy\n")
+			output.WriteString("# TYPE modbridge_proxy_requests_current gauge\n")
+			output.WriteString("# HELP modbridge_proxy_errors_current Current error counter snapshot per proxy\n")
+			output.WriteString("# TYPE modbridge_proxy_errors_current gauge\n")
+			output.WriteString("# HELP modbridge_proxy_active_connections_current Current active connections per proxy\n")
+			output.WriteString("# TYPE modbridge_proxy_active_connections_current gauge\n")
+			output.WriteString("# HELP modbridge_proxy_latency_p95_ms Current p95 latency in milliseconds per proxy\n")
+			output.WriteString("# TYPE modbridge_proxy_latency_p95_ms gauge\n")
+			output.WriteString("# HELP modbridge_proxy_status_running 1 when proxy is running, else 0\n")
+			output.WriteString("# TYPE modbridge_proxy_status_running gauge\n")
+
+			for _, proxyData := range proxies {
+				id, _ := proxyData["id"].(string)
+				if id == "" {
+					continue
+				}
+				label := fmt.Sprintf(`proxy_id="%s"`, escapePrometheusLabelValue(id))
+				output.WriteString(fmt.Sprintf("modbridge_proxy_requests_current{%s} %d\n", label, getInt64MetricValue(proxyData["requests"])))
+				output.WriteString(fmt.Sprintf("modbridge_proxy_errors_current{%s} %d\n", label, getInt64MetricValue(proxyData["errors"])))
+				output.WriteString(fmt.Sprintf("modbridge_proxy_active_connections_current{%s} %d\n", label, getInt64MetricValue(proxyData["active_connections"])))
+				output.WriteString(fmt.Sprintf("modbridge_proxy_latency_p95_ms{%s} %f\n", label, getFloat64MetricValue(proxyData["latency_p95_ms"])))
+
+				status, _ := proxyData["status"].(string)
+				running := 0
+				if status == "Running" {
+					running = 1
+				}
+				output.WriteString(fmt.Sprintf("modbridge_proxy_status_running{%s} %d\n", label, running))
+			}
+			output.WriteString("\n")
+		}
+	}
+
+	_, _ = w.Write([]byte(output.String()))
+}
+
+func escapePrometheusLabelValue(v string) string {
+	v = strings.ReplaceAll(v, "\\", "\\\\")
+	v = strings.ReplaceAll(v, "\"", "\\\"")
+	v = strings.ReplaceAll(v, "\n", "\\n")
+	return v
+}
+
+func getInt64MetricValue(v interface{}) int64 {
+	switch n := v.(type) {
+	case int64:
+		return n
+	case int:
+		return int64(n)
+	case float64:
+		return int64(n)
+	case json.Number:
+		parsed, err := n.Int64()
+		if err == nil {
+			return parsed
+		}
+	}
+	return 0
+}
+
+func getFloat64MetricValue(v interface{}) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case int64:
+		return float64(n)
+	case int:
+		return float64(n)
+	case json.Number:
+		parsed, err := n.Float64()
+		if err == nil {
+			return parsed
+		}
+	case string:
+		parsed, err := strconv.ParseFloat(n, 64)
+		if err == nil {
+			return parsed
+		}
+	}
+	return 0
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	cfg := s.cfgMgr.Get()
+	proxies := []map[string]interface{}{}
+	if s.mgr != nil {
+		proxies = s.mgr.GetProxies()
+	}
 	status := map[string]interface{}{
 		"setup_required": cfg.AdminPassHash == "",
-		"proxies":        s.mgr.GetProxies(),
+		"proxies":        proxies,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(status); err != nil {
@@ -280,6 +429,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Generate and set CSRF token
 	csrfToken := s.csrf.GenerateToken(token)
+	if csrfToken == "" {
+		http.Error(w, "Failed to generate CSRF token", http.StatusInternalServerError)
+		return
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "csrf_token",
 		Value:    csrfToken,
@@ -296,6 +449,39 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		"force_password_change": cfg.ForcePasswordChange,
 	}); err != nil {
 		s.log.Error("API", fmt.Sprintf("Failed to encode login response: %v", err))
+	}
+}
+
+func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.auth == nil {
+		http.Error(w, "Auth backend unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	c, err := r.Cookie("session_token")
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	session := s.auth.GetSession(c.Value)
+	if session == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"user_id":     session.UserID,
+		"username":    session.Username,
+		"role":        session.Role,
+		"permissions": []string{},
+	}); err != nil {
+		s.log.Error("API", fmt.Sprintf("Failed to encode /api/me response: %v", err))
 	}
 }
 
@@ -459,6 +645,11 @@ func (s *Server) handleUserByID(w http.ResponseWriter, r *http.Request) {
 
 // handleProxiesStream streams proxy updates via SSE
 func (s *Server) handleProxiesStream(w http.ResponseWriter, r *http.Request) {
+	if s.mgr == nil {
+		http.Error(w, "Proxy manager unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
@@ -475,11 +666,19 @@ func (s *Server) handleProxiesStream(w http.ResponseWriter, r *http.Request) {
 
 	timeout := time.NewTimer(30 * time.Minute)
 	defer timeout.Stop()
+	heartbeat := time.NewTicker(15 * time.Second)
+	defer heartbeat.Stop()
 
 	for {
 		select {
 		case <-r.Context().Done():
 			return
+		case <-heartbeat.C:
+			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
+				return
+			}
+			flusher.Flush()
+			timeout.Reset(30 * time.Minute)
 		case <-timeout.C:
 			s.log.Info("SSE stream timeout, closing connection", "")
 			return
@@ -712,6 +911,11 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
+	if s.log == nil {
+		http.Error(w, "Logger unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
@@ -728,11 +932,19 @@ func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
 
 	timeout := time.NewTimer(30 * time.Minute)
 	defer timeout.Stop()
+	heartbeat := time.NewTicker(15 * time.Second)
+	defer heartbeat.Stop()
 
 	for {
 		select {
 		case <-r.Context().Done():
 			return
+		case <-heartbeat.C:
+			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
+				return
+			}
+			flusher.Flush()
+			timeout.Reset(30 * time.Minute)
 		case <-timeout.C:
 			return
 		case entry, ok := <-ch:
