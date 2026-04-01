@@ -307,6 +307,7 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 	res := make([]map[string]interface{}, 0, len(m.proxies))
 	for _, p := range m.proxies {
 		status := &p.Stats
+		latency := p.LatencyPercentiles()
 		uptime := time.Duration(0)
 		if status.GetStatus() == "Running" {
 			uptime = time.Since(status.GetLastStart())
@@ -326,6 +327,10 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 			"requests":           status.Requests.Load(),
 			"errors":             status.Errors.Load(),
 			"active_connections": status.ActiveConns.Load(),
+			"latency_mean_ms":    latency.Mean.Seconds() * 1000,
+			"latency_p50_ms":     latency.P50.Seconds() * 1000,
+			"latency_p95_ms":     latency.P95.Seconds() * 1000,
+			"latency_p99_ms":     latency.P99.Seconds() * 1000,
 			"description":        pCfg.Description,
 			"connection_timeout": pCfg.ConnectionTimeout,
 			"read_timeout":       pCfg.ReadTimeout,
@@ -428,6 +433,7 @@ func (m *Manager) getProxyStatus(id string) map[string]interface{} {
 	}
 
 	status := &p.Stats
+	latency := p.LatencyPercentiles()
 	uptime := time.Duration(0)
 	if status.GetStatus() == "Running" {
 		uptime = time.Since(status.GetLastStart())
@@ -447,6 +453,10 @@ func (m *Manager) getProxyStatus(id string) map[string]interface{} {
 		"requests":           status.Requests.Load(),
 		"errors":             status.Errors.Load(),
 		"active_connections": status.ActiveConns.Load(),
+		"latency_mean_ms":    latency.Mean.Seconds() * 1000,
+		"latency_p50_ms":     latency.P50.Seconds() * 1000,
+		"latency_p95_ms":     latency.P95.Seconds() * 1000,
+		"latency_p99_ms":     latency.P99.Seconds() * 1000,
 		"description":        pCfg.Description,
 		"connection_timeout": pCfg.ConnectionTimeout,
 		"read_timeout":       pCfg.ReadTimeout,
