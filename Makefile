@@ -1,4 +1,4 @@
-.PHONY: help build test clean run docker-build docker-run lint coverage
+.PHONY: help build test clean run docker-build docker-run lint coverage bench bench-ci openapi openapi-check
 
 # Variables
 BINARY_NAME=modbridge
@@ -35,6 +35,25 @@ build-all: ## Build for all platforms
 test: ## Run tests
 	@echo "Running tests..."
 	go list -f '{{if or (len .TestGoFiles) (len .XTestGoFiles)}}{{.ImportPath}}{{end}}' ./... | xargs go test -v -race -coverprofile=coverage.txt -covermode=atomic
+
+bench: ## Run performance benchmarks
+	@echo "Running benchmarks..."
+	go test -run '^$$' -bench 'BenchmarkProxy(Connection|Request|Concurrent)$$' -benchmem ./pkg/testing/performance
+
+bench-ci: ## Run benchmark regression guardrails for CI
+	@echo "Running benchmark guardrails..."
+	./scripts/ci/check_bench.sh
+
+openapi: ## Generate OpenAPI spec file
+	@echo "Generating docs/openapi.json..."
+	go run ./cmd/openapi > docs/openapi.json
+
+openapi-check: ## Verify generated OpenAPI spec matches committed file
+	@echo "Checking OpenAPI spec consistency..."
+	go run ./cmd/openapi > docs/openapi.generated.json
+	python -m json.tool docs/openapi.generated.json > /dev/null
+	diff -u docs/openapi.json docs/openapi.generated.json
+	rm -f docs/openapi.generated.json
 
 coverage: test ## Generate coverage report
 	@echo "Generating coverage report..."

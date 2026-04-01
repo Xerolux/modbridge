@@ -1,0 +1,43 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "ModBridge API",
+    "description": "Modbus TCP Proxy Manager API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080"
+    }
+  ],
+  "paths": {
+    "/api/v1/devices": {
+      "get": {
+        "summary": "List all devices",
+        "description": "",
+        "operationId": "listDevices",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Device": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
