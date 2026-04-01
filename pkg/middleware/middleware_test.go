@@ -6,6 +6,7 @@
 package middleware
 
 import (
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -177,6 +178,34 @@ func TestRateLimiter(t *testing.T) {
 			if !rl.allow("ip2") {
 				t.Error("IP2 should be allowed")
 			}
+		}
+	})
+}
+
+func TestRateLimiterGetClientIP(t *testing.T) {
+	rl := NewRateLimiter(10, 20)
+
+	t.Run("x-forwarded-for", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("X-Forwarded-For", "203.0.113.10, 198.51.100.1")
+		if got := rl.getClientIP(req); got != "203.0.113.10" {
+			t.Fatalf("expected first forwarded IP, got %q", got)
+		}
+	})
+
+	t.Run("x-real-ip", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("X-Real-IP", "198.51.100.20")
+		if got := rl.getClientIP(req); got != "198.51.100.20" {
+			t.Fatalf("expected X-Real-IP, got %q", got)
+		}
+	})
+
+	t.Run("remote-addr-with-port", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "192.0.2.55:54321"
+		if got := rl.getClientIP(req); got != "192.0.2.55" {
+			t.Fatalf("expected stripped remote address, got %q", got)
 		}
 	})
 }

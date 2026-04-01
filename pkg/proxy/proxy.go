@@ -87,6 +87,14 @@ type ProxyInstance struct {
 	Stats Stats
 }
 
+// LatencyPercentiles returns current latency percentile snapshot.
+func (p *ProxyInstance) LatencyPercentiles() LatencyPercentiles {
+	if p.enhancedStats == nil {
+		return LatencyPercentiles{}
+	}
+	return p.enhancedStats.GetPercentiles()
+}
+
 type Stats struct {
 	Uptime        time.Duration
 	lastStartNano atomic.Int64 // stores UnixNano; use SetLastStart/GetLastStart

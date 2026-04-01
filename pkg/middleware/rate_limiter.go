@@ -6,6 +6,7 @@
 package middleware
 
 import (
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -99,9 +100,8 @@ func (rl *RateLimiter) getClientIP(r *http.Request) string {
 	// Check X-Forwarded-For header
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		ips := strings.Split(xff, ",")
-		if len(ips) > 0 {
-			ip := strings.TrimSpace(ips[0])
-			if ip != "" {
+		for _, rawIP := range ips {
+			if ip := normalizeIP(rawIP); ip != "" {
 				return ip
 			}
 		}
@@ -109,11 +109,39 @@ func (rl *RateLimiter) getClientIP(r *http.Request) string {
 
 	// Check X-Real-IP header
 	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return xri
+		if ip := normalizeIP(xri); ip != "" {
+			return ip
+		}
 	}
 
 	// Fallback to RemoteAddr
-	return r.RemoteAddr
+	if ip := normalizeIP(r.RemoteAddr); ip != "" {
+		return ip
+	}
+
+	return "unknown"
+}
+
+func normalizeIP(candidate string) string {
+	candidate = strings.TrimSpace(candidate)
+	if candidate == "" {
+		return ""
+	}
+
+	if ip := net.ParseIP(candidate); ip != nil {
+		return ip.String()
+	}
+
+	host, _, err := net.SplitHostPort(candidate)
+	if err != nil {
+		return candidate
+	}
+
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.String()
+	}
+
+	return host
 }
 
 // cleanup removes inactive clients
