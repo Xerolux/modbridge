@@ -48,6 +48,13 @@ type Logger struct {
 // NewLogger creates a new logger.
 func NewLogger(logDir string, bufferSize int) (*Logger, error) {
 	if logDir != "" {
+		if info, err := os.Stat(logDir); err == nil {
+			if !info.IsDir() {
+				if err := os.Remove(logDir); err != nil {
+					return nil, fmt.Errorf("failed to remove existing file at log path %s: %w", logDir, err)
+				}
+			}
+		}
 		if err := os.MkdirAll(logDir, 0755); err != nil {
 			return nil, fmt.Errorf("failed to create log directory: %w", err)
 		}
