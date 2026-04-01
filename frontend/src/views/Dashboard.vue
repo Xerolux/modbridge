@@ -90,7 +90,7 @@
         </div>
 
         <div
-          v-if="widgets.length === 0"
+          v-if="widgets.length === 0 && !grid"
           class="empty-grid rounded-[24px] border border-dashed border-white/15 p-10 text-center"
         >
           <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5">
@@ -103,9 +103,8 @@
         </div>
 
         <div
-          v-else
           class="grid-stack-dashboard grid-stack min-h-[60vh] sm:min-h-[520px] rounded-[24px] border border-white/10"
-          :class="{ 'grid-stack-dashboard--editing': layoutEditing }"
+          :class="{ 'grid-stack-dashboard--editing': layoutEditing, 'hidden': widgets.length === 0 }"
         >
           <div v-if="layoutEditing" class="layout-edit-banner">
             <i class="pi pi-arrows-alt"></i>
@@ -261,7 +260,9 @@ const initializeGrid = () => {
         { w: 1536, c: 6 }
       ]
     }
-  });
+  }, '.grid-stack-dashboard');
+
+  if (!grid.value) return;
 
   syncGridInteractivity();
 
@@ -280,13 +281,15 @@ const initializeGrid = () => {
     layoutEditing.value = false;
     saveLayout();
   });
+
+  const currentWidgets = [...widgets.value];
+  widgets.value = [];
+  currentWidgets.forEach(item => addWidgetToGrid(item));
 };
 
 onMounted(async () => {
   try {
     await fetchData(true);
-    initializeGrid();
-    window.addEventListener('resize', handleResize);
 
     let layoutToLoad = getStoredLayout();
     if (!layoutToLoad.length) {
@@ -294,6 +297,9 @@ onMounted(async () => {
     }
 
     loadGrid(layoutToLoad);
+    await nextTick();
+    initializeGrid();
+    window.addEventListener('resize', handleResize);
 
     const { data, disconnect } = useEventSource('/api/proxies/stream');
     sseDisconnect = disconnect;
@@ -352,10 +358,14 @@ const updateProxyCollection = (proxyData) => {
 };
 
 const loadGrid = (layout) => {
-  if (!grid.value) return;
-  grid.value.removeAll();
   widgets.value = [];
-  layout.forEach(addWidgetToGrid);
+  if (grid.value) {
+    grid.value.removeAll();
+  }
+  layout.forEach(item => {
+    const id = item.id || `w_${item.proxy_id || Date.now()}`;
+    widgets.value.push({ ...item, id });
+  });
 };
 
 const addWidgetToGrid = (item) => {
@@ -388,20 +398,22 @@ const saveLayout = () => {
   if (!grid.value) return;
 
   const items = grid.value.getGridItems();
-  const layout = items.map((item) => {
-    const widget = widgets.value.find(entry => entry.id === item.gridstackNode.id);
-    return {
-      x: item.gridstackNode.x,
-      y: item.gridstackNode.y,
-      w: item.gridstackNode.w,
-      h: item.gridstackNode.h,
-      id: item.gridstackNode.id,
-      proxy_id: widget?.proxy_id || '',
-      title: widget?.title || '',
-      unit: widget?.unit || '',
-      status: widget?.status || ''
-    };
-  });
+  const layout = items
+    .filter((item) => item.gridstackNode)
+    .map((item) => {
+      const widget = widgets.value.find(entry => entry.id === item.gridstackNode.id);
+      return {
+        x: item.gridstackNode.x,
+        y: item.gridstackNode.y,
+        w: item.gridstackNode.w,
+        h: item.gridstackNode.h,
+        id: item.gridstackNode.id,
+        proxy_id: widget?.proxy_id || '',
+        title: widget?.title || '',
+        unit: widget?.unit || '',
+        status: widget?.status || ''
+      };
+    });
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
 };
