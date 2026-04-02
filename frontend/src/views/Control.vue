@@ -1,7 +1,7 @@
 <template>
     <div class="p-4 flex flex-col gap-4">
         <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
-            <h1 class="text-xl sm:text-2xl font-bold text-white">Proxy Control</h1>
+            <h1 class="text-xl sm:text-2xl font-bold text-surface-900 dark:text-white">Proxy Control</h1>
             <div class="flex flex-wrap gap-2">
                 <Button
                     v-if="auth.hasPermission('proxy:edit')"
@@ -72,7 +72,7 @@
                                  <div v-if="editMode" class="drag-handle cursor-grab active:cursor-grabbing p-1 rounded-lg hover:bg-white/10 transition-colors">
                                      <i class="pi pi-bars text-gray-400 text-sm"></i>
                                  </div>
-                                 <span class="text-lg font-semibold text-white truncate" :title="proxy.name">{{ proxy.name }}</span>
+                                 <span class="text-lg font-semibold text-surface-900 dark:text-white truncate" :title="proxy.name">{{ proxy.name }}</span>
                              </div>
                              <Tag :severity="getSeverity(proxy.status)" :value="proxy.status" class="rounded-xl" />
                          </div>
@@ -245,7 +245,7 @@
                      <div v-for="(log, index) in proxyLogs" :key="index" class="border-b border-white/5 pb-1">
                           <span class="text-gray-400">[{{ formatTime(log.timestamp) }}]</span>
                          <span :class="getLogLevelColor(log.level)" class="mx-2 font-bold">{{ log.level }}</span>
-                         <span class="text-white">{{ log.message }}</span>
+                         <span class="text-surface-900 dark:text-white">{{ log.message }}</span>
                      </div>
                  </div>
              </div>

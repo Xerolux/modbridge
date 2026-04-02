@@ -17,7 +17,7 @@
                     <Tab v-if="auth.hasPermission('config:edit')" value="5" class="shrink-0">Advanced</Tab>
                 </TabList>
 
-                <TabPanels class="glass-card rounded-b-3xl text-white p-2 sm:p-4 border border-white/10 border-t-0">
+                <TabPanels class="glass-card rounded-b-3xl text-surface-900 dark:text-white p-2 sm:p-4 border border-white/10 border-t-0">
                     <TabPanel value="0">
                         <ConfigForm />
                     </TabPanel>
