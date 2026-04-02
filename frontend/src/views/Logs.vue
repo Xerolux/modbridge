@@ -116,7 +116,7 @@
           </div>
           <div>
               <span class="text-blue-300">{{ log.proxy_id || 'SYSTEM' }}:</span>
-              <span class="text-white ml-2">{{ log.message }}</span>
+              <span class="text-surface-900 dark:text-white ml-2">{{ log.message }}</span>
           </div>
         </div>
       </div>
