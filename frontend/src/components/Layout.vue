@@ -122,10 +122,8 @@
                    <div class="flex items-center gap-4 pl-2">
                        <Button v-if="isMobile" icon="pi pi-bars" text rounded @click="mobileMenuVisible = true" class="text-white hover:bg-white/10" />
                        <div class="flex items-center gap-2 cursor-pointer" @click="navigate('/')">
-                           <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-blue-500 flex items-center justify-center shadow-lg shadow-primary-500/20">
-                               <i class="pi pi-bolt text-white text-sm"></i>
-                           </div>
-                           <span class="text-xl font-bold tracking-tight text-white hidden sm:block">ModBridge</span>
+                           <img src="../assets/logo.png" alt="ModBridge Logo" class="w-8 h-8 object-contain" />
+                           <span class="text-xl font-bold tracking-tight text-surface-900 dark:text-white hidden sm:block">ModBridge</span>
                        </div>
                    </div>
                  </template>
@@ -155,11 +153,9 @@
 
         <Sidebar v-model:visible="mobileMenuVisible" :baseZIndex="10000" class="glass-sidebar">
             <template #header>
-                <div class="flex items-center gap-3 px-2">
-                     <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-blue-500 flex items-center justify-center shadow-lg">
-                         <i class="pi pi-bolt text-white text-sm"></i>
-                     </div>
-                     <span class="text-xl font-bold tracking-tight text-white">ModBridge</span>
+                <div class="flex items-center gap-3 px-2 cursor-pointer" @click="navigate('/')">
+                     <img src="../assets/logo.png" alt="ModBridge Logo" class="w-8 h-8 object-contain" />
+                     <span class="text-xl font-bold tracking-tight text-surface-900 dark:text-white">ModBridge</span>
                 </div>
             </template>
             <div class="flex flex-col gap-2 h-full py-4">
@@ -199,7 +195,7 @@
             </div>
         </Sidebar>
 
-        <main class="flex-grow text-white w-full max-w-7xl mx-auto p-4 pt-0">
+        <main class="flex-grow text-surface-900 dark:text-white w-full max-w-7xl mx-auto p-4 pt-0">
              <router-view></router-view>
         </main>
     </div>
@@ -212,14 +208,12 @@
     -webkit-backdrop-filter: blur(24px) !important;
 }
 :deep(.p-menubar .p-menubar-button) {
-    color: white;
 }
 :deep(.p-sidebar) {
     background: rgba(17, 24, 39, 0.7) !important;
     backdrop-filter: blur(24px) !important;
     -webkit-backdrop-filter: blur(24px) !important;
     border-right: 1px solid rgba(255, 255, 255, 0.1);
-    color: white;
 }
 :deep(.p-sidebar-header) {
     padding: 1.5rem 1.5rem 0.5rem;
