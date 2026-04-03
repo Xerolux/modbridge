@@ -32,7 +32,7 @@ func checkPortAvailable(port string) error {
 	// Try to create a listener on the port
 	ln, err := net.Listen("tcp", ":"+port)
 	if err != nil {
-		return fmt.Errorf("port already in use or invalid")
+		return fmt.Errorf("port already in use or invalid: %w", err)
 	}
 	// Close the listener immediately
 	ln.Close()
@@ -753,14 +753,19 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPut {
 		// Read raw JSON to handle flexible tags field
 		var rawMap map[string]interface{}
-		bodyBytes, err := io.ReadAll(r.Body)
+		const maxProxyPayloadBytes = 1 << 20 // 1 MiB
+		bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, maxProxyPayloadBytes+1))
 		if err != nil {
 			s.log.Error("API", fmt.Sprintf("Failed to read body: %v", err))
 			http.Error(w, "Failed to read body", http.StatusBadRequest)
 			return
 		}
+		if len(bodyBytes) > maxProxyPayloadBytes {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 
-		s.log.Info("API", fmt.Sprintf("PUT /api/proxies body: %s", string(bodyBytes)))
+		s.log.Info("API", fmt.Sprintf("PUT /api/proxies payload_size=%d", len(bodyBytes)))
 
 		if err := json.Unmarshal(bodyBytes, &rawMap); err != nil {
 			s.log.Error("API", fmt.Sprintf("Failed to unmarshal to map: %v", err))
@@ -863,6 +868,8 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }
 
 func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
@@ -982,13 +989,19 @@ func (s *Server) handleSystemRestart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.log.Info("System restart requested via API", "")
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"restarting"}`))
+	if _, err := w.Write([]byte(`{"status":"restarting"}`)); err != nil {
+		s.log.Error("API", fmt.Sprintf("Failed to write restart response: %v", err))
+		return
+	}
 
 	// Stop all proxies gracefully and exit for restart
 	go func() {
 		time.Sleep(500 * time.Millisecond)
-		s.mgr.StopAll()
+		if s.mgr != nil {
+			s.mgr.StopAll()
+		}
 		time.Sleep(500 * time.Millisecond)
 		s.log.Info("System restarting now", "")
 		// Exit with code 0 so the process manager (systemd, docker, etc.) can restart it

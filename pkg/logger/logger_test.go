@@ -115,3 +115,25 @@ func TestClose(t *testing.T) {
 		t.Errorf("Second close failed: %v", err)
 	}
 }
+
+func TestSetLogLevelFiltersMessages(t *testing.T) {
+	logger := NewNullLogger(10)
+	defer logger.Close()
+
+	logger.SetLogLevel(WARN)
+	logger.Debug("TEST", "debug")
+	logger.Info("TEST", "info")
+	logger.Warn("TEST", "warn")
+	logger.Error("TEST", "error")
+
+	logs := logger.GetRecent(10)
+	if len(logs) != 2 {
+		t.Fatalf("Expected 2 entries at WARN+, got %d", len(logs))
+	}
+	if logs[0].Level != WARN {
+		t.Fatalf("Expected first level WARN, got %s", logs[0].Level)
+	}
+	if logs[1].Level != ERROR {
+		t.Fatalf("Expected second level ERROR, got %s", logs[1].Level)
+	}
+}
