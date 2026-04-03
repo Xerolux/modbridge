@@ -57,33 +57,33 @@
              v-model="proxies"
              :disabled="!editMode"
              group="proxies"
-             item-key="id"
+             handle=".drag-handle"
              ghost-class="drag-ghost"
              drag-class="drag-active"
              class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
              @end="onDragEnd"
          >
-             <template #item="{ element: proxy }">
-                 <div class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10 cursor-default"
-                      :class="{ 'ring-2 ring-purple-500/50 cursor-grab active:cursor-grabbing': editMode }">
+             <div v-for="proxy in proxies" :key="proxy.id"
+                  class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10 cursor-default"
+                  :class="{ 'ring-2 ring-purple-500/50': editMode }">
                      <div class="p-5">
-                         <div class="flex justify-between items-center mb-4">
-                             <div class="flex items-center gap-3">
-                                 <div v-if="editMode" class="drag-handle cursor-grab active:cursor-grabbing p-1 rounded-lg hover:bg-white/10 transition-colors">
+                         <div class="flex justify-between items-center mb-4 gap-2">
+                             <div class="flex items-center gap-3 min-w-0">
+                                 <div v-if="editMode" class="drag-handle shrink-0 cursor-grab active:cursor-grabbing p-1 rounded-lg hover:bg-white/10 transition-colors">
                                      <i class="pi pi-bars text-gray-400 text-sm"></i>
                                  </div>
                                  <span class="text-lg font-semibold text-surface-900 dark:text-white truncate" :title="proxy.name">{{ proxy.name }}</span>
                              </div>
-                             <Tag :severity="getSeverity(proxy.status)" :value="proxy.status" class="rounded-xl" />
+                             <Tag :severity="getSeverity(proxy.status)" :value="proxy.status" class="rounded-xl shrink-0" />
                          </div>
 
                          <div class="flex flex-col gap-3">
-                             <div class="text-gray-400 text-sm">{{ proxy.description || 'No description' }}</div>
-                             <div class="flex items-center gap-2 text-sm text-gray-300">
-                                 <i class="pi pi-arrow-right-arrow-left text-purple-400 text-xs"></i>
-                                 <span>{{ proxy.listen_addr }}</span>
-                                 <i class="pi pi-arrow-right text-gray-500 text-xs"></i>
-                                 <span>{{ proxy.target_addr }}</span>
+                             <div class="text-gray-400 text-sm truncate" :title="proxy.description">{{ proxy.description || 'No description' }}</div>
+                             <div class="flex items-center gap-2 text-sm text-gray-300 min-w-0">
+                                 <i class="pi pi-arrow-right-arrow-left text-purple-400 text-xs shrink-0"></i>
+                                 <span class="truncate" :title="proxy.listen_addr">{{ proxy.listen_addr }}</span>
+                                 <i class="pi pi-arrow-right text-gray-500 text-xs shrink-0"></i>
+                                 <span class="truncate" :title="proxy.target_addr">{{ proxy.target_addr }}</span>
                              </div>
 
                               <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
@@ -175,8 +175,7 @@
                              </div>
                          </div>
                      </div>
-                 </div>
-             </template>
+             </div>
          </VueDraggable>
 
          <Dialog v-model:visible="showProxyDialog" :header="isEditMode ? 'Edit Proxy' : 'Add Proxy'" modal class="w-full max-w-lg">
@@ -285,6 +284,9 @@ let disconnectFn = null;
 const testingProxy = ref(null);
 const connectionStatus = ref({});
 
+let unwatchConnected = null;
+let unwatchData = null;
+
 const defaultProxyForm = () => ({
     id: '',
     name: 'New Proxy',
@@ -348,13 +350,13 @@ onMounted(async () => {
     const { data, disconnect, isConnected } = useEventSource('/api/proxies/stream');
     disconnectFn = disconnect;
 
-    watch(isConnected, (connected) => {
+    unwatchConnected = watch(isConnected, (connected) => {
         if (!connected) {
             console.warn('SSE connection lost');
         }
     });
 
-    watch(data, (eventData) => {
+    unwatchData = watch(data, (eventData) => {
         if (!eventData) return;
 
         const eventType = eventData.type;
@@ -384,6 +386,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+    if (unwatchConnected) unwatchConnected();
+    if (unwatchData) unwatchData();
     if (disconnectFn) {
         disconnectFn();
     }
