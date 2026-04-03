@@ -163,6 +163,47 @@ func TestHandleProxiesPostValid(t *testing.T) {
 	}
 }
 
+func TestHandleProxiesMethodNotAllowed(t *testing.T) {
+	log, err := logger.NewLogger("test.log", 100)
+	if err != nil {
+		t.Fatalf("Failed to create logger: %v", err)
+	}
+	defer log.Close()
+	cfgMgr := config.NewManager("test.json")
+	mgr := manager.NewManager(cfgMgr, log, nil)
+	server := NewServer(cfgMgr, mgr, nil, log, nil)
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/proxies", nil)
+	w := httptest.NewRecorder()
+
+	server.handleProxies(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("Expected status %d, got %d", http.StatusMethodNotAllowed, w.Code)
+	}
+}
+
+func TestHandleProxiesPutRejectsOversizedBody(t *testing.T) {
+	log, err := logger.NewLogger("test.log", 100)
+	if err != nil {
+		t.Fatalf("Failed to create logger: %v", err)
+	}
+	defer log.Close()
+	cfgMgr := config.NewManager("test.json")
+	mgr := manager.NewManager(cfgMgr, log, nil)
+	server := NewServer(cfgMgr, mgr, nil, log, nil)
+
+	oversized := bytes.Repeat([]byte("a"), (1<<20)+1)
+	req := httptest.NewRequest(http.MethodPut, "/api/proxies", bytes.NewReader(oversized))
+	w := httptest.NewRecorder()
+
+	server.handleProxies(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("Expected status %d, got %d", http.StatusRequestEntityTooLarge, w.Code)
+	}
+}
+
 func TestMiddlewareChain(t *testing.T) {
 	log, err := logger.NewLogger("test.log", 100)
 	if err != nil {

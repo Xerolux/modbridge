@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -42,7 +43,7 @@ type Logger struct {
 	ringStart   int
 	ringCount   int
 	subscribers map[chan LogEntry]struct{}
-	minLevel    LogLevel // Minimum log level to output
+	minLevel    atomic.Int32 // Minimum log level to output (levelPriority value)
 }
 
 // NewLogger creates a new logger.
@@ -60,26 +61,28 @@ func NewLogger(logDir string, bufferSize int) (*Logger, error) {
 		}
 	}
 
-	return &Logger{
+	l := &Logger{
 		logDir:      logDir,
 		files:       make(map[string]*os.File),
 		ringBuffer:  make([]LogEntry, 0, bufferSize),
 		ringSize:    bufferSize,
 		subscribers: make(map[chan LogEntry]struct{}),
-		minLevel:    INFO, // Default to INFO
-	}, nil
+	}
+	l.minLevel.Store(levelPriority(INFO))
+	return l, nil
 }
 
 // NewNullLogger creates a logger that discards file output.
 func NewNullLogger(bufferSize int) *Logger {
-	return &Logger{
+	l := &Logger{
 		logDir:      "",
 		files:       make(map[string]*os.File),
 		ringBuffer:  make([]LogEntry, 0, bufferSize),
 		ringSize:    bufferSize,
 		subscribers: make(map[chan LogEntry]struct{}),
-		minLevel:    INFO, // Default to INFO
 	}
+	l.minLevel.Store(levelPriority(INFO))
+	return l
 }
 
 func (l *Logger) getLogFile(proxyID string) (*os.File, error) {
@@ -112,18 +115,38 @@ func (l *Logger) getLogFile(proxyID string) (*os.File, error) {
 
 // shouldLog returns true if the given level should be logged.
 func (l *Logger) shouldLog(level LogLevel) bool {
-	// Order: DEBUG < INFO < WARN < ERROR
-	levels := map[LogLevel]int{
-		DEBUG: 0,
-		INFO:  1,
-		WARN:  2,
-		ERROR: 3,
+	return levelPriority(level) >= l.minLevel.Load()
+}
+
+func levelPriority(level LogLevel) int32 {
+	switch level {
+	case DEBUG:
+		return 0
+	case INFO:
+		return 1
+	case WARN:
+		return 2
+	case ERROR:
+		return 3
+	default:
+		// Unknown levels should be treated conservatively and logged.
+		return 3
 	}
+}
 
-	currentLevel := levels[level]
-	minLevel := levels[l.minLevel]
-
-	return currentLevel >= minLevel
+func priorityToLevel(priority int32) LogLevel {
+	switch priority {
+	case 0:
+		return DEBUG
+	case 1:
+		return INFO
+	case 2:
+		return WARN
+	case 3:
+		return ERROR
+	default:
+		return ERROR
+	}
 }
 
 // Log writes a log entry.
@@ -256,16 +279,12 @@ func (l *Logger) Warn(proxyID, msg string) {
 
 // SetLogLevel changes the minimum log level.
 func (l *Logger) SetLogLevel(level LogLevel) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.minLevel = level
+	l.minLevel.Store(levelPriority(level))
 }
 
 // GetLogLevel returns the current minimum log level.
 func (l *Logger) GetLogLevel() LogLevel {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.minLevel
+	return priorityToLevel(l.minLevel.Load())
 }
 
 // Close closes all logger files.
