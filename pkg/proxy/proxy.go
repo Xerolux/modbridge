@@ -51,6 +51,18 @@ func min(a, b uint) uint {
 	return b
 }
 
+func tryAcquireConnSlot(sem chan struct{}) bool {
+	if sem == nil {
+		return true
+	}
+	select {
+	case sem <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
 // ProxyInstance represents a running proxy.
 type ProxyInstance struct {
 	ID         string
@@ -309,19 +321,15 @@ func (p *ProxyInstance) acceptLoop() {
 		sem := p.connSem
 		p.connSemMu.Unlock()
 
-		if sem != nil {
-			select {
-			case sem <- struct{}{}: // Acquire semaphore slot
-				// Proceed with connection
-			case <-time.After(5 * time.Second):
-				// Connection limit reached, drop this connection
-				conn.Close()
-				if globalLimitApplied {
-					atomic.AddInt64(&globalActiveConnections, -1) // Release global counter
-				}
-				p.log.Info(p.ID, "Connection limit reached, dropping connection")
-				continue
+		if !tryAcquireConnSlot(sem) {
+			// Connection limit reached, drop this connection immediately.
+			// Keeping accept loop non-blocking improves resiliency during load spikes.
+			conn.Close()
+			if globalLimitApplied {
+				atomic.AddInt64(&globalActiveConnections, -1) // Release global counter
 			}
+			p.log.Info(p.ID, "Connection limit reached, dropping connection")
+			continue
 		}
 
 		p.wg.Add(1)
