@@ -122,7 +122,7 @@
                    <div class="flex items-center gap-4 pl-2">
                        <Button v-if="isMobile" icon="pi pi-bars" text rounded @click="mobileMenuVisible = true" class="text-white hover:bg-white/10" />
                        <div class="flex items-center gap-2 cursor-pointer" @click="navigate('/')">
-                           <img src="../assets/logo.png" alt="ModBridge Logo" class="w-8 h-8 object-contain" />
+                           <img src="../assets/logo.png" alt="ModBridge Logo" class="w-12 h-12 object-contain" />
                            <span class="text-xl font-bold tracking-tight text-surface-900 dark:text-white hidden sm:block">ModBridge</span>
                        </div>
                    </div>
@@ -154,7 +154,7 @@
         <Sidebar v-model:visible="mobileMenuVisible" :baseZIndex="10000" class="glass-sidebar">
             <template #header>
                 <div class="flex items-center gap-3 px-2 cursor-pointer" @click="navigate('/')">
-                     <img src="../assets/logo.png" alt="ModBridge Logo" class="w-8 h-8 object-contain" />
+                     <img src="../assets/logo.png" alt="ModBridge Logo" class="w-12 h-12 object-contain" />
                      <span class="text-xl font-bold tracking-tight text-surface-900 dark:text-white">ModBridge</span>
                 </div>
             </template>
@@ -196,7 +196,7 @@
         </Sidebar>
 
         <main class="flex-grow text-surface-900 dark:text-white w-full max-w-7xl mx-auto p-4 pt-0">
-             <router-view></router-view>
+             <router-view :key="$route.fullPath"></router-view>
         </main>
     </div>
 </template>

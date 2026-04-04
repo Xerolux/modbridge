@@ -52,82 +52,94 @@
              </div>
          </div>
 
-         <VueDraggable
-             v-else
-             v-model="proxies"
-             :disabled="!editMode"
-             group="proxies"
-             handle=".drag-handle"
-             ghost-class="drag-ghost"
-             drag-class="drag-active"
-             class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-             @end="onDragEnd"
-         >
-             <div v-for="proxy in proxies" :key="proxy.id"
-                  class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10 cursor-default"
-                  :class="{ 'ring-2 ring-purple-500/50': editMode }">
-                     <div class="p-5">
-                         <div class="flex justify-between items-center mb-4 gap-2">
-                             <div class="flex items-center gap-3 min-w-0">
-                                 <div v-if="editMode" class="drag-handle shrink-0 cursor-grab active:cursor-grabbing p-1 rounded-lg hover:bg-white/10 transition-colors">
-                                     <i class="pi pi-bars text-gray-400 text-sm"></i>
-                                 </div>
-                                 <span class="text-lg font-semibold text-surface-900 dark:text-white truncate" :title="proxy.name">{{ proxy.name }}</span>
+         <div v-else>
+             <Tabs value="0">
+                 <TabList>
+                     <Tab v-for="(group, index) in groups" :key="group.name" :value="String(index)">
+                         {{ group.name }}
+                     </Tab>
+                 </TabList>
+                 <TabPanels>
+                     <TabPanel v-for="(group, index) in groups" :key="group.name" :value="String(index)">
+                         <VueDraggable
+                             v-model="group.proxies"
+                             :disabled="!editMode"
+                             group="proxies"
+                             handle=".drag-handle"
+                             ghost-class="drag-ghost"
+                             drag-class="drag-active"
+                             class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                             @end="(e) => onDragEnd(group.name, e)"
+                         >
+                             <div v-for="proxy in group.proxies" :key="proxy.id"
+                                  class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10 cursor-default"
+                                  :class="{ 'ring-2 ring-purple-500/50': editMode }">
+                                     <div class="p-5">
+                                         <div class="flex justify-between items-center mb-4 gap-2">
+                                             <div class="flex items-center gap-3 min-w-0">
+                                                 <div v-if="editMode" class="drag-handle shrink-0 cursor-grab active:cursor-grabbing p-1 rounded-lg hover:bg-white/10 transition-colors">
+                                                     <i class="pi pi-bars text-gray-400 text-sm"></i>
+                                                 </div>
+                                                 <span class="text-lg font-semibold text-surface-900 dark:text-white truncate" :title="proxy.name">{{ proxy.name }}</span>
+                                             </div>
+                                             <Tag :severity="getSeverity(proxy.status)" :value="proxy.status" class="rounded-xl shrink-0" />
+                                         </div>
+
+                                         <div class="flex flex-col gap-3">
+                                             <div class="text-gray-400 text-sm truncate" :title="proxy.description">{{ proxy.description || 'No description' }}</div>
+                                             <div class="flex items-center gap-2 text-sm text-gray-300 min-w-0">
+                                                 <i class="pi pi-arrow-right-arrow-left text-purple-400 text-xs shrink-0"></i>
+                                                 <span class="truncate" :title="proxy.listen_addr">{{ proxy.listen_addr }}</span>
+                                                 <i class="pi pi-arrow-right text-gray-500 text-xs shrink-0"></i>
+                                                 <span class="truncate" :title="proxy.target_addr">{{ proxy.target_addr }}</span>
+                                             </div>
+
+                                              <div class="flex justify-end gap-2 mt-2">
+                                                   <!-- Quick Action: Toggle Start/Stop -->
+                                                   <Button
+                                                      v-if="auth.hasPermission('proxy:control') && proxy.status !== 'Running'"
+                                                      icon="pi pi-play"
+                                                      severity="success"
+                                                      label="Start"
+                                                      @click="controlProxy(proxy.id, 'start')"
+                                                      class="flex-1 text-base p-3 sm:p-2 min-h-[44px] rounded-2xl"
+                                                   />
+                                                   <Button
+                                                      v-if="auth.hasPermission('proxy:control') && proxy.status === 'Running'"
+                                                      icon="pi pi-stop"
+                                                      severity="danger"
+                                                      label="Stop"
+                                                      @click="controlProxy(proxy.id, 'stop')"
+                                                      class="flex-1 text-base p-3 sm:p-2 min-h-[44px] rounded-2xl"
+                                                   />
+
+                                                   <!-- Overflow Context Menu for other actions -->
+                                                   <Button
+                                                      icon="pi pi-ellipsis-v"
+                                                      severity="secondary"
+                                                      @click="(e) => toggleMenu(e, proxy)"
+                                                      class="p-3 sm:p-2 min-h-[44px] rounded-2xl w-12 shrink-0"
+                                                      aria-haspopup="true"
+                                                      aria-controls="overlay_menu"
+                                                   />
+                                              </div>
+
+                                             <div v-if="connectionStatus[proxy.id]" class="mt-3 p-3 rounded-2xl" :class="connectionStatus[proxy.id].reachable ? 'glass-card border-green-500/30 text-green-300' : 'glass-card border-red-500/30 text-red-300'">
+                                                 <div class="flex items-center gap-2 mb-1">
+                                                     <i :class="connectionStatus[proxy.id].reachable ? 'pi pi-check-circle' : 'pi pi-times-circle'"></i>
+                                                     <span class="font-semibold text-sm">{{ connectionStatus[proxy.id].reachable ? 'Reachable' : 'Unreachable' }}</span>
+                                                 </div>
+                                                 <div class="text-xs text-gray-300">{{ connectionStatus[proxy.id].target }}</div>
+                                                 <div v-if="!connectionStatus[proxy.id].reachable" class="text-xs mt-1 text-yellow-300">{{ connectionStatus[proxy.id].error }}</div>
+                                             </div>
+                                         </div>
+                                     </div>
                              </div>
-                             <Tag :severity="getSeverity(proxy.status)" :value="proxy.status" class="rounded-xl shrink-0" />
-                         </div>
-
-                         <div class="flex flex-col gap-3">
-                             <div class="text-gray-400 text-sm truncate" :title="proxy.description">{{ proxy.description || 'No description' }}</div>
-                             <div class="flex items-center gap-2 text-sm text-gray-300 min-w-0">
-                                 <i class="pi pi-arrow-right-arrow-left text-purple-400 text-xs shrink-0"></i>
-                                 <span class="truncate" :title="proxy.listen_addr">{{ proxy.listen_addr }}</span>
-                                 <i class="pi pi-arrow-right text-gray-500 text-xs shrink-0"></i>
-                                 <span class="truncate" :title="proxy.target_addr">{{ proxy.target_addr }}</span>
-                             </div>
-
-                              <div class="flex justify-end gap-2 mt-2">
-                                   <!-- Quick Action: Toggle Start/Stop -->
-                                   <Button
-                                      v-if="auth.hasPermission('proxy:control') && proxy.status !== 'Running'"
-                                      icon="pi pi-play"
-                                      severity="success"
-                                      label="Start"
-                                      @click="controlProxy(proxy.id, 'start')"
-                                      class="flex-1 text-base p-3 sm:p-2 min-h-[44px] rounded-2xl"
-                                   />
-                                   <Button
-                                      v-if="auth.hasPermission('proxy:control') && proxy.status === 'Running'"
-                                      icon="pi pi-stop"
-                                      severity="danger"
-                                      label="Stop"
-                                      @click="controlProxy(proxy.id, 'stop')"
-                                      class="flex-1 text-base p-3 sm:p-2 min-h-[44px] rounded-2xl"
-                                   />
-
-                                   <!-- Overflow Context Menu for other actions -->
-                                   <Button
-                                      icon="pi pi-ellipsis-v"
-                                      severity="secondary"
-                                      @click="(e) => toggleMenu(e, proxy)"
-                                      class="p-3 sm:p-2 min-h-[44px] rounded-2xl w-12 shrink-0"
-                                      aria-haspopup="true"
-                                      aria-controls="overlay_menu"
-                                   />
-                              </div>
-
-                             <div v-if="connectionStatus[proxy.id]" class="mt-3 p-3 rounded-2xl" :class="connectionStatus[proxy.id].reachable ? 'glass-card border-green-500/30 text-green-300' : 'glass-card border-red-500/30 text-red-300'">
-                                 <div class="flex items-center gap-2 mb-1">
-                                     <i :class="connectionStatus[proxy.id].reachable ? 'pi pi-check-circle' : 'pi pi-times-circle'"></i>
-                                     <span class="font-semibold text-sm">{{ connectionStatus[proxy.id].reachable ? 'Reachable' : 'Unreachable' }}</span>
-                                 </div>
-                                 <div class="text-xs text-gray-300">{{ connectionStatus[proxy.id].target }}</div>
-                                 <div v-if="!connectionStatus[proxy.id].reachable" class="text-xs mt-1 text-yellow-300">{{ connectionStatus[proxy.id].error }}</div>
-                             </div>
-                         </div>
-                     </div>
-             </div>
-         </VueDraggable>
+                         </VueDraggable>
+                     </TabPanel>
+                 </TabPanels>
+             </Tabs>
+         </div>
 
          <Dialog v-model:visible="showProxyDialog" :header="isEditMode ? 'Edit Proxy' : 'Add Proxy'" modal class="w-full max-w-lg">
              <div class="flex flex-col gap-4">
@@ -207,7 +219,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue';
 import axios from '../axios.js';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
@@ -219,6 +231,11 @@ import Checkbox from 'primevue/checkbox';
 import Chips from 'primevue/chips';
 import Toast from 'primevue/toast';
 import ConfirmDialog from 'primevue/confirmdialog';
+import Tabs from 'primevue/tabs';
+import TabList from 'primevue/tablist';
+import Tab from 'primevue/tab';
+import TabPanels from 'primevue/tabpanels';
+import TabPanel from 'primevue/tabpanel';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 import { VueDraggable } from 'vue-draggable-plus';
@@ -267,7 +284,36 @@ const showLogsDialog = ref(false);
 const currentProxy = ref(null);
 const proxyLogs = ref([]);
 
-const onDragEnd = () => {
+const groups = computed(() => {
+    const groupMap = {};
+    proxies.value.forEach(proxy => {
+        let proxyGroups = ['Ungrouped'];
+        if (proxy.tags && proxy.tags.length > 0) {
+            proxyGroups = proxy.tags;
+        }
+        proxyGroups.forEach(tag => {
+            if (!groupMap[tag]) {
+                groupMap[tag] = [];
+            }
+            groupMap[tag].push(proxy);
+        });
+    });
+
+    const result = Object.keys(groupMap).sort().map(key => ({
+        name: key,
+        proxies: groupMap[key]
+    }));
+
+    if (result.length === 0) {
+         return [{ name: 'All', proxies: proxies.value }];
+    }
+
+    return result;
+});
+
+const onDragEnd = (groupName, event) => {
+    // Save order specifically per group if needed, or globally.
+    // For now we preserve global order but note that dragging within groups might be complex.
     const order = proxies.value.map(p => p.id);
     localStorage.setItem('proxy_order', JSON.stringify(order));
 };
