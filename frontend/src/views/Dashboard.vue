@@ -190,6 +190,7 @@ const errorMessage = ref('');
 const layoutEditing = ref(false);
 const isMobileLayout = ref(window.innerWidth <= BREAKPOINTS.MOBILE);
 let sseDisconnect = null;
+let unwatchData = null;
 
 const runningProxyCount = computed(() => proxies.value.filter(proxy => proxy.status === 'Running').length);
 const availableProxyOptions = computed(() => {
@@ -304,7 +305,7 @@ onMounted(async () => {
     const { data, disconnect } = useEventSource('/api/proxies/stream');
     sseDisconnect = disconnect;
 
-    watch(data, (eventData) => {
+    unwatchData = watch(data, (eventData) => {
       if (!eventData) return;
 
       const proxyData = eventData.proxy;
@@ -338,6 +339,7 @@ const handleResize = debounce(() => {
 }, 150);
 
 onUnmounted(() => {
+  if (unwatchData) unwatchData();
   window.removeEventListener('resize', handleResize);
   if (grid.value) {
     grid.value.destroy(false);

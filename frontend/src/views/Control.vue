@@ -57,112 +57,63 @@
              v-model="proxies"
              :disabled="!editMode"
              group="proxies"
-             item-key="id"
+             handle=".drag-handle"
              ghost-class="drag-ghost"
              drag-class="drag-active"
              class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
              @end="onDragEnd"
          >
-             <template #item="{ element: proxy }">
-                 <div class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10 cursor-default"
-                      :class="{ 'ring-2 ring-purple-500/50 cursor-grab active:cursor-grabbing': editMode }">
+             <div v-for="proxy in proxies" :key="proxy.id"
+                  class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10 cursor-default"
+                  :class="{ 'ring-2 ring-purple-500/50': editMode }">
                      <div class="p-5">
-                         <div class="flex justify-between items-center mb-4">
-                             <div class="flex items-center gap-3">
-                                 <div v-if="editMode" class="drag-handle cursor-grab active:cursor-grabbing p-1 rounded-lg hover:bg-white/10 transition-colors">
+                         <div class="flex justify-between items-center mb-4 gap-2">
+                             <div class="flex items-center gap-3 min-w-0">
+                                 <div v-if="editMode" class="drag-handle shrink-0 cursor-grab active:cursor-grabbing p-1 rounded-lg hover:bg-white/10 transition-colors">
                                      <i class="pi pi-bars text-gray-400 text-sm"></i>
                                  </div>
                                  <span class="text-lg font-semibold text-surface-900 dark:text-white truncate" :title="proxy.name">{{ proxy.name }}</span>
                              </div>
-                             <Tag :severity="getSeverity(proxy.status)" :value="proxy.status" class="rounded-xl" />
+                             <Tag :severity="getSeverity(proxy.status)" :value="proxy.status" class="rounded-xl shrink-0" />
                          </div>
 
                          <div class="flex flex-col gap-3">
-                             <div class="text-gray-400 text-sm">{{ proxy.description || 'No description' }}</div>
-                             <div class="flex items-center gap-2 text-sm text-gray-300">
-                                 <i class="pi pi-arrow-right-arrow-left text-purple-400 text-xs"></i>
-                                 <span>{{ proxy.listen_addr }}</span>
-                                 <i class="pi pi-arrow-right text-gray-500 text-xs"></i>
-                                 <span>{{ proxy.target_addr }}</span>
+                             <div class="text-gray-400 text-sm truncate" :title="proxy.description">{{ proxy.description || 'No description' }}</div>
+                             <div class="flex items-center gap-2 text-sm text-gray-300 min-w-0">
+                                 <i class="pi pi-arrow-right-arrow-left text-purple-400 text-xs shrink-0"></i>
+                                 <span class="truncate" :title="proxy.listen_addr">{{ proxy.listen_addr }}</span>
+                                 <i class="pi pi-arrow-right text-gray-500 text-xs shrink-0"></i>
+                                 <span class="truncate" :title="proxy.target_addr">{{ proxy.target_addr }}</span>
                              </div>
 
-                              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
+                              <div class="flex justify-end gap-2 mt-2">
+                                   <!-- Quick Action: Toggle Start/Stop -->
                                    <Button
-                                      v-if="auth.hasPermission('proxy:control')"
+                                      v-if="auth.hasPermission('proxy:control') && proxy.status !== 'Running'"
                                       icon="pi pi-play"
                                       severity="success"
                                       label="Start"
-                                      :disabled="proxy.status === 'Running'"
                                       @click="controlProxy(proxy.id, 'start')"
-                                      class="text-base p-3 sm:p-2 min-h-[44px] rounded-2xl"
+                                      class="flex-1 text-base p-3 sm:p-2 min-h-[44px] rounded-2xl"
                                    />
                                    <Button
-                                      v-if="auth.hasPermission('proxy:control')"
+                                      v-if="auth.hasPermission('proxy:control') && proxy.status === 'Running'"
                                       icon="pi pi-stop"
                                       severity="danger"
                                       label="Stop"
-                                      :disabled="proxy.status === 'Stopped' || proxy.status === 'Error'"
                                       @click="controlProxy(proxy.id, 'stop')"
-                                      class="text-base p-3 sm:p-2 min-h-[44px] rounded-2xl"
+                                      class="flex-1 text-base p-3 sm:p-2 min-h-[44px] rounded-2xl"
                                    />
-                                    <Button
-                                      v-if="auth.hasPermission('proxy:control') && !proxy.paused && proxy.status === 'Running'"
-                                      icon="pi pi-pause"
-                                      severity="warning"
-                                      label="Pause"
-                                      @click="controlProxy(proxy.id, 'pause')"
-                                      class="text-base p-3 sm:p-2 min-h-[44px] rounded-2xl"
-                                   />
+
+                                   <!-- Overflow Context Menu for other actions -->
                                    <Button
-                                      v-if="auth.hasPermission('proxy:control') && proxy.paused"
-                                      icon="pi pi-play"
-                                      severity="success"
-                                      label="Resume"
-                                      @click="controlProxy(proxy.id, 'resume')"
-                                      class="text-base p-3 sm:p-2 min-h-[44px] rounded-2xl"
-                                   />
-                                   <Button
-                                      v-if="auth.hasPermission('proxy:control')"
-                                      icon="pi pi-refresh"
-                                      severity="info"
-                                      label="Restart"
-                                      :disabled="proxy.status === 'Stopped'"
-                                      @click="controlProxy(proxy.id, 'restart')"
-                                      class="text-base p-3 sm:p-2 min-h-[44px] rounded-2xl"
-                                   />
-                                   <Button
-                                      v-if="auth.hasPermission('proxy:edit')"
-                                      icon="pi pi-pencil"
+                                      icon="pi pi-ellipsis-v"
                                       severity="secondary"
-                                      label="Edit"
-                                      @click="openEditProxyDialog(proxy)"
-                                      class="text-base p-3 sm:p-2 min-h-[44px] rounded-2xl"
+                                      @click="(e) => toggleMenu(e, proxy)"
+                                      class="p-3 sm:p-2 min-h-[44px] rounded-2xl w-12 shrink-0"
+                                      aria-haspopup="true"
+                                      aria-controls="overlay_menu"
                                    />
-                              </div>
-                              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
-                                  <Button
-                                      icon="pi pi-search"
-                                      severity="info"
-                                      label="Test"
-                                      @click="testConnectivity(proxy)"
-                                      :loading="testingProxy === proxy.id"
-                                      class="text-base p-3 sm:p-2 min-h-[44px] rounded-2xl"
-                                  />
-                                  <Button
-                                      icon="pi pi-eye"
-                                      severity="secondary"
-                                      label="View Logs"
-                                      @click="openProxyLogs(proxy.id)"
-                                      class="text-base p-3 sm:p-2 min-h-[44px] rounded-2xl"
-                                  />
-                                  <Button
-                                      v-if="auth.hasPermission('proxy:delete')"
-                                      icon="pi pi-trash"
-                                      severity="danger"
-                                      label="Delete"
-                                      @click="confirmDeleteProxy(proxy.id)"
-                                      class="text-base p-3 sm:p-2 min-h-[44px] rounded-2xl"
-                                  />
                               </div>
 
                              <div v-if="connectionStatus[proxy.id]" class="mt-3 p-3 rounded-2xl" :class="connectionStatus[proxy.id].reachable ? 'glass-card border-green-500/30 text-green-300' : 'glass-card border-red-500/30 text-red-300'">
@@ -175,8 +126,7 @@
                              </div>
                          </div>
                      </div>
-                 </div>
-             </template>
+             </div>
          </VueDraggable>
 
          <Dialog v-model:visible="showProxyDialog" :header="isEditMode ? 'Edit Proxy' : 'Add Proxy'" modal class="w-full max-w-lg">
@@ -250,6 +200,7 @@
                  </div>
              </div>
          </Dialog>
+         <Menu ref="actionMenu" id="overlay_menu" :model="menuItems" :popup="true" />
          <Toast />
          <ConfirmDialog />
      </div>
@@ -261,6 +212,7 @@ import axios from '../axios.js';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
 import Dialog from 'primevue/dialog';
+import Menu from 'primevue/menu';
 import InputText from 'primevue/inputtext';
 import InputNumber from 'primevue/inputnumber';
 import Checkbox from 'primevue/checkbox';
@@ -284,6 +236,13 @@ let disconnectFn = null;
 
 const testingProxy = ref(null);
 const connectionStatus = ref({});
+
+let unwatchConnected = null;
+const actionMenu = ref();
+const menuItems = ref([]);
+const activeProxyForMenu = ref(null);
+
+let unwatchData = null;
 
 const defaultProxyForm = () => ({
     id: '',
@@ -348,13 +307,13 @@ onMounted(async () => {
     const { data, disconnect, isConnected } = useEventSource('/api/proxies/stream');
     disconnectFn = disconnect;
 
-    watch(isConnected, (connected) => {
+    unwatchConnected = watch(isConnected, (connected) => {
         if (!connected) {
             console.warn('SSE connection lost');
         }
     });
 
-    watch(data, (eventData) => {
+    unwatchData = watch(data, (eventData) => {
         if (!eventData) return;
 
         const eventType = eventData.type;
@@ -384,6 +343,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+    if (unwatchConnected) unwatchConnected();
+    if (unwatchData) unwatchData();
     if (disconnectFn) {
         disconnectFn();
     }
@@ -432,6 +393,84 @@ const confirmDeleteProxy = (id) => {
             }
         }
     });
+};
+
+const toggleMenu = (event, proxy) => {
+    activeProxyForMenu.value = proxy;
+
+    const items = [];
+
+    if (auth.hasPermission('proxy:control')) {
+        const controlGroup = {
+            label: 'Control',
+            items: []
+        };
+
+        if (proxy.status !== 'Stopped' && proxy.status !== 'Error') {
+            controlGroup.items.push({
+                label: 'Restart',
+                icon: 'pi pi-refresh',
+                command: () => controlProxy(proxy.id, 'restart')
+            });
+        }
+
+        if (!proxy.paused && proxy.status === 'Running') {
+            controlGroup.items.push({
+                label: 'Pause',
+                icon: 'pi pi-pause',
+                command: () => controlProxy(proxy.id, 'pause')
+            });
+        } else if (proxy.paused) {
+            controlGroup.items.push({
+                label: 'Resume',
+                icon: 'pi pi-play',
+                command: () => controlProxy(proxy.id, 'resume')
+            });
+        }
+
+        if (controlGroup.items.length > 0) {
+            items.push(controlGroup);
+        }
+    }
+
+    const settingsGroup = {
+        label: 'Manage',
+        items: []
+    };
+
+    settingsGroup.items.push({
+        label: 'Test Connection',
+        icon: 'pi pi-search',
+        command: () => testConnectivity(proxy)
+    });
+
+    settingsGroup.items.push({
+        label: 'View Logs',
+        icon: 'pi pi-eye',
+        command: () => openProxyLogs(proxy.id)
+    });
+
+    if (auth.hasPermission('proxy:edit')) {
+        settingsGroup.items.push({
+            label: 'Edit',
+            icon: 'pi pi-pencil',
+            command: () => openEditProxyDialog(proxy)
+        });
+    }
+
+    if (auth.hasPermission('proxy:delete')) {
+        settingsGroup.items.push({
+            label: 'Delete',
+            icon: 'pi pi-trash',
+            class: 'text-red-400',
+            command: () => confirmDeleteProxy(proxy.id)
+        });
+    }
+
+    items.push(settingsGroup);
+    menuItems.value = items;
+
+    actionMenu.value.toggle(event);
 };
 
 const openProxyLogs = async (id) => {
