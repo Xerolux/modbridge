@@ -126,3 +126,20 @@ func handleMockTarget(conn net.Conn) {
 		conn.Write(resp)
 	}
 }
+
+func TestTryAcquireConnSlot(t *testing.T) {
+	sem := make(chan struct{}, 1)
+
+	if !tryAcquireConnSlot(sem) {
+		t.Fatalf("expected first acquire to succeed")
+	}
+	if tryAcquireConnSlot(sem) {
+		t.Fatalf("expected second acquire to fail when semaphore is full")
+	}
+
+	<-sem // release
+
+	if !tryAcquireConnSlot(sem) {
+		t.Fatalf("expected acquire to succeed after release")
+	}
+}

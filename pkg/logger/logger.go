@@ -163,33 +163,21 @@ func (l *Logger) Log(level LogLevel, proxyID, msg string) {
 		Message:   msg,
 	}
 
-	// Critical section 1: File write and ring buffer operations
-	func() {
-		l.mu.Lock()
-		defer l.mu.Unlock()
-
-		// 1. Write to file
-		if f, _ := l.getLogFile(proxyID); f != nil {
-			if jsonBytes, err := json.Marshal(entry); err == nil {
-				_, _ = f.Write(jsonBytes)
-				_, _ = f.WriteString("\n")
-			}
+	// Single critical section:
+	// 1) write file, 2) append ring, 3) snapshot subscribers.
+	l.mu.Lock()
+	if f, _ := l.getLogFile(proxyID); f != nil {
+		if jsonBytes, err := json.Marshal(entry); err == nil {
+			_, _ = f.Write(jsonBytes)
+			_, _ = f.WriteString("\n")
 		}
-
-		// 2. Add to ring buffer without shifting the slice on every write.
-		l.appendRingEntry(entry)
-	}()
-
-	// Critical section 2: Get subscriber snapshot
-	subscribers := func() []chan LogEntry {
-		l.mu.Lock()
-		defer l.mu.Unlock()
-		subs := make([]chan LogEntry, 0, len(l.subscribers))
-		for ch := range l.subscribers {
-			subs = append(subs, ch)
-		}
-		return subs
-	}()
+	}
+	l.appendRingEntry(entry)
+	subscribers := make([]chan LogEntry, 0, len(l.subscribers))
+	for ch := range l.subscribers {
+		subscribers = append(subscribers, ch)
+	}
+	l.mu.Unlock()
 
 	// Broadcast to subscribers (outside of lock)
 	for _, ch := range subscribers {
