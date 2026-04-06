@@ -177,7 +177,7 @@ jobs:
       - name: Install cross-compiler
         if: matrix.packages != ''
         run: sudo apt-get update && sudo apt-get install -y ${{ matrix.packages }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: frontend-dist
           path: frontend/dist/
@@ -299,7 +299,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts/
           pattern: modbridge-*
