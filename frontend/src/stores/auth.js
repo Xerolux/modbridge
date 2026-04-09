@@ -1,10 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios from '../axios.js'
+import { onUnauthorized } from '../utils/authEvents'
 
 export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = ref(false)
-  const checking = ref(false)
   const user = ref({
     userId: '',
     username: '',
@@ -12,58 +12,63 @@ export const useAuthStore = defineStore('auth', () => {
     permissions: []
   })
 
+  let checkPromise = null
+
   const isAdmin = computed(() => user.value.role === 'admin')
   const isOperator = computed(() => user.value.role === 'operator' || user.value.role === 'admin')
-  const isViewer = computed(() => true)
 
   const hasPermission = (permission) => {
     if (isAdmin.value) return true
     return user.value.permissions.includes(permission)
   }
 
+  const resetState = () => {
+    isAuthenticated.value = false
+    user.value = { userId: '', username: '', role: '', permissions: [] }
+    checkPromise = null
+  }
+
+  onUnauthorized(resetState)
+
   const checkAuth = async () => {
-    if (checking.value) return isAuthenticated.value
-    checking.value = true
-    try {
-      const res = await axios.get('/api/me')
-      user.value = {
-        userId: res.data.user_id || '',
-        username: res.data.username || '',
-        role: res.data.role || 'admin',
-        permissions: res.data.permissions || []
-      }
-      isAuthenticated.value = true
-    } catch {
-      // Let router handle setup logic by redirecting unauthenticated users
+    if (checkPromise) return checkPromise
+    checkPromise = (async () => {
       try {
-        await axios.get('/api/status')
+        const res = await axios.get('/api/me')
+        user.value = {
+          userId: res.data.user_id || '',
+          username: res.data.username || '',
+          role: res.data.role || 'admin',
+          permissions: res.data.permissions || []
+        }
+        isAuthenticated.value = true
       } catch {
-        // Ignore error
+        try {
+          await axios.get('/api/status')
+        } catch {
+          // Ignore error
+        }
+        isAuthenticated.value = false
+        user.value = { userId: '', username: '', role: '', permissions: [] }
+      } finally {
+        checkPromise = null
       }
-      isAuthenticated.value = false
-      user.value = { userId: '', username: '', role: '', permissions: [] }
-    } finally {
-      checking.value = false
-    }
-    return isAuthenticated.value
+      return isAuthenticated.value
+    })()
+    return checkPromise
   }
 
   const login = async (payload) => {
     try {
       const res = await axios.post('/api/login', payload)
+      const meRes = await axios.get('/api/me')
       user.value = {
-        userId: res.data.user_id || 'admin',
-        username: res.data.username || 'admin',
-        role: res.data.role || 'admin',
-        permissions: []
+        userId: meRes.data.user_id || res.data.user_id || 'admin',
+        username: meRes.data.username || res.data.username || 'admin',
+        role: meRes.data.role || res.data.role || 'admin',
+        permissions: meRes.data.permissions || []
       }
       isAuthenticated.value = true
-      if (res.data.role) {
-        const meRes = await axios.get('/api/me')
-        if (meRes.data.permissions) {
-          user.value.permissions = meRes.data.permissions
-        }
-      }
       return { success: true }
     } catch (e) {
       isAuthenticated.value = false

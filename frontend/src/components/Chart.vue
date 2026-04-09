@@ -109,12 +109,28 @@ const drawLineChart = (ctx, width, height) => {
     ctx.fillText(value.toFixed(1), padding - 5, y + 4);
   }
 
+  if (values.length === 1) {
+    const x = padding + chartWidth / 2;
+    const y = padding + chartHeight - ((values[0] - minValue) / (maxValue - minValue)) * chartHeight;
+    ctx.fillStyle = props.color;
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#6b7280';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(labels[0], x, height - padding + 20);
+    return;
+  }
+
   ctx.strokeStyle = props.color;
   ctx.lineWidth = 2;
   ctx.beginPath();
 
+  const step = chartWidth / (values.length - 1);
+
   values.forEach((value, index) => {
-    const x = padding + (chartWidth / (values.length - 1)) * index;
+    const x = padding + step * index;
     const y =
       padding +
       chartHeight -
@@ -135,7 +151,7 @@ const drawLineChart = (ctx, width, height) => {
   ctx.stroke();
 
   values.forEach((value, index) => {
-    const x = padding + (chartWidth / (values.length - 1)) * index;
+    const x = padding + step * index;
     const y =
       padding +
       chartHeight -

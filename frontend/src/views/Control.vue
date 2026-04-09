@@ -85,14 +85,14 @@
                                              <Tag :severity="getSeverity(proxy.status)" :value="proxy.status" class="rounded-xl shrink-0" />
                                          </div>
 
-                                         <div class="flex flex-col gap-3">
-                                             <div class="text-gray-400 text-sm truncate" :title="proxy.description">{{ proxy.description || 'No description' }}</div>
-                                             <div class="flex items-center gap-2 text-sm text-gray-300 min-w-0">
-                                                 <i class="pi pi-arrow-right-arrow-left text-purple-400 text-xs shrink-0"></i>
-                                                 <span class="truncate" :title="proxy.listen_addr">{{ proxy.listen_addr }}</span>
-                                                 <i class="pi pi-arrow-right text-gray-500 text-xs shrink-0"></i>
-                                                 <span class="truncate" :title="proxy.target_addr">{{ proxy.target_addr }}</span>
-                                             </div>
+                                              <div class="flex flex-col gap-3">
+                                              <div class="text-gray-400 text-sm break-words" :title="proxy.description">{{ proxy.description || 'No description' }}</div>
+                                              <div class="flex items-center gap-2 text-sm text-gray-300 min-w-0 flex-wrap">
+                                                  <i class="pi pi-arrow-right-arrow-left text-purple-400 text-xs shrink-0"></i>
+                                                  <span class="truncate" :title="proxy.listen_addr">{{ proxy.listen_addr }}</span>
+                                                  <i class="pi pi-arrow-right text-gray-500 text-xs shrink-0"></i>
+                                                  <span class="truncate" :title="proxy.target_addr">{{ proxy.target_addr }}</span>
+                                              </div>
 
                                               <div class="flex justify-end gap-2 mt-2">
                                                    <!-- Quick Action: Toggle Start/Stop -->
@@ -250,6 +250,7 @@ const editMode = ref(false);
 const toast = useToast();
 const confirm = useConfirm();
 let disconnectFn = null;
+const pendingTimers = [];
 
 const testingProxy = ref(null);
 const connectionStatus = ref({});
@@ -389,6 +390,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+    pendingTimers.forEach(clearTimeout);
+    pendingTimers.length = 0;
     if (unwatchConnected) unwatchConnected();
     if (unwatchData) unwatchData();
     if (disconnectFn) {
@@ -523,8 +526,7 @@ const openProxyLogs = async (id) => {
     currentProxy.value = proxies.value.find(p => p.id === id);
     try {
         const res = await axios.get('/api/logs');
-        const allLogs = res.data;
-        proxyLogs.value = allLogs.filter(log => log.proxy_id === id);
+        proxyLogs.value = res.data.filter(log => log.proxy_id === id);
     } catch (e) {
         console.error("Failed to fetch logs", e);
         proxyLogs.value = [];
@@ -536,7 +538,7 @@ const controlProxy = async (id, action) => {
     try {
         await axios.post('/api/proxies/control', { id, action });
         toast.add({ severity: 'success', summary: 'Success', detail: `Proxy ${action} command sent`, life: 3000 });
-        setTimeout(fetchProxies, 500);
+        pendingTimers.push(setTimeout(fetchProxies, 500));
     } catch (e) {
         toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data || e.message, life: 5000 });
     }
@@ -546,7 +548,7 @@ const controlAllProxies = async (action) => {
     try {
         await axios.post('/api/proxies/control', { action });
         toast.add({ severity: 'success', summary: 'Success', detail: `All proxies ${action.replace('_all', '')} command sent`, life: 3000 });
-        setTimeout(fetchProxies, 500);
+        pendingTimers.push(setTimeout(fetchProxies, 500));
     } catch (e) {
         toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data || e.message, life: 5000 });
     }

@@ -1,8 +1,8 @@
 import axios from 'axios';
+import { emitUnauthorized } from './utils/authEvents.js';
 
 axios.defaults.withCredentials = true;
 
-// Helper to get cookie by name
 function getCookie(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
@@ -19,12 +19,11 @@ axios.interceptors.request.use(config => {
     return Promise.reject(error);
 });
 
-// Redirect to login on 401 responses (session expired)
 axios.interceptors.response.use(
     response => response,
     error => {
         if (error.response && error.response.status === 401) {
-            // Only redirect if not already on login page
+            emitUnauthorized();
             if (window.location.hash !== '#/login') {
                 window.location.hash = '#/login';
             }

@@ -98,4 +98,12 @@ router.beforeEach(async (to, from, next) => {
   next()
 })
 
+router.onError((error) => {
+  console.error('Router navigation error:', error)
+  if (error.message.includes('Failed to fetch dynamically imported module') ||
+      error.message.includes('Importing a module script failed')) {
+    window.location.reload()
+  }
+})
+
 export default router

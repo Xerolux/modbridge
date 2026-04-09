@@ -24,6 +24,7 @@ import (
 	"modbridge/pkg/manager"
 	"modbridge/pkg/metrics"
 	"modbridge/pkg/middleware"
+	"modbridge/pkg/rbac"
 	"modbridge/pkg/users"
 )
 
@@ -484,12 +485,20 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	permissions := []string{}
+	if perms := rbac.GetRolePermissions(rbac.Role(session.Role)); len(perms) > 0 {
+		permissions = make([]string, len(perms))
+		for i, p := range perms {
+			permissions[i] = string(p)
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"user_id":     session.UserID,
 		"username":    session.Username,
 		"role":        session.Role,
-		"permissions": []string{},
+		"permissions": permissions,
 	}); err != nil {
 		s.log.Error("API", fmt.Sprintf("Failed to encode /api/me response: %v", err))
 	}

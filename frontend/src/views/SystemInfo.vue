@@ -146,7 +146,7 @@
                 <template #content>
                     <div class="flex flex-col gap-3">
                         <Button @click="refreshInfo" label="Refresh" icon="pi pi-refresh" class="w-full p-3 sm:p-2" />
-                        <Button @click="restartSystem" label="Restart System" icon="pi pi-power-off" severity="warning" class="w-full p-3 sm:p-2" />
+                        <Button v-if="auth.hasPermission('system:restart')" @click="restartSystem" label="Restart System" icon="pi pi-power-off" severity="warning" class="w-full p-3 sm:p-2" />
                     </div>
                 </template>
             </Card>
@@ -155,9 +155,9 @@
                 <template #title><div class="text-lg sm:text-xl">Proxy Control</div></template>
                 <template #content>
                     <div class="flex flex-col gap-3">
-                        <Button @click="startAllProxies" label="Start All Proxies" icon="pi pi-play" severity="success" class="w-full p-3 sm:p-2" />
-                        <Button @click="stopAllProxies" label="Stop All Proxies" icon="pi pi-stop" severity="danger" class="w-full p-3 sm:p-2" />
-                        <Button @click="restartAllProxies" label="Restart All Proxies" icon="pi pi-refresh" severity="warning" class="w-full p-3 sm:p-2" />
+                        <Button v-if="auth.hasPermission('proxy:control')" @click="startAllProxies" label="Start All Proxies" icon="pi pi-play" severity="success" class="w-full p-3 sm:p-2" />
+                        <Button v-if="auth.hasPermission('proxy:control')" @click="stopAllProxies" label="Stop All Proxies" icon="pi pi-stop" severity="danger" class="w-full p-3 sm:p-2" />
+                        <Button v-if="auth.hasPermission('proxy:control')" @click="restartAllProxies" label="Restart All Proxies" icon="pi pi-refresh" severity="warning" class="w-full p-3 sm:p-2" />
                         <Button @click="downloadLogs" label="Download Logs" icon="pi pi-download" severity="secondary" class="w-full p-3 sm:p-2" />
                     </div>
                 </template>
@@ -195,7 +195,7 @@
                                     <div>Process: {{ port.process }} (User: {{ port.user }})</div>
                                     <div class="truncate text-gray-500">{{ port.command }}</div>
                                 </div>
-                                <Button @click="releasePort(port)" label="Release Port" icon="pi pi-trash" severity="danger" size="small" class="w-full p-2" />
+                                <Button v-if="auth.hasPermission('system:manage')" @click="releasePort(port)" label="Release Port" icon="pi pi-trash" severity="danger" size="small" class="w-full p-2" />
                             </div>
                         </div>
 
@@ -222,6 +222,9 @@
  import { useToast } from 'primevue/usetoast';
  import { useConfirm } from 'primevue/useconfirm';
  import { downloadBlob } from '../utils/helpers';
+ import { useAuthStore } from '../stores/auth';
+
+ const auth = useAuthStore();
 
  const loading = ref(true);
  const toast = useToast();

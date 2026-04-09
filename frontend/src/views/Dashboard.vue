@@ -191,6 +191,8 @@ const layoutEditing = ref(false);
 const isMobileLayout = ref(window.innerWidth <= BREAKPOINTS.MOBILE);
 let sseDisconnect = null;
 let unwatchData = null;
+let gridInitialized = false;
+let fetchVersion = 0;
 
 const runningProxyCount = computed(() => proxies.value.filter(proxy => proxy.status === 'Running').length);
 const availableProxyOptions = computed(() => {
@@ -267,7 +269,9 @@ const initializeGrid = () => {
 
   syncGridInteractivity();
 
-  grid.value.on('change', saveLayout);
+  grid.value.on('change', () => {
+    if (gridInitialized) saveLayout();
+  });
   grid.value.on('dragstart', () => {
     layoutEditing.value = true;
   });
@@ -286,6 +290,7 @@ const initializeGrid = () => {
   const currentWidgets = [...widgets.value];
   widgets.value = [];
   currentWidgets.forEach(item => addWidgetToGrid(item));
+  gridInitialized = true;
 };
 
 onMounted(async () => {
@@ -308,6 +313,7 @@ onMounted(async () => {
     unwatchData = watch(data, (eventData) => {
       if (!eventData) return;
 
+      fetchVersion++;
       const proxyData = eventData.proxy;
 
       switch (eventData.type) {
@@ -353,10 +359,15 @@ const updateProxyCollection = (proxyData) => {
   const index = proxies.value.findIndex(proxy => proxy.id === proxyData.id);
   if (index >= 0) {
     proxies.value[index] = proxyData;
-    return;
+  } else {
+    proxies.value.push(proxyData);
   }
 
-  proxies.value.push(proxyData);
+  const widgetIndex = widgets.value.findIndex(w => w.proxy_id === proxyData.id);
+  if (widgetIndex >= 0) {
+    widgets.value[widgetIndex].title = proxyData.name;
+    widgets.value[widgetIndex].status = proxyData.status;
+  }
 };
 
 const loadGrid = (layout) => {
@@ -364,10 +375,23 @@ const loadGrid = (layout) => {
   if (grid.value) {
     grid.value.removeAll();
   }
-  layout.forEach(item => {
-    const id = item.id || `w_${item.proxy_id || Date.now()}`;
-    widgets.value.push({ ...item, id });
+  const validLayout = layout.filter(item => {
+    if (!item.proxy_id) return false;
+    return proxies.value.some(p => p.id === item.proxy_id);
   });
+  validLayout.forEach(item => {
+    const id = item.id || `w_${item.proxy_id || Date.now()}`;
+    const proxy = proxies.value.find(p => p.id === item.proxy_id);
+    widgets.value.push({
+      ...item,
+      id,
+      title: proxy ? proxy.name : item.title || 'Unbekannt',
+      status: proxy ? proxy.status : item.status || 'Unknown'
+    });
+  });
+  if (validLayout.length < layout.length) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(validLayout));
+  }
 };
 
 const addWidgetToGrid = (item) => {
@@ -421,14 +445,17 @@ const saveLayout = () => {
 };
 
 const fetchData = async (isInitial = false) => {
+  const thisVersion = ++fetchVersion;
   try {
     if (isInitial) loading.value = true;
     error.value = null;
     errorMessage.value = '';
     const res = await axios.get('/api/proxies');
+    if (thisVersion !== fetchVersion) return;
     proxies.value = res.data;
     if (isInitial) loading.value = false;
   } catch (requestError) {
+    if (thisVersion !== fetchVersion) return;
     const errorData = requestError.response?.data;
     error.value = true;
     errorMessage.value = typeof errorData === 'string' ? errorData : requestError.message || 'Unbekannter Fehler';
@@ -629,7 +656,8 @@ const resetLayout = () => {
     rgba(15, 23, 42, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 18px 45px rgba(2, 6, 23, 0.35);
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 

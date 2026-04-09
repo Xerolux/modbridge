@@ -36,7 +36,7 @@ const statusDotClass = {
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
           <div class="text-[0.7rem] font-semibold uppercase tracking-[0.28em] text-[var(--text-muted)]">Proxy Widget</div>
-          <div class="mt-2 truncate text-lg font-bold text-[var(--text-primary)]">{{ title }}</div>
+          <div class="mt-2 text-lg font-bold text-[var(--text-primary)] truncate" :title="title">{{ title }}</div>
         </div>
 
         <div :class="statusClass[status] || statusClass.Unknown">
@@ -46,7 +46,7 @@ const statusDotClass = {
       </div>
 
       <div class="space-y-3">
-        <div class="text-3xl font-extrabold tracking-tight text-[var(--text-primary)] sm:text-[2rem]" :title="String(value)">
+        <div class="text-2xl font-extrabold tracking-tight text-[var(--text-primary)] sm:text-[2rem] break-words" :title="String(value)">
           {{ value }}
           <span v-if="unit" class="ml-1 text-sm font-medium text-[var(--text-muted)]">{{ unit }}</span>
         </div>
@@ -72,7 +72,8 @@ const statusDotClass = {
   position: relative;
   height: 100%;
   border-radius: 20px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .widget-noise {

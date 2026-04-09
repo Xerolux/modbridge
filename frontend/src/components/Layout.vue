@@ -196,7 +196,7 @@
         </Sidebar>
 
         <main class="flex-grow text-surface-900 dark:text-white w-full max-w-7xl mx-auto p-4 pt-0">
-             <router-view :key="$route.fullPath"></router-view>
+             <router-view></router-view>
         </main>
     </div>
 </template>

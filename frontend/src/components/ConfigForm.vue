@@ -376,13 +376,11 @@ const saveProxy = async (proxy, index) => {
   delete validationErrors.value[validationKey];
   activeSaveKey.value = validationKey;
 
-  const proxyData = {
-    ...proxy,
-    tags: normalizeTags(proxy)
-  };
+  const { _isNew, _isDirty, _showAdvanced, _tempId, ...proxyData } = proxy;
+  proxyData.tags = normalizeTags(proxy);
 
   let success = false;
-  if (proxy._isNew) {
+  if (_isNew) {
     success = await store.addProxy(proxyData);
   } else {
     success = await store.updateProxy(proxyData);
