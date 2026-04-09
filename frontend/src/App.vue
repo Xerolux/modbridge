@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, watch } from 'vue';
+import { onMounted, onUnmounted, watch } from 'vue';
 import { useAppStore } from './stores/appStore';
 
 const store = useAppStore();
@@ -9,15 +9,38 @@ const applyTheme = (isDark) => {
   document.documentElement.classList.toggle('light', !isDark);
 };
 
+const applyEffectsPreference = (reduced) => {
+  document.documentElement.classList.toggle('effects-reduced', reduced);
+};
+
+const onBeforeUnload = (event) => {
+  if (!store.hasUnsavedChanges) return;
+  event.preventDefault();
+  event.returnValue = '';
+};
+
 onMounted(() => {
   applyTheme(store.darkMode);
+  applyEffectsPreference(store.reducedEffects);
+  window.addEventListener('beforeunload', onBeforeUnload);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('beforeunload', onBeforeUnload);
 });
 
 watch(() => store.darkMode, applyTheme, { immediate: true });
+watch(() => store.reducedEffects, applyEffectsPreference, { immediate: true });
 </script>
 
 <template>
-  <div :class="store.darkMode ? 'dark' : 'light'" class="app-shell">
+  <div
+    :class="[
+      store.darkMode ? 'dark' : 'light',
+      store.reducedEffects ? 'effects-reduced' : ''
+    ]"
+    class="app-shell"
+  >
     <div class="ambient-layer ambient-grid"></div>
     <div class="ambient-layer ambient-orb ambient-orb-a"></div>
     <div class="ambient-layer ambient-orb ambient-orb-b"></div>
@@ -69,9 +92,7 @@ watch(() => store.darkMode, applyTheme, { immediate: true });
   --shadow-strong: 0 28px 60px rgba(148, 163, 184, 0.24);
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 html,
 body,
@@ -91,30 +112,13 @@ body {
   overflow-x: hidden;
 }
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
+h1,h2,h3,h4,h5,h6 {
   font-family: 'Space Grotesk', sans-serif;
   letter-spacing: -0.03em;
   margin: 0;
 }
 
-a {
-  color: inherit;
-}
-
-input,
-select,
-textarea,
-.p-inputtext,
-.p-dropdown,
-.p-inputnumber-input,
-.p-password-input {
-  font-size: 16px !important;
-}
+a { color: inherit; }
 
 .app-shell {
   min-height: 100vh;
@@ -122,10 +126,7 @@ textarea,
   isolation: isolate;
 }
 
-.content-wrapper {
-  position: relative;
-  z-index: 2;
-}
+.content-wrapper { position: relative; z-index: 2; }
 
 .ambient-layer {
   pointer-events: none;
@@ -169,6 +170,18 @@ textarea,
   height: 20rem;
   background: rgba(34, 197, 94, 0.12);
   animation-duration: 26s;
+}
+
+.effects-reduced .ambient-orb,
+.effects-reduced .ambient-grid {
+  display: none;
+}
+
+.effects-reduced .glass-card,
+.effects-reduced .glass-panel,
+.effects-reduced .glass-hero {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .glass-card,
@@ -215,148 +228,17 @@ textarea,
   display: inline-block;
 }
 
-.status-dot--running {
-  background: var(--success);
-  box-shadow: 0 0 0.75rem rgba(74, 222, 128, 0.45);
-}
-
-.status-dot--stopped {
-  background: var(--warning);
-  box-shadow: 0 0 0.75rem rgba(251, 191, 36, 0.4);
-}
-
-.status-dot--error {
-  background: var(--danger);
-  box-shadow: 0 0 0.75rem rgba(251, 113, 133, 0.4);
-}
-
-.status-dot--unknown {
-  background: rgba(148, 163, 184, 0.8);
-}
-
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.12);
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(125, 211, 252, 0.3);
-  border-radius: 999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(125, 211, 252, 0.48);
-}
+.status-dot--running { background: var(--success); box-shadow: 0 0 0.75rem rgba(74, 222, 128, 0.45); }
+.status-dot--stopped { background: var(--warning); box-shadow: 0 0 0.75rem rgba(251, 191, 36, 0.4); }
+.status-dot--error { background: var(--danger); box-shadow: 0 0 0.75rem rgba(251, 113, 133, 0.4); }
+.status-dot--unknown { background: rgba(148, 163, 184, 0.8); }
 
 @keyframes floatOrb {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(1.5rem, -1.2rem, 0) scale(1.08);
-  }
-}
-
-@media (max-width: 768px) {
-  .ambient-grid {
-    opacity: 0.22;
-  }
-
-  .ambient-orb-a,
-  .ambient-orb-b,
-  .ambient-orb-c {
-    width: 16rem;
-    height: 16rem;
-  }
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(1.5rem, -1.2rem, 0) scale(1.08); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ambient-orb {
-    animation: none !important;
-  }
-}
-
-.p-card,
-.p-dialog,
-.p-datatable,
-.p-tabpanels,
-.p-tablist,
-.p-menubar,
-.p-sidebar {
-  border-radius: 24px !important;
-}
-
-.p-card,
-.p-dialog,
-.p-datatable,
-.p-tabpanels,
-.p-tablist,
-.p-menubar,
-.p-sidebar,
-.p-dropdown-panel {
-  background: var(--bg-surface-strong) !important;
-  border: 1px solid var(--border-soft) !important;
-  box-shadow: var(--shadow-soft) !important;
-  backdrop-filter: var(--glass-blur) !important;
-  -webkit-backdrop-filter: var(--glass-blur) !important;
-}
-
-.p-inputtext,
-.p-dropdown,
-.p-inputnumber-input,
-.p-password-input,
-.p-textarea,
-.p-multiselect,
-.p-chips-input-token input {
-  background: rgba(255, 255, 255, 0.05) !important;
-  border: 1px solid var(--border-soft) !important;
-  color: var(--text-primary) !important;
-  border-radius: 16px !important;
-  min-height: 44px;
-}
-
-.p-inputtext:enabled:focus,
-.p-inputnumber-input:enabled:focus,
-.p-password-input:enabled:focus,
-.p-dropdown:not(.p-disabled).p-focus,
-.p-multiselect:not(.p-disabled).p-focus {
-  border-color: var(--border-strong) !important;
-  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.14) !important;
-}
-
-.p-button {
-  border-radius: 16px !important;
-  min-height: 44px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
-}
-
-.p-button:hover {
-  transform: translateY(-1px);
-}
-
-.p-tab {
-  border-radius: 14px 14px 0 0 !important;
-}
-
-.p-datatable-thead > tr > th {
-  background: rgba(255, 255, 255, 0.04) !important;
-  color: var(--text-secondary) !important;
-}
-
-.p-datatable-tbody > tr {
-  background: transparent !important;
-}
-
-.p-datatable-tbody > tr:hover {
-  background: rgba(255, 255, 255, 0.04) !important;
-}
-
-.p-tag {
-  border-radius: 999px !important;
+  .ambient-orb { animation: none !important; }
 }
 </style>

@@ -2,10 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Ensure touch targets for PrimeVue components are adequately sized and prevent iOS zoom */
-.p-inputtext, .p-dropdown, .p-inputnumber-input, .p-password-input, input[type="text"], input[type="number"], input[type="email"], input[type="password"], select, textarea {
+:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.ui-section-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.ui-input-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.ui-field-error {
+  color: #fda4af;
+  font-size: 0.8rem;
+}
+
+.ui-help {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.ui-card {
+  border-radius: 1.5rem;
+  border: 1px solid var(--border-soft);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: var(--shadow-soft);
+}
+
+.p-inputtext,
+.p-dropdown,
+.p-inputnumber-input,
+.p-password-input,
+input[type='text'],
+input[type='number'],
+input[type='email'],
+input[type='password'],
+select,
+textarea {
   min-height: 44px;
-  font-size: 16px !important; /* Prevents auto-zoom on iOS Safari */
+  font-size: 16px !important;
 }
 
 .p-button {
@@ -17,11 +65,11 @@
   min-width: 44px;
 }
 
-/* Hide scrollbar but keep scrollability */
 .hide-scrollbar {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+
 .hide-scrollbar::-webkit-scrollbar {
-  display: none; /* Chrome/Safari */
+  display: none;
 }

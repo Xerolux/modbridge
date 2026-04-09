@@ -37,6 +37,10 @@
                 />
             </div>
         </div>
+        <div v-if="unreachableCount > 0" class="glass-card rounded-2xl p-3 border border-red-400/30 text-red-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <span>{{ unreachableCount }} proxy endpoints are unreachable. Check diagnostics and logs.</span>
+            <Button label="Open Logs" icon="pi pi-eye" severity="danger" outlined @click="goToLogs" />
+        </div>
 
          <div v-if="loading" class="flex justify-center min-h-[400px] items-center">
              <div class="text-center">
@@ -256,7 +260,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import axios from '../axios.js';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
@@ -280,10 +285,12 @@ const loading = ref(true);
 const editMode = ref(false);
 const toast = useToast();
 const confirm = useConfirm();
+const router = useRouter();
 let disconnectFn = null;
 
 const testingProxy = ref(null);
 const connectionStatus = ref({});
+const unreachableCount = computed(() => Object.values(connectionStatus.value).filter((entry) => entry && !entry.reachable).length);
 
 const defaultProxyForm = () => ({
     id: '',
@@ -495,6 +502,10 @@ const testConnectivity = async (proxy) => {
      } finally {
          testingProxy.value = null;
      }
+};
+
+const goToLogs = () => {
+    router.push('/logs');
 };
 </script>
 

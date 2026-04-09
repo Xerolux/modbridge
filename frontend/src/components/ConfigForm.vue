@@ -42,13 +42,13 @@
         <div class="space-y-4">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 class="text-xl font-bold text-[var(--text-primary)]">Proxy-Liste</h3>
+              <h3 class="text-xl font-bold text-[var(--text-primary)]">Proxy List</h3>
               <p class="text-sm text-[var(--text-muted)]">
                 Ziehe die Karten an der Griffleiste, um deine Arbeitsreihenfolge visuell zu organisieren.
               </p>
             </div>
             <Button
-              label="Proxy hinzufügen"
+              label="Add Proxy"
               icon="pi pi-plus"
               @click="addProxy"
               class="w-full sm:w-auto"
@@ -59,9 +59,9 @@
             <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5">
               <i class="pi pi-inbox text-2xl text-[var(--text-secondary)]"></i>
             </div>
-            <h4 class="text-lg font-semibold text-[var(--text-primary)]">Noch keine Proxies angelegt</h4>
+            <h4 class="text-lg font-semibold text-[var(--text-primary)]">No proxies configured</h4>
             <p class="mx-auto mt-2 max-w-md text-sm text-[var(--text-muted)]">
-              Lege deinen ersten Proxy an und verwalte danach Reihenfolge, Status und Zeitlimits direkt in dieser Oberfläche.
+              Create your first proxy and manage order, status, and timeout values from one place.
             </p>
           </div>
 
@@ -90,6 +90,7 @@
                       type="button"
                       class="proxy-drag-handle mt-1 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-[var(--text-secondary)] transition hover:border-white/20 hover:text-[var(--text-primary)]"
                       title="Proxy verschieben"
+                      aria-label="Drag proxy card"
                     >
                       <GripVerticalIcon class="h-5 w-5" />
                     </button>
@@ -118,14 +119,14 @@
                   <div class="flex flex-wrap items-center gap-2">
                     <Button
                       v-if="proxy._isDirty || proxy._isNew"
-                      :label="proxy._isNew ? 'Erstellen' : 'Speichern'"
+                      :label="proxy._isNew ? 'Create' : 'Save'"
                       icon="pi pi-save"
                       @click.stop="saveProxy(proxy, index)"
                       :loading="store.isLoading && activeSaveKey === getProxyKey(proxy, index)"
                       size="small"
                     />
                     <Button
-                      :label="proxy._showAdvanced ? 'Weniger' : 'Mehr'"
+                      :label="proxy._showAdvanced ? 'Less' : 'More'"
                       :icon="proxy._showAdvanced ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
                       severity="secondary"
                       text
@@ -139,6 +140,7 @@
                       rounded
                       @click.stop="removeProxy(proxy.id, index)"
                       size="small"
+                      aria-label="Delete proxy"
                     />
                   </div>
                 </div>
@@ -163,7 +165,7 @@
                   </div>
 
                   <div class="field-group xl:col-span-6">
-                    <label>Beschreibung</label>
+                    <label>Description</label>
                     <input v-model="proxy.description" type="text" placeholder="Optionaler Hinweis zur Anlage" @input="markDirty(proxy, index)" />
                   </div>
 
@@ -182,11 +184,11 @@
                   <div class="flex flex-wrap gap-3">
                     <label class="toggle-chip">
                       <input type="checkbox" v-model="proxy.enabled" @change="markDirty(proxy, index)" />
-                      <span>Aktiviert</span>
+                      <span>Enabled</span>
                     </label>
                     <label class="toggle-chip">
                       <input type="checkbox" v-model="proxy.paused" @change="markDirty(proxy, index)" />
-                      <span>Pausiert</span>
+                      <span>Paused</span>
                     </label>
                   </div>
 
@@ -195,7 +197,7 @@
                       {{ tag }}
                     </span>
                     <span v-if="normalizeTags(proxy).length === 0" class="text-xs text-[var(--text-muted)]">
-                      Keine Tags gesetzt
+                      No tags set
                     </span>
                   </div>
                 </div>
@@ -232,7 +234,7 @@
             <div class="space-y-3">
               <div>
                 <p class="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Web Interface</p>
-                <h3 class="mt-1 text-xl font-bold text-[var(--text-primary)]">Port und Zugriff</h3>
+                <h3 class="mt-1 text-xl font-bold text-[var(--text-primary)]">Port and Access</h3>
               </div>
               <div class="field-group">
                 <label>Web Interface Address</label>
@@ -244,7 +246,7 @@
                     placeholder=":8080"
                   >
                   <Button
-                    label="Speichern"
+                    label="Save"
                     icon="pi pi-check"
                     @click="savePort"
                     :loading="store.isLoading"
@@ -263,15 +265,15 @@
               <ol class="space-y-3 text-sm text-[var(--text-secondary)]">
                 <li class="workflow-step">
                   <span class="workflow-badge">1</span>
-                  Karten verschieben, um deine bevorzugte Arbeitsreihenfolge zu setzen.
+                  Drag cards to set your preferred working order.
                 </li>
                 <li class="workflow-step">
                   <span class="workflow-badge">2</span>
-                  Änderungen pro Karte prüfen und nur betroffene Einträge speichern.
+                  Review each card and save only changed entries.
                 </li>
                 <li class="workflow-step">
                   <span class="workflow-badge">3</span>
-                  Erweiterte Timeout- und Retry-Werte bei Bedarf ausklappen.
+                  Expand advanced timeout and retry values when needed.
                 </li>
               </ol>
             </div>
@@ -283,7 +285,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onUnmounted, ref, watch } from 'vue';
 import Button from 'primevue/button';
 import { VueDraggable } from 'vue-draggable-plus';
 import { GripVerticalIcon } from 'lucide-vue-next';
@@ -298,6 +300,9 @@ const activeSaveKey = ref(null);
 
 const dirtyCount = computed(() => store.proxies.filter(proxy => proxy._isDirty || proxy._isNew).length);
 const runningCount = computed(() => store.proxies.filter(proxy => proxy.status === 'Running').length);
+watch(dirtyCount, (count) => {
+  store.setUnsavedChanges('proxy-config', count > 0);
+}, { immediate: true });
 
 const getProxyKey = (proxy, index) => proxy.id || proxy._tempId || `proxy-${index}`;
 
@@ -360,6 +365,7 @@ const removeProxy = async (id, index) => {
 
   if (confirm('Moechtest du diesen Proxy wirklich entfernen?')) {
     await store.deleteProxy(id);
+    store.setUnsavedChanges('proxy-config', dirtyCount.value > 0);
   }
 };
 
@@ -390,6 +396,7 @@ const saveProxy = async (proxy, index) => {
 
   if (success) {
     activeProxyKey.value = null;
+    store.setUnsavedChanges('proxy-config', dirtyCount.value > 0);
   }
 
   activeSaveKey.value = null;
@@ -398,6 +405,7 @@ const saveProxy = async (proxy, index) => {
 const savePort = async () => {
   if (confirm('Eine Port-Aenderung erfordert einen Neustart. Fortfahren?')) {
     await store.saveWebPort(store.webPort);
+    store.setUnsavedChanges('system-config', false);
   }
 };
 
@@ -407,11 +415,17 @@ const markDirty = (proxy, index) => {
   }
   activeProxyKey.value = getProxyKey(proxy, index);
   delete validationErrors.value[getValidationKey(proxy, index)];
+  store.setUnsavedChanges('proxy-config', true);
 };
 
 const onReorder = () => {
   activeProxyKey.value = null;
+  store.setUnsavedChanges('proxy-config', true);
 };
+
+onUnmounted(() => {
+  store.clearUnsavedChanges('proxy-config');
+});
 </script>
 
 <style scoped>

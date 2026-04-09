@@ -1,6 +1,20 @@
 <template>
     <div class="p-2 sm:p-4 flex flex-col gap-4">
-        <h1 class="text-xl sm:text-2xl font-bold mb-2 sm:mb-4 text-gray-200">Configuration</h1>
+        <div class="glass-hero rounded-[24px] p-5 sm:p-6">
+            <div class="relative z-[1] flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <p class="ui-section-title">Settings</p>
+                    <h1 class="text-xl sm:text-2xl font-bold text-[var(--text-primary)]">Configuration Center</h1>
+                    <p class="ui-help mt-2">Basic setup first, then security and integrations.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span v-if="store.hasUnsavedChanges" class="inline-flex items-center rounded-full border border-amber-300/30 bg-amber-400/10 px-3 py-1 text-xs text-amber-200">
+                        Unsaved changes: {{ store.unsavedCount }}
+                    </span>
+                    <Button icon="pi pi-save" label="Save all" @click="saveConfig" :disabled="!store.hasUnsavedChanges" />
+                </div>
+            </div>
+        </div>
 
         <div v-if="loading" class="flex justify-center">
             <i class="pi pi-spin pi-spinner text-4xl text-blue-500"></i>
@@ -9,10 +23,10 @@
         <div v-else class="flex flex-col gap-6">
             <Tabs value="0">
                 <TabList class="glass-card rounded-t-3xl text-gray-200 overflow-x-auto flex-nowrap whitespace-nowrap hide-scrollbar border border-white/10 border-b-0">
-                    <Tab value="0" class="shrink-0">Proxies</Tab>
-                    <Tab value="1" class="shrink-0">Logging</Tab>
+                    <Tab value="0" class="shrink-0">Basic</Tab>
+                    <Tab value="1" class="shrink-0">Observability</Tab>
                     <Tab v-if="auth.hasPermission('config:edit')" value="2" class="shrink-0">Security</Tab>
-                    <Tab v-if="auth.hasPermission('config:edit')" value="3" class="shrink-0">Email</Tab>
+                    <Tab v-if="auth.hasPermission('config:edit')" value="3" class="shrink-0">Integrations</Tab>
                     <Tab v-if="auth.hasPermission('config:edit')" value="4" class="shrink-0">Backup</Tab>
                     <Tab v-if="auth.hasPermission('config:edit')" value="5" class="shrink-0">Advanced</Tab>
                 </TabList>
@@ -293,7 +307,7 @@
 </template>
 
 <script setup>
-  import { ref, onMounted } from 'vue';
+  import { ref, onMounted, onUnmounted, watch } from 'vue';
   import axios from '../axios.js';
   import Button from 'primevue/button';
   import Password from 'primevue/password';
@@ -366,6 +380,7 @@
      debug_mode: false,
      max_connections: 1000
  });
+ const configSnapshot = ref('');
 
  const logLevels = [
      { label: 'DEBUG', value: 'DEBUG' },
@@ -386,10 +401,17 @@
      try {
          const res = await axios.get('/api/config/system');
          config.value = { ...config.value, ...res.data };
+         configSnapshot.value = JSON.stringify(config.value);
+         store.setUnsavedChanges('system-config', false);
      } catch (e) {
          toast.add({ severity: 'error', summary: 'Fehler', detail: 'Konfiguration konnte nicht geladen werden', life: 5000 });
      }
  };
+
+ watch(config, () => {
+     if (!configSnapshot.value) return;
+     store.setUnsavedChanges('system-config', JSON.stringify(config.value) !== configSnapshot.value);
+ }, { deep: true });
 
  onMounted(async () => {
      await Promise.all([
@@ -404,6 +426,8 @@
      try {
          await axios.put('/api/config/system', config.value);
          toast.add({ severity: 'success', summary: 'Success', detail: 'Configuration saved', life: 3000 });
+         configSnapshot.value = JSON.stringify(config.value);
+         store.setUnsavedChanges('system-config', false);
      } catch (e) {
          toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data || e.message, life: 5000 });
      }
@@ -462,6 +486,7 @@
          });
          toast.add({ severity: 'success', summary: 'Success', detail: 'Configuration imported', life: 3000 });
          await store.fetchProxies();
+         await fetchConfig();
      } catch (e) {
          toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to import configuration', life: 5000 });
      }
@@ -483,4 +508,8 @@
          }
      });
  };
+
+ onUnmounted(() => {
+     store.clearUnsavedChanges('system-config');
+ });
  </script>

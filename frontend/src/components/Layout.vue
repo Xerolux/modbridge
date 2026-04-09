@@ -67,18 +67,19 @@
           command: () => navigate('/config')
       },
       {
+          label: 'Security',
+          icon: 'pi pi-shield',
+          path: '/audit',
+          permission: 'audit:view',
+          command: () => navigate('/audit')
+      },
+      {
           label: 'Users',
           icon: 'pi pi-users',
           path: '/users',
           permission: 'user:view',
           command: () => navigate('/users')
       },
-      {
-          label: 'Audit Log',
-          icon: 'pi pi-history',
-          path: '/audit',
-          permission: 'audit:view',
-          command: () => navigate('/audit')
       }
   ];
 
@@ -120,7 +121,7 @@
             <Menubar :model="isMobile ? [] : items" class="glass-card border border-white/10 rounded-2xl shadow-lg !bg-surface-800/40">
                  <template #start>
                    <div class="flex items-center gap-4 pl-2">
-                       <Button v-if="isMobile" icon="pi pi-bars" text rounded @click="mobileMenuVisible = true" class="text-white hover:bg-white/10" />
+                       <Button v-if="isMobile" icon="pi pi-bars" text rounded @click="mobileMenuVisible = true" class="text-white hover:bg-white/10" aria-label="Open navigation menu" />
                        <div class="flex items-center gap-2 cursor-pointer" @click="navigate('/')">
                            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-blue-500 flex items-center justify-center shadow-lg shadow-primary-500/20">
                                <i class="pi pi-bolt text-white text-sm"></i>
@@ -140,14 +141,19 @@
                          <LanguageSelector class="hidden sm:flex" />
                          <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-900/50 border border-white/5">
                              <i :class="appStore.darkMode ? 'pi pi-moon' : 'pi pi-sun'" class="text-surface-300 text-sm"></i>
-                             <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" class="scale-75" />
+                             <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" class="scale-75" aria-label="Toggle dark mode" />
+                         </div>
+                         <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-900/50 border border-white/5">
+                             <i class="pi pi-eye text-surface-300 text-sm"></i>
+                             <InputSwitch :modelValue="appStore.reducedEffects" @update:modelValue="(val) => appStore.toggleReducedEffects(val)" class="scale-75" aria-label="Toggle reduced effects mode" />
                          </div>
                          <div v-if="auth.user.username" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-900/50 border border-white/5">
                              <i class="pi pi-user text-surface-300 text-sm"></i>
                              <span class="text-surface-200 text-sm">{{ auth.user.username }}</span>
                              <span class="text-xs text-surface-400">({{ auth.user.role }})</span>
                          </div>
-                         <Button icon="pi pi-power-off" severity="danger" rounded text @click="logout" class="hidden sm:flex hover:bg-red-500/20 w-10 h-10" />
+                         <span v-if="appStore.hasUnsavedChanges" class="hidden sm:inline-flex rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-[11px] uppercase tracking-wider text-amber-200">Unsaved</span>
+                         <Button icon="pi pi-power-off" severity="danger" rounded text @click="logout" class="hidden sm:flex hover:bg-red-500/20 w-10 h-10" aria-label="Logout" />
                      </div>
                  </template>
             </Menubar>
@@ -183,8 +189,12 @@
                         <span class="text-surface-200 font-medium text-sm">Theme</span>
                         <div class="flex items-center gap-3">
                             <i :class="appStore.darkMode ? 'pi pi-moon text-surface-400' : 'pi pi-sun text-surface-400'"></i>
-                            <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" class="scale-90" />
+                            <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" class="scale-90" aria-label="Toggle dark mode" />
                         </div>
+                     </div>
+                     <div class="flex items-center justify-between px-4 py-3 rounded-xl bg-surface-900/50 border border-white/5">
+                        <span class="text-surface-200 font-medium text-sm">Reduced Effects</span>
+                        <InputSwitch :modelValue="appStore.reducedEffects" @update:modelValue="(val) => appStore.toggleReducedEffects(val)" class="scale-90" aria-label="Toggle reduced effects mode" />
                      </div>
                      <LanguageSelector class="w-full px-2" />
                     <Button

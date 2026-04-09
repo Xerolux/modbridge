@@ -46,6 +46,15 @@
 
       <div class="flex flex-wrap gap-2 sm:gap-3 w-full lg:w-auto">
         <Button
+          v-if="errorProxyCount > 0"
+          label="Show Errors"
+          icon="pi pi-exclamation-triangle"
+          severity="danger"
+          outlined
+          @click="goToLogs"
+          class="flex-1 sm:flex-none"
+        />
+        <Button
           icon="pi pi-cog"
           @click="showConfigPanel = true"
           class="flex-1 sm:flex-none"
@@ -165,6 +174,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { GridStack } from 'gridstack';
 import 'gridstack/dist/gridstack.min.css';
 import axios from '../axios.js';
@@ -178,6 +188,7 @@ import { BREAKPOINTS, DASHBOARD_CONFIG, GRID_CONFIG } from '../utils/constants';
 import { debounce, formatNumber } from '../utils/helpers';
 
 const STORAGE_KEY = 'dashboard_layout_v2';
+const router = useRouter();
 
 const grid = ref(null);
 const proxies = ref([]);
@@ -193,6 +204,7 @@ const isMobileLayout = ref(window.innerWidth <= BREAKPOINTS.MOBILE);
 let sseDisconnect = null;
 
 const runningProxyCount = computed(() => proxies.value.filter(proxy => proxy.status === 'Running').length);
+const errorProxyCount = computed(() => proxies.value.filter(proxy => proxy.status === 'Error').length);
 const availableProxyOptions = computed(() => {
   const usedIds = new Set(widgets.value.map(widget => widget.proxy_id));
   return proxies.value
@@ -492,6 +504,10 @@ const resetLayout = () => {
   localStorage.removeItem(STORAGE_KEY);
   loadGrid(buildDefaultLayout(proxies.value));
   saveLayout();
+};
+
+const goToLogs = () => {
+  router.push('/logs');
 };
 </script>
 

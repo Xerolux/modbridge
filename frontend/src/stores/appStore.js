@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import axios from '../axios.js';
 
 export const useAppStore = defineStore('app', () => {
@@ -13,18 +13,41 @@ export const useAppStore = defineStore('app', () => {
   const isLoading = ref(false);
   const error = ref(null);
   const darkMode = ref(localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches));
+  const reducedEffects = ref(localStorage.getItem('reduced-effects') === '1');
+  const hasUnsavedChanges = ref(false);
+  const unsavedScopes = ref({});
+
+  const unsavedCount = computed(() => Object.values(unsavedScopes.value).filter(Boolean).length);
 
   const toggleDarkMode = (value) => {
-    // If value is provided, use it; otherwise toggle
     darkMode.value = value !== undefined ? value : !darkMode.value;
     localStorage.setItem('theme', darkMode.value ? 'dark' : 'light');
+  };
+
+  const toggleReducedEffects = (value) => {
+    reducedEffects.value = value !== undefined ? value : !reducedEffects.value;
+    localStorage.setItem('reduced-effects', reducedEffects.value ? '1' : '0');
+  };
+
+  const setUnsavedChanges = (scope, isDirty) => {
+    if (!scope) return;
+    unsavedScopes.value[scope] = Boolean(isDirty);
+    hasUnsavedChanges.value = Object.values(unsavedScopes.value).some(Boolean);
+  };
+
+  const clearUnsavedChanges = (scope) => {
+    if (scope) {
+      delete unsavedScopes.value[scope];
+    } else {
+      unsavedScopes.value = {};
+    }
+    hasUnsavedChanges.value = Object.values(unsavedScopes.value).some(Boolean);
   };
 
   const fetchProxies = async () => {
     try {
       const res = await axios.get('/api/proxies');
-      // Convert tags array to comma-separated string for editing
-      proxies.value = res.data.map(proxy => ({
+      proxies.value = res.data.map((proxy) => ({
         ...proxy,
         tags: Array.isArray(proxy.tags) ? proxy.tags.join(', ') : proxy.tags || ''
       }));
@@ -138,21 +161,27 @@ export const useAppStore = defineStore('app', () => {
   };
 
   return {
-     proxies,
-     webPort,
-     status,
-     isLoading,
-     error,
-     darkMode,
-     toggleDarkMode,
-     fetchProxies,
-     addProxy,
-     updateProxy,
-     deleteProxy,
-     fetchWebPort,
-     saveWebPort,
-     fetchStatus,
-     restartSystem,
-     exportDeviceHistory
-   };
+    proxies,
+    webPort,
+    status,
+    isLoading,
+    error,
+    darkMode,
+    reducedEffects,
+    hasUnsavedChanges,
+    unsavedCount,
+    toggleDarkMode,
+    toggleReducedEffects,
+    setUnsavedChanges,
+    clearUnsavedChanges,
+    fetchProxies,
+    addProxy,
+    updateProxy,
+    deleteProxy,
+    fetchWebPort,
+    saveWebPort,
+    fetchStatus,
+    restartSystem,
+    exportDeviceHistory
+  };
 });

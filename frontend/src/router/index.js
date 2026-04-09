@@ -1,18 +1,19 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
- import { useAuthStore } from '../stores/auth'
+import { createRouter, createWebHashHistory } from 'vue-router';
+import { useAuthStore } from '../stores/auth';
+import { useAppStore } from '../stores/appStore';
 
- const Dashboard = () => import('../views/Dashboard.vue')
- const Login = () => import('../views/Login.vue')
- const Control = () => import('../views/Control.vue')
- const Config = () => import('../views/Config.vue')
- const Logs = () => import('../views/Logs.vue')
- const Devices = () => import('../views/Devices.vue')
- const SystemInfo = () => import('../views/SystemInfo.vue')
- const Users = () => import('../views/Users/Users.vue')
- const Audit = () => import('../views/Audit/Audit.vue')
- const Layout = () => import('../components/Layout.vue')
+const Dashboard = () => import('../views/Dashboard.vue');
+const Login = () => import('../views/Login.vue');
+const Control = () => import('../views/Control.vue');
+const Config = () => import('../views/Config.vue');
+const Logs = () => import('../views/Logs.vue');
+const Devices = () => import('../views/Devices.vue');
+const SystemInfo = () => import('../views/SystemInfo.vue');
+const Users = () => import('../views/Users/Users.vue');
+const Audit = () => import('../views/Audit/Audit.vue');
+const Layout = () => import('../components/Layout.vue');
 
- const routes = [
+const routes = [
   {
     path: '/login',
     name: 'Login',
@@ -24,78 +25,49 @@ import { createRouter, createWebHashHistory } from 'vue-router'
     component: Layout,
     meta: { requiresAuth: true },
     children: [
-      {
-        path: '',
-        name: 'Dashboard',
-        component: Dashboard,
-        meta: { preload: true }
-      },
-      {
-        path: '/control',
-        name: 'Control',
-        component: Control,
-        meta: { permission: 'proxy:view' }
-      },
-      {
-        path: '/devices',
-        name: 'Devices',
-        component: Devices,
-        meta: { permission: 'device:view' }
-      },
-      {
-        path: '/config',
-        name: 'Config',
-        component: Config,
-        meta: { permission: 'config:view' }
-      },
-      {
-        path: '/logs',
-        name: 'Logs',
-        component: Logs,
-        meta: { permission: 'logs:view' }
-      },
-      {
-        path: '/system',
-        name: 'System',
-        component: SystemInfo,
-        meta: { permission: 'system:view' }
-      },
-      {
-        path: '/users',
-        name: 'Users',
-        component: Users,
-        meta: { permission: 'user:view' }
-      },
-      {
-        path: '/audit',
-        name: 'Audit',
-        component: Audit,
-        meta: { permission: 'audit:view' }
-      }
+      { path: '', name: 'Dashboard', component: Dashboard, meta: { preload: true } },
+      { path: '/control', name: 'Control', component: Control, meta: { permission: 'proxy:view' } },
+      { path: '/devices', name: 'Devices', component: Devices, meta: { permission: 'device:view' } },
+      { path: '/config', name: 'Config', component: Config, meta: { permission: 'config:view' } },
+      { path: '/logs', name: 'Logs', component: Logs, meta: { permission: 'logs:view' } },
+      { path: '/system', name: 'System', component: SystemInfo, meta: { permission: 'system:view' } },
+      { path: '/users', name: 'Users', component: Users, meta: { permission: 'user:view' } },
+      { path: '/audit', name: 'Audit', component: Audit, meta: { permission: 'audit:view' } }
     ]
   }
-]
+];
 
 const router = createRouter({
   history: createWebHashHistory(),
   routes
-})
+});
 
 router.beforeEach(async (to, from, next) => {
-  const auth = useAuthStore()
+  const auth = useAuthStore();
+  const app = useAppStore();
+
+  if (to.fullPath !== from.fullPath && app.hasUnsavedChanges) {
+    const confirmed = window.confirm('You have unsaved changes. Leave this page and discard them?');
+    if (!confirmed) {
+      next(false);
+      return;
+    }
+    app.clearUnsavedChanges();
+  }
 
   if (to.meta.requiresAuth) {
-     const valid = await auth.checkAuth()
-     if (!valid) {
-         next('/login')
-         return
-     }
-     if (to.meta.permission && !auth.hasPermission(to.meta.permission)) {
-         next('/')
-         return
-     }
+    const valid = await auth.checkAuth();
+    if (!valid) {
+      next('/login');
+      return;
+    }
+    if (to.meta.permission && !auth.hasPermission(to.meta.permission)) {
+      next('/');
+      return;
+    }
   }
-  next()
-})
 
-export default router
+  next();
+});
+
+export default router;
