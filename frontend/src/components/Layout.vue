@@ -132,8 +132,8 @@
                         </button>
                    </div>
                  </template>
-                 <template #item="{ item, props }">
-                     <a v-ripple class="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 rounded-xl cursor-pointer text-surface-200 transition-colors mx-1" :class="{'bg-white/10 text-white font-medium': isActiveRoute(item.path)}" v-bind="props.action">
+                 <template #item="{ item }">
+                     <a v-ripple class="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 rounded-xl cursor-pointer text-surface-200 transition-colors mx-1" :class="{'bg-white/10 text-white font-medium': isActiveRoute(item.path)}" @click.prevent="item.command">
                          <i :class="item.icon" class="text-lg"></i>
                          <span class="text-sm">{{ item.label }}</span>
                      </a>
