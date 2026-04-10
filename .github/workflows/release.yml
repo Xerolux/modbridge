@@ -3,10 +3,27 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version (z.B. v1.0.0)'
+      version_mode:
+        description: 'Version-Modus'
         required: true
+        default: auto
+        type: choice
+        options:
+          - auto
+          - manual
+      version:
+        description: 'Version (nur bei manual, z.B. v1.0.0)'
+        required: false
         type: string
+      bump:
+        description: 'Auto-Inkrement (nur bei auto)'
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
       release_type:
         description: 'Release-Typ'
         required: true
@@ -51,12 +68,48 @@ jobs:
       - name: Validate & compute release info
         id: compute
         run: |
+          MODE="${{ inputs.version_mode }}"
           VERSION="${{ inputs.version }}"
+          BUMP="${{ inputs.bump }}"
           TYPE="${{ inputs.release_type }}"
           MAKE_LATEST="${{ inputs.make_latest }}"
 
-          # Auto-add v prefix if missing
-          [[ "$VERSION" != v* ]] && VERSION="v${VERSION}"
+          git fetch --tags --force
+
+          LATEST_TAG=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1)
+
+          if [ "$MODE" = "manual" ]; then
+            if [ -z "$VERSION" ]; then
+              echo "❌ Bei version_mode=manual muss 'version' gesetzt werden."
+              exit 1
+            fi
+            [[ "$VERSION" != v* ]] && VERSION="v${VERSION}"
+          else
+            BASE_VERSION="${LATEST_TAG#v}"
+            if [ -z "$BASE_VERSION" ]; then
+              BASE_VERSION=$(tr -d '[:space:]' < version.txt)
+            fi
+
+            if [[ ! "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "❌ Konnte keine gueltige Basisversion ermitteln (Tag/version.txt)."
+              exit 1
+            fi
+
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
+            case "$BUMP" in
+              major)
+                MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+              minor)
+                MINOR=$((MINOR + 1)); PATCH=0 ;;
+              patch)
+                PATCH=$((PATCH + 1)) ;;
+              *)
+                echo "❌ Unbekannter bump-Wert: $BUMP"
+                exit 1 ;;
+            esac
+
+            VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          fi
 
           # Validate semver format (vX.Y.Z)
           if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -73,6 +126,11 @@ jobs:
             TAG="${VERSION}-${TYPE}"
             DOCKER_TAG="${VERSION#v}-${TYPE}"
             PRERELEASE="true"
+          fi
+
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "❌ Tag ${TAG} existiert bereits."
+            exit 1
           fi
 
           # Build comma-separated Docker tag list
@@ -93,18 +151,19 @@ jobs:
 
           echo ""
           echo "📦 Git Tag:      ${TAG}"
+          echo "🔢 Version mode: ${MODE}"
+          echo "🧮 Bump:         ${BUMP}"
+          echo "Last tag:       ${LATEST_TAG:-<none>}"
           echo "🐳 Docker Tags:  ${TAGS}"
           echo "🔖 Prerelease:   ${PRERELEASE}"
           echo "⭐ Latest:        ${MAKE_LATEST}"
 
       - name: Create and push git tag
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -f "${{ steps.compute.outputs.tag }}"
-          git push -f origin "${{ steps.compute.outputs.tag }}"
+          git tag "${{ steps.compute.outputs.tag }}"
+          git push origin "${{ steps.compute.outputs.tag }}"
 
   # ─────────────────────────────────────────────────────────────────────────────
   # 2. Test (parallel with build-frontend)
