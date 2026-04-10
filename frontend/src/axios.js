@@ -25,7 +25,7 @@ axios.interceptors.response.use(
         if (error.response && error.response.status === 401) {
             emitUnauthorized();
             if (window.location.hash !== '#/login') {
-                window.location.hash = '#/login';
+                window.location.replace('/#/login');
             }
         }
         return Promise.reject(error);

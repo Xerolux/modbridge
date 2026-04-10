@@ -38,7 +38,7 @@
         stripedRows
         responsiveLayout="scroll"
         class="p-datatable-sm"
-        :globalFilterFields="['action', 'username', 'resource_type']"
+        :globalFilterFields="['action', 'username', 'resource_type', 'ip_address', 'mac_address', 'device_name']"
       >
         <Column field="timestamp" header="Timestamp" sortable>
           <template #body="{ data }">
@@ -63,6 +63,25 @@
             <span class="text-gray-300">
               {{ data.resource_type }}{{ data.resource_id ? ':' + data.resource_id : '' }}
             </span>
+          </template>
+        </Column>
+        <Column field="ip_address" header="IP">
+          <template #body="{ data }">
+            <span class="text-gray-300 text-sm" :title="data.ip_address || '-'">
+              {{ data.ip_address || '-' }}
+            </span>
+          </template>
+        </Column>
+        <Column field="mac_address" header="MAC">
+          <template #body="{ data }">
+            <div class="flex flex-col">
+              <span class="text-gray-300 text-sm" :title="data.mac_address || '-'">
+                {{ data.mac_address || '-' }}
+              </span>
+              <span v-if="data.device_name" class="text-gray-500 text-xs" :title="data.device_name">
+                {{ data.device_name }}
+              </span>
+            </div>
           </template>
         </Column>
         <Column field="success" header="Status" sortable>

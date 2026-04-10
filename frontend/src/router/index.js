@@ -81,27 +81,29 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
+  const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
 
-  if (to.meta.requiresAuth) {
-     const valid = await auth.checkAuth()
-     if (!valid) {
-         next('/login')
-         return
-     }
-     if (to.meta.permission && !auth.hasPermission(to.meta.permission)) {
-         next('/')
-         return
-     }
+  if (!requiresAuth) return true
+
+  const valid = await auth.checkAuth()
+  if (!valid) {
+    return { path: '/login', replace: true }
   }
-  next()
+
+  const requiredPermission = to.meta.permission
+  if (requiredPermission && !auth.hasPermission(requiredPermission)) {
+    return { path: '/', replace: true }
+  }
+
+  return true
 })
 
 router.onError((error) => {
   console.error('Router navigation error:', error)
-  if (error.message.includes('Failed to fetch dynamically imported module') ||
-      error.message.includes('Importing a module script failed')) {
+  const message = String(error?.message || '')
+  if (/failed to fetch dynamically imported module|importing a module script failed|loading chunk|chunkloaderror/i.test(message)) {
     window.location.reload()
   }
 })

@@ -264,21 +264,53 @@ textarea,
 
 @media (max-width: 768px) {
   .ambient-grid {
-    opacity: 0.22;
+    opacity: 0.14;
   }
 
   .ambient-orb-a,
   .ambient-orb-b,
   .ambient-orb-c {
-    width: 16rem;
-    height: 16rem;
+    width: 13rem;
+    height: 13rem;
+    filter: blur(54px);
+    opacity: 0.35;
+  }
+
+  .ambient-orb-c {
+    display: none;
+  }
+
+  .p-card,
+  .p-dialog,
+  .p-datatable,
+  .p-tabpanels,
+  .p-tablist,
+  .p-menubar,
+  .p-sidebar,
+  .p-dropdown-panel {
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .ambient-grid,
+  .ambient-orb {
+    display: none;
+  }
+
   .ambient-orb {
     animation: none !important;
   }
+
+  .p-button {
+    transition: none !important;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.85);
+  outline-offset: 2px;
 }
 
 .p-card,

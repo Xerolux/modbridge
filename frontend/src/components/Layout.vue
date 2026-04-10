@@ -19,7 +19,12 @@
   const isMobile = ref(false);
 
   const navigate = (path) => {
-      router.push(path);
+      if (route.path === path) {
+          mobileMenuVisible.value = false;
+          return;
+      }
+
+      router.push(path).catch(() => {});
       mobileMenuVisible.value = false;
   };
 
@@ -120,11 +125,11 @@
             <Menubar :model="isMobile ? [] : items" class="glass-card border border-white/10 rounded-2xl shadow-lg !bg-surface-800/40">
                  <template #start>
                    <div class="flex items-center gap-4 pl-2">
-                       <Button v-if="isMobile" icon="pi pi-bars" text rounded @click="mobileMenuVisible = true" class="text-white hover:bg-white/10" />
-                       <div class="flex items-center gap-2 cursor-pointer" @click="navigate('/')">
-                           <img src="../assets/logo.png" alt="ModBridge Logo" class="w-12 h-12 object-contain" />
-                           <span class="text-xl font-bold tracking-tight text-surface-900 dark:text-white hidden sm:block">ModBridge</span>
-                       </div>
+                        <Button v-if="isMobile" icon="pi pi-bars" text rounded @click="mobileMenuVisible = true" class="text-white hover:bg-white/10" aria-label="Open navigation" />
+                        <button type="button" class="flex items-center gap-2 cursor-pointer bg-transparent border-0 p-0" @click="navigate('/')" aria-label="Go to dashboard">
+                            <img src="../assets/logo.png" alt="ModBridge Logo" class="w-12 h-12 object-contain" />
+                            <span class="text-xl font-bold tracking-tight text-surface-900 dark:text-white hidden sm:block">ModBridge</span>
+                        </button>
                    </div>
                  </template>
                  <template #item="{ item, props }">
@@ -145,7 +150,7 @@
                              <span class="text-surface-200 text-sm">{{ auth.user.username }}</span>
                              <span class="text-xs text-surface-400">({{ auth.user.role }})</span>
                          </div>
-                         <Button icon="pi pi-power-off" severity="danger" rounded text @click="logout" class="hidden sm:flex hover:bg-red-500/20 w-10 h-10" />
+                          <Button icon="pi pi-power-off" severity="danger" rounded text @click="logout" class="hidden sm:flex hover:bg-red-500/20 w-10 h-10" aria-label="Logout" />
                      </div>
                  </template>
             </Menubar>
@@ -153,10 +158,10 @@
 
         <Sidebar v-model:visible="mobileMenuVisible" :baseZIndex="10000" class="glass-sidebar">
             <template #header>
-                <div class="flex items-center gap-3 px-2 cursor-pointer" @click="navigate('/')">
+                <button type="button" class="flex items-center gap-3 px-2 cursor-pointer bg-transparent border-0 p-0" @click="navigate('/')" aria-label="Go to dashboard">
                      <img src="../assets/logo.png" alt="ModBridge Logo" class="w-12 h-12 object-contain" />
                      <span class="text-xl font-bold tracking-tight text-surface-900 dark:text-white">ModBridge</span>
-                </div>
+                </button>
             </template>
             <div class="flex flex-col gap-2 h-full py-4">
                 <div v-for="item in items" :key="item.label">

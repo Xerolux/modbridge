@@ -36,15 +36,15 @@ type CreateUserRequest struct {
 }
 
 type UpdateUserRequest struct {
-	Username           string `json:"username"`
-	FullName           string `json:"full_name"`
-	Email              string `json:"email"`
-	Role               string `json:"role"`
-	Enabled            bool   `json:"enabled"`
-	AutoDeactivateDays int    `json:"auto_deactivate_days"`
-	ExpiresAt          string `json:"expires_at"`
-	Password           string `json:"password,omitempty"`
-	Description        string `json:"description"`
+	Username           *string `json:"username"`
+	FullName           *string `json:"full_name"`
+	Email              *string `json:"email"`
+	Role               *string `json:"role"`
+	Enabled            *bool   `json:"enabled"`
+	AutoDeactivateDays *int    `json:"auto_deactivate_days"`
+	ExpiresAt          *string `json:"expires_at"`
+	Password           *string `json:"password,omitempty"`
+	Description        *string `json:"description"`
 }
 
 func (m *Manager) CreateUser(req *CreateUserRequest, createdBy string) (*database.User, error) {
@@ -159,10 +159,13 @@ func (m *Manager) UpdateUser(id string, req *UpdateUserRequest) error {
 		return errors.New("user not found")
 	}
 
-	if req.Username != "" {
-		req.Username = strings.TrimSpace(req.Username)
-		if req.Username != user.Username {
-			existing, err := m.db.GetUserByUsername(req.Username)
+	if req.Username != nil {
+		trimmedUsername := strings.TrimSpace(*req.Username)
+		if trimmedUsername == "" {
+			return errors.New("username is required")
+		}
+		if trimmedUsername != user.Username {
+			existing, err := m.db.GetUserByUsername(trimmedUsername)
 			if err != nil {
 				return err
 			}
@@ -170,34 +173,72 @@ func (m *Manager) UpdateUser(id string, req *UpdateUserRequest) error {
 				return errors.New("username already exists")
 			}
 		}
-		user.Username = req.Username
+		user.Username = trimmedUsername
 	}
-	user.FullName = strings.TrimSpace(req.FullName)
-	user.Email = strings.TrimSpace(req.Email)
-	if req.Role != "" {
-		_, err := rbac.ParseRole(req.Role)
+
+	if req.FullName != nil {
+		trimmedFullName := strings.TrimSpace(*req.FullName)
+		if trimmedFullName == "" {
+			return errors.New("full name is required")
+		}
+		user.FullName = trimmedFullName
+	}
+
+	if req.Email != nil {
+		trimmedEmail := strings.TrimSpace(*req.Email)
+		if trimmedEmail == "" {
+			return errors.New("email is required")
+		}
+		user.Email = trimmedEmail
+	}
+
+	if req.Role != nil {
+		_, err := rbac.ParseRole(*req.Role)
 		if err != nil {
 			return err
 		}
-		user.Role = req.Role
+		user.Role = *req.Role
 	}
-	user.Enabled = req.Enabled
-	user.AutoDeactivateDays = req.AutoDeactivateDays
-	user.Description = req.Description
 
-	if req.ExpiresAt != "" {
-		t, err := time.Parse(time.RFC3339, req.ExpiresAt)
-		if err != nil {
-			return errors.New("invalid expires_at format, use RFC3339")
+	if req.Enabled != nil {
+		user.Enabled = *req.Enabled
+	}
+
+	if req.AutoDeactivateDays != nil {
+		user.AutoDeactivateDays = *req.AutoDeactivateDays
+	}
+
+	if req.Description != nil {
+		user.Description = strings.TrimSpace(*req.Description)
+	}
+
+	if req.ExpiresAt != nil {
+		expiresAtValue := strings.TrimSpace(*req.ExpiresAt)
+		if expiresAtValue != "" {
+			t, err := time.Parse(time.RFC3339, expiresAtValue)
+			if err != nil {
+				return errors.New("invalid expires_at format, use RFC3339")
+			}
+			user.ExpiresAt = &t
+		} else if req.AutoDeactivateDays != nil {
+			if *req.AutoDeactivateDays > 0 {
+				t := time.Now().AddDate(0, 0, *req.AutoDeactivateDays)
+				user.ExpiresAt = &t
+			} else {
+				user.ExpiresAt = nil
+			}
 		}
-		user.ExpiresAt = &t
-	} else if req.ExpiresAt == "" && req.AutoDeactivateDays > 0 {
-		t := time.Now().AddDate(0, 0, req.AutoDeactivateDays)
-		user.ExpiresAt = &t
+	} else if req.AutoDeactivateDays != nil {
+		if *req.AutoDeactivateDays > 0 {
+			t := time.Now().AddDate(0, 0, *req.AutoDeactivateDays)
+			user.ExpiresAt = &t
+		} else {
+			user.ExpiresAt = nil
+		}
 	}
 
-	if req.Password != "" {
-		hash, err := auth.HashPassword(req.Password)
+	if req.Password != nil && strings.TrimSpace(*req.Password) != "" {
+		hash, err := auth.HashPassword(*req.Password)
 		if err != nil {
 			return err
 		}

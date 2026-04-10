@@ -16,8 +16,37 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 )
+
+type auditLogResponse struct {
+	*database.AuditLogEntry
+	MACAddress string `json:"mac_address,omitempty"`
+	DeviceName string `json:"device_name,omitempty"`
+}
+
+func normalizeIP(value string) string {
+	ip := strings.TrimSpace(value)
+	if ip == "" {
+		return ""
+	}
+
+	if parsed := net.ParseIP(ip); parsed != nil {
+		return parsed.String()
+	}
+
+	host, _, err := net.SplitHostPort(ip)
+	if err == nil {
+		host = strings.Trim(host, "[]")
+		if parsed := net.ParseIP(host); parsed != nil {
+			return parsed.String()
+		}
+		return host
+	}
+
+	return ip
+}
 
 func (s *Server) handleLogDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", "attachment; filename=proxy.log")
@@ -415,8 +444,40 @@ func (s *Server) handleAuditLogs(w http.ResponseWriter, r *http.Request) {
 		logs = []*database.AuditLogEntry{}
 	}
 
+	deviceByIP := map[string]struct {
+		mac  string
+		name string
+	}{}
+	if s.mgr != nil {
+		for _, device := range s.mgr.GetDevices() {
+			normalized := normalizeIP(device.IP)
+			if normalized == "" {
+				continue
+			}
+			deviceByIP[normalized] = struct {
+				mac  string
+				name string
+			}{mac: device.MAC, name: device.Name}
+		}
+	}
+
+	response := make([]auditLogResponse, 0, len(logs))
+	for _, entry := range logs {
+		item := auditLogResponse{AuditLogEntry: entry}
+		normalizedIP := normalizeIP(entry.IPAddress)
+		if device, ok := deviceByIP[normalizedIP]; ok {
+			if strings.TrimSpace(device.mac) != "" && strings.ToLower(device.mac) != "unknown" {
+				item.MACAddress = device.mac
+			}
+			if strings.TrimSpace(device.name) != "" {
+				item.DeviceName = device.name
+			}
+		}
+		response = append(response, item)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(logs)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func (s *Server) handleAuditLogsExport(w http.ResponseWriter, r *http.Request) {
@@ -435,6 +496,46 @@ func (s *Server) handleAuditLogsExport(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Failed to export audit logs", http.StatusInternalServerError)
 		return
+	}
+
+	// Enrich export with MAC/device names when possible.
+	var logs []*database.AuditLogEntry
+	if err := json.Unmarshal([]byte(data), &logs); err == nil {
+		deviceByIP := map[string]struct {
+			mac  string
+			name string
+		}{}
+		if s.mgr != nil {
+			for _, device := range s.mgr.GetDevices() {
+				normalized := normalizeIP(device.IP)
+				if normalized == "" {
+					continue
+				}
+				deviceByIP[normalized] = struct {
+					mac  string
+					name string
+				}{mac: device.MAC, name: device.Name}
+			}
+		}
+
+		enriched := make([]auditLogResponse, 0, len(logs))
+		for _, entry := range logs {
+			item := auditLogResponse{AuditLogEntry: entry}
+			normalizedIP := normalizeIP(entry.IPAddress)
+			if device, ok := deviceByIP[normalizedIP]; ok {
+				if strings.TrimSpace(device.mac) != "" && strings.ToLower(device.mac) != "unknown" {
+					item.MACAddress = device.mac
+				}
+				if strings.TrimSpace(device.name) != "" {
+					item.DeviceName = device.name
+				}
+			}
+			enriched = append(enriched, item)
+		}
+
+		if encoded, err := json.MarshalIndent(enriched, "", "  "); err == nil {
+			data = string(encoded)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -552,6 +552,11 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
+	session, ok := s.requirePermissionForUserRoute(w, r)
+	if !ok {
+		return
+	}
+
 	if r.Method == http.MethodGet {
 		if s.userMgr == nil {
 			w.Header().Set("Content-Type", "application/json")
@@ -591,7 +596,12 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		user, err := s.userMgr.CreateUser(&req, "admin")
+		createdBy := "admin"
+		if session != nil && session.Username != "" {
+			createdBy = session.Username
+		}
+
+		user, err := s.userMgr.CreateUser(&req, createdBy)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -607,6 +617,11 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUserByID(w http.ResponseWriter, r *http.Request) {
+	session, ok := s.requirePermissionForUserRoute(w, r)
+	if !ok {
+		return
+	}
+
 	if s.userMgr == nil {
 		http.Error(w, "User management not available", http.StatusServiceUnavailable)
 		return
@@ -651,6 +666,11 @@ func (s *Server) handleUserByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodDelete {
+		if session != nil && session.UserID == id {
+			http.Error(w, "cannot delete active session user", http.StatusBadRequest)
+			return
+		}
+
 		if err := s.userMgr.DeleteUser(id); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -660,6 +680,45 @@ func (s *Server) handleUserByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+func (s *Server) requirePermissionForUserRoute(w http.ResponseWriter, r *http.Request) (*auth.Session, bool) {
+	permissionByMethod := map[string]rbac.Permission{
+		http.MethodGet:    rbac.PermUserView,
+		http.MethodPost:   rbac.PermUserCreate,
+		http.MethodPut:    rbac.PermUserEdit,
+		http.MethodDelete: rbac.PermUserDelete,
+	}
+
+	permission, exists := permissionByMethod[r.Method]
+	if !exists {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return nil, false
+	}
+
+	if s.auth == nil {
+		http.Error(w, "Auth backend unavailable", http.StatusServiceUnavailable)
+		return nil, false
+	}
+
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return nil, false
+	}
+
+	session := s.auth.GetSession(cookie.Value)
+	if session == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return nil, false
+	}
+
+	if !rbac.HasPermission(rbac.Role(session.Role), permission) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return nil, false
+	}
+
+	return session, true
 }
 
 // handleProxiesStream streams proxy updates via SSE

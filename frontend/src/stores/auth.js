@@ -4,6 +4,7 @@ import axios from '../axios.js'
 import { onUnauthorized } from '../utils/authEvents'
 
 export const useAuthStore = defineStore('auth', () => {
+  const AUTH_CHECK_CACHE_MS = 5000
   const isAuthenticated = ref(false)
   const user = ref({
     userId: '',
@@ -13,6 +14,7 @@ export const useAuthStore = defineStore('auth', () => {
   })
 
   let checkPromise = null
+  let lastAuthCheckAt = 0
 
   const isAdmin = computed(() => user.value.role === 'admin')
   const isOperator = computed(() => user.value.role === 'operator' || user.value.role === 'admin')
@@ -26,11 +28,16 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated.value = false
     user.value = { userId: '', username: '', role: '', permissions: [] }
     checkPromise = null
+    lastAuthCheckAt = 0
   }
 
   onUnauthorized(resetState)
 
   const checkAuth = async () => {
+    if (isAuthenticated.value && Date.now() - lastAuthCheckAt < AUTH_CHECK_CACHE_MS) {
+      return true
+    }
+
     if (checkPromise) return checkPromise
     checkPromise = (async () => {
       try {
@@ -42,6 +49,7 @@ export const useAuthStore = defineStore('auth', () => {
           permissions: res.data.permissions || []
         }
         isAuthenticated.value = true
+        lastAuthCheckAt = Date.now()
       } catch {
         try {
           await axios.get('/api/status')
@@ -50,6 +58,7 @@ export const useAuthStore = defineStore('auth', () => {
         }
         isAuthenticated.value = false
         user.value = { userId: '', username: '', role: '', permissions: [] }
+        lastAuthCheckAt = 0
       } finally {
         checkPromise = null
       }
@@ -69,9 +78,11 @@ export const useAuthStore = defineStore('auth', () => {
         permissions: meRes.data.permissions || []
       }
       isAuthenticated.value = true
+      lastAuthCheckAt = Date.now()
       return { success: true }
     } catch (e) {
       isAuthenticated.value = false
+      lastAuthCheckAt = 0
       const message = e.response?.data?.trim() || e.message || 'Login failed'
       return { success: false, message }
     }
@@ -82,6 +93,7 @@ export const useAuthStore = defineStore('auth', () => {
     document.cookie = 'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
     isAuthenticated.value = false
     user.value = { userId: '', username: '', role: '', permissions: [] }
+    lastAuthCheckAt = 0
   }
 
   return {
