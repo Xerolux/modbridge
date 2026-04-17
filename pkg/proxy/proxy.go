@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"modbridge/pkg/devices"
 	"modbridge/pkg/logger"
 	"modbridge/pkg/middleware"
@@ -92,9 +93,10 @@ type ProxyInstance struct {
 	// Enhanced features
 	circuitBreaker  *CircuitBreaker
 	enhancedStats   *EnhancedStats
-	requestID       int64 // Atomic counter for request IDs
+	requestID       int64
 	healthChecker   *HealthChecker
 	adaptiveTimeout *AdaptiveTimeout
+	recoveryManager *RecoveryManager
 
 	Stats Stats
 }
@@ -238,6 +240,32 @@ func (p *ProxyInstance) Start() error {
 	)
 	p.healthChecker.Start()
 
+	p.healthChecker.SetOnUnhealthy(func() {
+		p.log.Info(p.ID, "Health checker detected target failure, triggering recovery")
+		if p.recoveryManager != nil {
+			p.recoveryManager.AddTask(p.TargetAddr, 10)
+		}
+	})
+
+	p.healthChecker.SetOnRecovery(func() {
+		p.log.Info(p.ID, "Health checker detected target recovery, resetting circuit breaker and pre-warming pool")
+		if p.circuitBreaker != nil {
+			p.circuitBreaker.Reset()
+		}
+		if p.connPool != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := p.connPool.PreWarm(ctx, 2); err != nil {
+				p.log.Error(p.ID, fmt.Sprintf("Pool pre-warm failed: %v", err))
+			}
+		}
+	})
+
+	p.recoveryManager = NewRecoveryManager(DefaultRecoveryConfig(), func(target string) error {
+		p.log.Info(p.ID, fmt.Sprintf("Recovery check: dialing %s", target))
+		return nil
+	})
+
 	// Initialize adaptive timeouts
 	p.adaptiveTimeout = NewAdaptiveTimeout(p.ReadTimeout, p.ConnectionTimeout)
 
@@ -274,6 +302,10 @@ func (p *ProxyInstance) Stop() {
 
 	if p.healthChecker != nil {
 		p.healthChecker.Stop()
+	}
+
+	if p.recoveryManager != nil {
+		p.recoveryManager.Stop()
 	}
 
 	// Wait for all goroutines to finish
@@ -431,7 +463,12 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}, glo
 			p.Stats.Errors.Add(1)
 			p.circuitBreaker.RecordFailure()
 			p.enhancedStats.RecordRequestComplete(reqID, bytesRead, 0, errFwd)
-			return
+			exceptionResp := modbus.CreateExceptionResponse(reqFrame, 0x0B)
+			if _, writeErr := clientConn.Write(exceptionResp); writeErr != nil {
+				p.log.Error(p.ID, fmt.Sprintf("Write exception response error: %v", writeErr))
+				return
+			}
+			continue
 		}
 		p.Stats.Requests.Add(1)
 		p.circuitBreaker.RecordSuccess()
@@ -510,8 +547,17 @@ func (p *ProxyInstance) handleSplitRead(reqFrame []byte) ([]byte, error) {
 	return respFrame, nil
 }
 
+// retryBackoff calculates exponential backoff with jitter for retry attempts.
+func (p *ProxyInstance) retryBackoff(attempt int) time.Duration {
+	base := time.Duration(1<<min(uint(attempt-1), 10)) * 100 * time.Millisecond
+	if base > 30*time.Second {
+		base = 30 * time.Second
+	}
+	jitter := time.Duration(rand.Int63n(int64(base) / 2))
+	return base + jitter
+}
+
 // forwardRequest sends a request to the target and returns the response.
-// Uses connection pool for concurrent request handling.
 func (p *ProxyInstance) forwardRequest(req []byte) ([]byte, error) {
 	var lastErr error
 
@@ -524,15 +570,10 @@ func (p *ProxyInstance) forwardRequest(req []byte) ([]byte, error) {
 
 	for attempt := 0; attempt <= p.MaxRetries; attempt++ {
 		if attempt > 0 {
-			// Exponential backoff with cap to prevent overflow
-			backoffDuration := time.Duration(1<<min(uint(attempt-1), 10)) * 100 * time.Millisecond
-			if backoffDuration > 30*time.Second {
-				backoffDuration = 30 * time.Second
-			}
+			backoffDuration := p.retryBackoff(attempt)
 			time.Sleep(backoffDuration)
 		}
 
-		// Get connection from pool
 		rawConn, err := p.connPool.Get(p.ctx)
 		if err != nil {
 			lastErr = err
@@ -609,10 +650,7 @@ func (p *ProxyInstance) forwardRequestRTU(tcpReq []byte) ([]byte, error) {
 	}
 	for attempt := 0; attempt <= p.MaxRetries; attempt++ {
 		if attempt > 0 {
-			backoff := time.Duration(1<<min(uint(attempt-1), 10)) * 100 * time.Millisecond
-			if backoff > 30*time.Second {
-				backoff = 30 * time.Second
-			}
+			backoff := p.retryBackoff(attempt)
 			time.Sleep(backoff)
 		}
 

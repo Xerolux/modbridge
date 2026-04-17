@@ -20,6 +20,8 @@ type HealthChecker struct {
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
 	log         func(string, string)
+	onUnhealthy func()
+	onRecovery  func()
 }
 
 type HealthStatus struct {
@@ -92,6 +94,7 @@ func (hc *HealthChecker) check() {
 	hc.lastCheck = time.Now()
 
 	if err != nil {
+		wasHealthy := hc.healthy
 		hc.consecutive++
 		hc.healthy = false
 		hc.lastError = err.Error()
@@ -99,6 +102,9 @@ func (hc *HealthChecker) check() {
 			if hc.log != nil {
 				hc.log("HC", "target unreachable: "+err.Error())
 			}
+		}
+		if wasHealthy && hc.onUnhealthy != nil {
+			go hc.onUnhealthy()
 		}
 		return
 	}
@@ -109,8 +115,13 @@ func (hc *HealthChecker) check() {
 	hc.lastError = ""
 	conn.Close()
 
-	if wasUnhealthy && hc.log != nil {
-		hc.log("HC", "target is reachable again")
+	if wasUnhealthy {
+		if hc.log != nil {
+			hc.log("HC", "target is reachable again")
+		}
+		if hc.onRecovery != nil {
+			go hc.onRecovery()
+		}
 	}
 }
 
@@ -118,6 +129,18 @@ func (hc *HealthChecker) IsHealthy() bool {
 	hc.mu.RLock()
 	defer hc.mu.RUnlock()
 	return hc.healthy
+}
+
+func (hc *HealthChecker) SetOnUnhealthy(fn func()) {
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	hc.onUnhealthy = fn
+}
+
+func (hc *HealthChecker) SetOnRecovery(fn func()) {
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	hc.onRecovery = fn
 }
 
 func (hc *HealthChecker) GetStatus() HealthStatus {

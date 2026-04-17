@@ -28,13 +28,13 @@ type CircuitBreaker struct {
 	lastFailureTime time.Time
 	lastStateChange time.Time
 
-	// Configuration
-	threshold        int           // Failures before opening
-	halfOpenAttempts int           // Success attempts in half-open
-	timeout          time.Duration // Time to stay in open state
-	successThreshold int           // Successes to close again
+	threshold        int
+	halfOpenAttempts int
+	timeout          time.Duration
+	successThreshold int
 
-	// Metrics
+	openCount int64
+
 	totalRequests    int64
 	totalFailures    int64
 	totalSuccesses   int64
@@ -92,8 +92,9 @@ func (cb *CircuitBreaker) AllowRequest() bool {
 
 	cb.totalRequests++
 
-	// Check if we should transition from open to half-open
-	if cb.state == StateOpen && time.Since(cb.lastStateChange) > cb.timeout {
+	effectiveTimeout := cb.adaptiveOpenTimeout()
+
+	if cb.state == StateOpen && time.Since(cb.lastStateChange) > effectiveTimeout {
 		cb.transitionToHalfOpen()
 		return true
 	}
@@ -105,11 +106,20 @@ func (cb *CircuitBreaker) AllowRequest() bool {
 		cb.rejectedRequests++
 		return false
 	case StateHalfOpen:
-		// In half-open, we allow a limited number of requests
 		return cb.successCount < cb.halfOpenAttempts
 	}
 
 	return false
+}
+
+func (cb *CircuitBreaker) adaptiveOpenTimeout() time.Duration {
+	backoffMultiplier := time.Duration(1 << min(uint(cb.openCount), 4))
+	effective := cb.timeout * backoffMultiplier
+	maxTimeout := cb.timeout * 16
+	if effective > maxTimeout {
+		effective = maxTimeout
+	}
+	return effective
 }
 
 // RecordSuccess records a successful request
@@ -180,6 +190,8 @@ func (cb *CircuitBreaker) GetMetrics() map[string]interface{} {
 		"last_failure_time": cb.lastFailureTime,
 		"last_state_change": cb.lastStateChange,
 		"failure_rate":      safeFailureRate(cb.totalFailures, cb.totalRequests),
+		"open_count":        cb.openCount,
+		"effective_timeout": cb.adaptiveOpenTimeout(),
 	}
 }
 
@@ -191,9 +203,9 @@ func (cb *CircuitBreaker) Reset() {
 	cb.state = StateClosed
 	cb.failureCount = 0
 	cb.successCount = 0
+	cb.openCount = 0
 	cb.lastStateChange = time.Now()
 	cb.lastResetTime = time.Now()
-	// Don't reset metrics for observability
 }
 
 // safeFailureRate calculates failure rate avoiding division by zero
@@ -208,6 +220,7 @@ func safeFailureRate(failures, total int64) float64 {
 
 func (cb *CircuitBreaker) transitionToOpen() {
 	cb.state = StateOpen
+	cb.openCount++
 	cb.lastStateChange = time.Now()
 }
 
@@ -221,5 +234,6 @@ func (cb *CircuitBreaker) transitionToClosed() {
 	cb.state = StateClosed
 	cb.failureCount = 0
 	cb.successCount = 0
+	cb.openCount = 0
 	cb.lastStateChange = time.Now()
 }

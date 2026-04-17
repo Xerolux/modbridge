@@ -283,6 +283,53 @@ func (p *Pool) Stats() PoolStats {
 	}
 }
 
+// PreWarm creates new connections up to the specified count.
+// This is useful after a target recovers to avoid latency spikes.
+func (p *Pool) PreWarm(ctx context.Context, count int) error {
+	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return ErrPoolClosed
+	}
+	available := p.maxSize - p.size
+	p.mu.Unlock()
+
+	if available < count {
+		count = available
+	}
+	if count <= 0 {
+		return nil
+	}
+
+	var firstErr error
+	for i := 0; i < count; i++ {
+		conn, err := p.factory(ctx)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+
+		p.mu.Lock()
+		if p.closed {
+			p.mu.Unlock()
+			conn.Close()
+			return ErrPoolClosed
+		}
+		pc := &poolConn{
+			conn:     conn,
+			lastUsed: time.Now(),
+		}
+		p.size++
+		p.mu.Unlock()
+
+		p.conns <- pc
+	}
+
+	return firstErr
+}
+
 // PoolStats represents pool statistics.
 type PoolStats struct {
 	TotalConns  int

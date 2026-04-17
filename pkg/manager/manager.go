@@ -6,6 +6,7 @@
 package manager
 
 import (
+	"context"
 	"fmt"
 	"modbridge/pkg/config"
 	"modbridge/pkg/database"
@@ -24,6 +25,8 @@ type Manager struct {
 	log           *logger.Logger
 	deviceTracker *devices.Tracker
 	broadcaster   *EventBroadcaster
+	healthCancel  context.CancelFunc
+	healthWg      sync.WaitGroup
 }
 
 // NewManager creates a manager with database support.
@@ -52,6 +55,8 @@ func (m *Manager) Initialize() {
 			}
 		}
 	}
+
+	m.startHealthMonitor()
 }
 
 // AddProxy adds a new proxy or updates existing.
@@ -342,6 +347,8 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 
 // StopAll stops all running proxies and cleans up resources.
 func (m *Manager) StopAll() {
+	m.stopHealthMonitor()
+
 	m.mu.Lock()
 	var wg sync.WaitGroup
 	for _, p := range m.proxies {
@@ -405,6 +412,73 @@ func (m *Manager) GetConnectionHistory(ip string, limit int) ([]*database.Connec
 // GetAllConnectionHistory returns all connection history with optional proxy filter.
 func (m *Manager) GetAllConnectionHistory(proxyID string, limit int) ([]*database.ConnectionHistoryEntry, error) {
 	return m.deviceTracker.GetAllConnectionHistory(proxyID, limit)
+}
+
+// startHealthMonitor starts a background goroutine that monitors proxy health
+// and restarts proxies that have unexpectedly stopped.
+func (m *Manager) startHealthMonitor() {
+	ctx, cancel := context.WithCancel(context.Background())
+	m.healthCancel = cancel
+
+	m.healthWg.Add(1)
+	go func() {
+		defer m.healthWg.Done()
+
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				m.checkAndRestartProxies()
+			}
+		}
+	}()
+}
+
+func (m *Manager) stopHealthMonitor() {
+	if m.healthCancel != nil {
+		m.healthCancel()
+		m.healthWg.Wait()
+	}
+}
+
+// checkAndRestartProxies checks all proxies that should be running and restarts
+// them if they have unexpectedly stopped (not paused or intentionally disabled).
+func (m *Manager) checkAndRestartProxies() {
+	cfg := m.cfgMgr.Get()
+	cfgMap := make(map[string]config.ProxyConfig)
+	for _, pc := range cfg.Proxies {
+		cfgMap[pc.ID] = pc
+	}
+
+	m.mu.RLock()
+	var toRestart []string
+	for id, p := range m.proxies {
+		pCfg := cfgMap[id]
+		if pCfg.Enabled && !pCfg.Paused && p.Stats.GetStatus() != "Running" {
+			toRestart = append(toRestart, id)
+		}
+	}
+	m.mu.RUnlock()
+
+	for _, id := range toRestart {
+		m.mu.RLock()
+		p, ok := m.proxies[id]
+		m.mu.RUnlock()
+		if !ok {
+			continue
+		}
+
+		m.log.Info(id, "Health monitor: proxy unexpectedly stopped, attempting restart")
+		if err := p.Start(); err != nil {
+			m.log.Error(id, fmt.Sprintf("Health monitor: restart failed: %v", err))
+		} else {
+			m.log.Info(id, "Health monitor: proxy restarted successfully")
+		}
+	}
 }
 
 // GetProxyEventsSubscription returns a subscription for proxy events
