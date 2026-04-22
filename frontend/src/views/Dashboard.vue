@@ -8,9 +8,9 @@
             Live Dashboard
           </div>
           <div>
-            <h1 class="text-2xl sm:text-3xl font-bold text-gradient">Glass Dashboard</h1>
-            <p class="mt-2 max-w-2xl text-sm sm:text-base text-[var(--text-secondary)]">
-              Widgets lassen sich frei anordnen. Ziehe Karten im Raster, speichere dein Layout lokal und blende Batch-Konfiguration bei Bedarf direkt daneben ein.
+            <h1 class="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white">Dashboard</h1>
+            <p class="mt-2 max-w-2xl text-sm sm:text-base text-surface-600 dark:text-surface-300">
+              Widgets per Drag-and-Drop anordnen.
             </p>
           </div>
         </div>
@@ -38,13 +38,19 @@
 
     <div class="dashboard-header flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
       <div class="space-y-1">
-        <h2 class="text-xl font-bold text-[var(--text-primary)]">Workspace</h2>
-        <p class="text-sm text-[var(--text-muted)]">
-          {{ isMobileLayout ? 'Auf kleinen Displays bleibt das Layout statisch.' : 'Widgets koennen per Drag-and-Drop neu angeordnet werden.' }}
-        </p>
+        <h2 class="text-xl font-bold text-surface-900 dark:text-white">Workspace</h2>
       </div>
 
       <div class="flex flex-wrap gap-2 sm:gap-3 w-full lg:w-auto">
+        <Button
+          v-if="errorProxyCount > 0"
+          label="Show Errors"
+          icon="pi pi-exclamation-triangle"
+          severity="danger"
+          outlined
+          @click="goToLogs"
+          class="flex-1 sm:flex-none"
+        />
         <Button
           icon="pi pi-cog"
           @click="showConfigPanel = true"
@@ -90,16 +96,13 @@
         </div>
 
         <div
-          v-if="widgets.length === 0 && !grid"
-          class="empty-grid rounded-[24px] border border-dashed border-white/15 p-10 text-center"
+          v-if="widgets.length === 0"
+          class="empty-grid rounded-[24px] border border-dashed border-surface-300 dark:border-surface-600 p-10 text-center bg-surface-100/50 dark:bg-surface-800/50"
         >
-          <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5">
-            <i class="pi pi-plus-circle text-2xl text-[var(--text-secondary)]"></i>
+          <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-200 dark:bg-surface-700">
+            <i class="pi pi-th-large text-2xl text-surface-400 dark:text-surface-500"></i>
           </div>
-          <h3 class="text-xl font-semibold text-[var(--text-primary)]">Noch keine Widgets auf dem Board</h3>
-          <p class="mx-auto mt-2 max-w-md text-sm text-[var(--text-muted)]">
-            Fuege einen Proxy als Widget hinzu und ziehe die Karten anschliessend an die gewuenschte Position.
-          </p>
+          <h3 class="mb-2 text-lg font-medium text-surface-700 dark:text-surface-200">Keine Widgets</h3>
         </div>
 
         <div
@@ -164,6 +167,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { GridStack } from 'gridstack';
 import 'gridstack/dist/gridstack.min.css';
 import axios from '../axios.js';
@@ -177,6 +181,7 @@ import { BREAKPOINTS, DASHBOARD_CONFIG, GRID_CONFIG } from '../utils/constants';
 import { debounce, formatNumber } from '../utils/helpers';
 
 const STORAGE_KEY = 'dashboard_layout_v2';
+const router = useRouter();
 
 const grid = ref(null);
 const proxies = ref([]);
@@ -195,6 +200,7 @@ let gridInitialized = false;
 let fetchVersion = 0;
 
 const runningProxyCount = computed(() => proxies.value.filter(proxy => proxy.status === 'Running').length);
+const errorProxyCount = computed(() => proxies.value.filter(proxy => proxy.status === 'Error').length);
 const availableProxyOptions = computed(() => {
   const usedIds = new Set(widgets.value.map(widget => widget.proxy_id));
   return proxies.value
@@ -535,6 +541,10 @@ const resetLayout = () => {
   loadGrid(buildDefaultLayout(proxies.value));
   saveLayout();
 };
+
+const goToLogs = () => {
+  router.push('/logs');
+};
 </script>
 
 <style scoped>
@@ -656,8 +666,7 @@ const resetLayout = () => {
     rgba(15, 23, 42, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 18px 45px rgba(2, 6, 23, 0.35);
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
