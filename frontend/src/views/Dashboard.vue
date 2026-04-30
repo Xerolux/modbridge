@@ -10,7 +10,7 @@
           <div>
             <h1 class="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white">Dashboard</h1>
             <p class="mt-2 max-w-2xl text-sm sm:text-base text-surface-600 dark:text-surface-300">
-              Widgets per Drag-and-Drop anordnen.
+              Organize widgets with drag-and-drop
             </p>
           </div>
         </div>
@@ -127,8 +127,8 @@
                 type="button"
                 class="widget-remove"
                 @click="removeWidget(widget.id)"
-                aria-label="Widget entfernen"
-                title="Widget entfernen"
+                :aria-label="$t('dashboard.widgetRemove')"
+                :title="$t('dashboard.widgetRemove')"
               >
                 <i class="pi pi-times text-sm"></i>
               </button>
@@ -168,6 +168,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from "vue-i18n";
 import { GridStack } from 'gridstack';
 import 'gridstack/dist/gridstack.min.css';
 import axios from '../axios.js';
@@ -182,6 +183,7 @@ import { debounce, formatNumber } from '../utils/helpers';
 
 const STORAGE_KEY = 'dashboard_layout_v2';
 const router = useRouter();
+const { t } = useI18n();
 
 const grid = ref(null);
 const proxies = ref([]);
@@ -340,7 +342,7 @@ onMounted(async () => {
     });
   } catch (err) {
     error.value = true;
-    errorMessage.value = err.message || 'Fehler beim Initialisieren des Dashboards';
+    errorMessage.value = err.message || t('dashboard.error');
     loading.value = false;
   }
 });
@@ -391,7 +393,7 @@ const loadGrid = (layout) => {
     widgets.value.push({
       ...item,
       id,
-      title: proxy ? proxy.name : item.title || 'Unbekannt',
+      title: proxy ? proxy.name : item.title || t('common.error'),
       status: proxy ? proxy.status : item.status || 'Unknown'
     });
   });
@@ -464,7 +466,7 @@ const fetchData = async (isInitial = false) => {
     if (thisVersion !== fetchVersion) return;
     const errorData = requestError.response?.data;
     error.value = true;
-    errorMessage.value = typeof errorData === 'string' ? errorData : requestError.message || 'Unbekannter Fehler';
+    errorMessage.value = typeof errorData === 'string' ? errorData : requestError.message || t('common.error');
     if (isInitial) loading.value = false;
     throw requestError;
   }
@@ -472,9 +474,9 @@ const fetchData = async (isInitial = false) => {
 
 const getWidgetValue = (widget) => {
   const proxy = proxies.value.find(entry => entry.id === widget.proxy_id);
-  if (!proxy) return 'Unbekannt';
+  if (!proxy) return t('common.error');
   if (proxy.status === 'Running') {
-    return `${formatNumber(proxy.requests || 0)} Anfragen`;
+    return `${formatNumber(proxy.requests || 0)} ${t("units.requests")}`;
   }
   return proxy.status;
 };
@@ -486,7 +488,7 @@ const getWidgetConnections = (widget) => {
 
 const getWidgetStatus = (widget) => {
   const proxy = proxies.value.find(entry => entry.id === widget.proxy_id);
-  return proxy ? proxy.status : widget.status || 'Unbekannt';
+  return proxy ? proxy.status : widget.status || t('common.error');
 };
 
 const openAddWidget = () => {

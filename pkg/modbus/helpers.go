@@ -221,17 +221,27 @@ func ReadRTUFrame(r io.Reader, fc byte) ([]byte, error) {
 }
 
 // crc16Modbus calculates the CRC-16/Modbus checksum.
-func crc16Modbus(data []byte) []byte {
-	crc := uint16(0xFFFF)
-	for _, b := range data {
-		crc ^= uint16(b)
-		for i := 0; i < 8; i++ {
+var crc16Table [256]uint16
+
+func init() {
+	for i := 0; i < 256; i++ {
+		crc := uint16(i)
+		for j := 0; j < 8; j++ {
 			if crc&1 != 0 {
 				crc = (crc >> 1) ^ 0xA001
 			} else {
 				crc >>= 1
 			}
 		}
+		crc16Table[i] = crc
+	}
+}
+
+// crc16Modbus calculates the CRC-16/Modbus checksum using a pre-calculated lookup table.
+func crc16Modbus(data []byte) []byte {
+	crc := uint16(0xFFFF)
+	for _, b := range data {
+		crc = (crc >> 8) ^ crc16Table[byte(crc)^b]
 	}
 	return []byte{byte(crc), byte(crc >> 8)}
 }

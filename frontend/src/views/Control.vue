@@ -1,7 +1,7 @@
 <template>
     <div class="p-4 flex flex-col gap-4">
         <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
-            <h1 class="text-xl sm:text-2xl font-bold text-surface-900 dark:text-white">Proxy Control</h1>
+            <h1 class="text-xl sm:text-2xl font-bold text-surface-900 dark:text-white">{{ $t('control.title') }}</h1>
             <div class="flex flex-wrap gap-2">
                 <Button
                     v-if="auth.hasPermission('proxy:edit')"
@@ -15,7 +15,7 @@
                     v-if="auth.hasPermission('proxy:create')"
                     icon="pi pi-plus"
                     severity="info"
-                    label="Add Proxy"
+                    :label="$t('common.add') + ' Proxy'"
                     @click="openAddProxyDialog"
                     class="text-sm flex-1 sm:flex-none"
                 />
@@ -23,7 +23,7 @@
                     v-if="auth.hasPermission('proxy:control')"
                     icon="pi pi-play"
                     severity="success"
-                    label="Start All"
+                    :label="$t('control.startAll')"
                     @click="controlAllProxies('start_all')"
                     class="text-sm flex-1 sm:flex-none"
                 />
@@ -31,7 +31,7 @@
                     v-if="auth.hasPermission('proxy:control')"
                     icon="pi pi-stop"
                     severity="danger"
-                    label="Stop All"
+                    :label="$t('control.stopAll')"
                     @click="controlAllProxies('stop_all')"
                     class="text-sm flex-1 sm:flex-none"
                 />
@@ -48,7 +48,7 @@
          <div v-else-if="proxies.length === 0" class="flex justify-center items-center min-h-[300px]">
              <div class="text-center text-gray-400 glass-card p-12 rounded-3xl">
                  <i class="pi pi-inbox text-5xl mb-4 block text-purple-400/50"></i>
-                 <p>No proxies configured. Click "Add Proxy" to get started.</p>
+                 <p>No proxies configured. Click "{{ $t('common.add') }} Proxy" to get started.</p>
              </div>
          </div>
 
@@ -141,7 +141,7 @@
              </Tabs>
          </div>
 
-         <Dialog v-model:visible="showProxyDialog" :header="isEditMode ? 'Edit Proxy' : 'Add Proxy'" modal class="w-full max-w-lg">
+         <Dialog v-model:visible="showProxyDialog" :header="isEditMode ? $t('common.edit') + ' Proxy' : $t('common.add') + ' Proxy'" modal class="w-full max-w-lg">
              <div class="flex flex-col gap-4">
                  <div>
                      <label class="block text-sm font-medium mb-1">Name</label>
