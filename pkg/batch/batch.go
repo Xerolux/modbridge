@@ -191,11 +191,10 @@ func (b *Batcher) Responses() <-chan *Response {
 func (b *Batcher) run() {
 	defer close(b.responseChan)
 
-	timer := time.NewTimer(0)
+	timer := time.NewTimer(b.config.MaxBatchDelay)
 	if !timer.Stop() {
 		<-timer.C
 	}
-	timerActive := false
 
 	for {
 		select {
@@ -206,29 +205,12 @@ func (b *Batcher) run() {
 			pendingCount := len(b.pendingRequests)
 			b.mu.Unlock()
 
-			if pendingCount > 0 {
-				if timerActive {
-					if !timer.Stop() {
-						select {
-						case <-timer.C:
-						default:
-						}
-					}
-				}
+			if pendingCount == 1 {
+				// First request in a new batch, start timer
 				timer.Reset(b.config.MaxBatchDelay)
-				timerActive = true
-			} else if timerActive {
-				if !timer.Stop() {
-					select {
-					case <-timer.C:
-					default:
-					}
-				}
-				timerActive = false
 			}
 
 		case <-timer.C:
-			timerActive = false
 			b.flush()
 
 			// Check if requests arrived during flush
@@ -238,11 +220,10 @@ func (b *Batcher) run() {
 
 			if pendingCount > 0 {
 				timer.Reset(b.config.MaxBatchDelay)
-				timerActive = true
 			}
 
 		case <-b.ctx.Done():
-			if timerActive && !timer.Stop() {
+			if !timer.Stop() {
 				select {
 				case <-timer.C:
 				default:

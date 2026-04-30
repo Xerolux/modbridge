@@ -245,22 +245,22 @@
                                 <h3 class="text-lg font-semibold mb-4">Password</h3>
                                 <div class="grid grid-cols-1 gap-4">
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-300 mb-1">Current Password</label>
+                                        <label class="block text-sm font-medium text-gray-300 mb-1">{{ $t('login.currentPassword') }}</label>
                                         <Password v-model="passwordForm.currentPassword" :feedback="false" toggleMask class="w-full" />
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-300 mb-1">New Password</label>
+                                        <label class="block text-sm font-medium text-gray-300 mb-1">{{ $t('login.newPassword') }}</label>
                                         <Password v-model="passwordForm.newPassword" toggleMask class="w-full" />
                                         <div class="mt-2 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                                            <p class="text-xs text-blue-300 font-medium mb-1">Passwort-Anforderungen:</p>
+                                            <p class="text-xs text-blue-300 font-medium mb-1">{{ $t('login.passwordRequirements') }}:</p>
                                             <ul class="text-xs text-gray-400 space-y-1 ml-4 list-disc">
-                                                <li>Mindestens 8 Zeichen lang</li>
-                                                <li>Mindestens 3 von: Großbuchstaben, Kleinbuchstaben, Zahlen, Sonderzeichen</li>
-                                                <li>Nicht zu einfach oder häufig verwendet</li>
+                                                <li>{{ $t('login.passwordMinLength') }}</li>
+                                                <li>{{ $t('login.passwordComplexity') }}</li>
+                                                <li>{{ $t('login.passwordNotCommon') }}</li>
                                             </ul>
                                         </div>
                                     </div>
-                                    <Button label="Change Password" icon="pi pi-key" @click="changePassword" />
+                                    <Button :label="$t('login.changePassword')" icon="pi pi-key" @click="changePassword" />
                                 </div>
                             </div>
 
