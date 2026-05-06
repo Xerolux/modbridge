@@ -198,8 +198,8 @@ func (p *ProxyInstance) Start() error {
 
 	// Create connection pool for target with optimized settings
 	poolCfg := pool.Config{
-		InitialSize:    2,                // Optimized: Better initial capacity
-		MaxSize:        20,               // Optimized: Increased for higher concurrency
+		InitialSize:    1,                // Modbus targets usually accept 1-3 connections max
+		MaxSize:        10,               // Moderate concurrency limit to avoid dropping connections
 		MaxIdleTime:    10 * time.Minute, // Optimized: Longer idle time for reusability
 		AcquireTimeout: p.ConnectionTimeout,
 		Dialer: func(ctx context.Context) (net.Conn, error) {
@@ -411,7 +411,10 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}, glo
 		default:
 		}
 
-		if err := clientConn.SetReadDeadline(time.Now().Add(p.ReadTimeout)); err != nil {
+		// Use a generous idle timeout for the client connection (e.g., 5 minutes)
+		// rather than the strict ReadTimeout (which is for target device reads)
+		idleTimeout := 5 * time.Minute
+		if err := clientConn.SetReadDeadline(time.Now().Add(idleTimeout)); err != nil {
 			p.log.Error(p.ID, fmt.Sprintf("SetReadDeadline failed: %v", err))
 			return
 		}

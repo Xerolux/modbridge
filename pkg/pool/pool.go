@@ -407,10 +407,26 @@ func isConnHealthy(conn net.Conn) bool {
 	if conn == nil {
 		return false
 	}
-	err := conn.SetReadDeadline(time.Now().Add(time.Millisecond))
+
+	err := conn.SetReadDeadline(time.Now().Add(1 * time.Millisecond))
 	if err != nil {
 		return false
 	}
+
+	var buf [1]byte
+	n, err := conn.Read(buf[:])
 	conn.SetReadDeadline(time.Time{})
+
+	if err != nil {
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			return true
+		}
+		return false
+	}
+
+	if n > 0 {
+		return false
+	}
+
 	return true
 }
