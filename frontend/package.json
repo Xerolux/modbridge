@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@primeuix/themes": "^2.0.3",
-    "axios": "^1.15.0",
+    "axios": "^1.15.2",
     "gridstack": "^12.4.2",
     "lucide-vue-next": "^0.577.0",
     "pinia": "^3.0.4",
@@ -25,7 +25,7 @@
     "@vitejs/plugin-vue": "^6.0.5",
     "autoprefixer": "^10.4.27",
     "esbuild": "^0.27.4",
-    "postcss": "^8.5.8",
+    "postcss": "^8.5.14",
     "tailwindcss": "^3.4.1",
     "vite": "^8.0.5"
   }
