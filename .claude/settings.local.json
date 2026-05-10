@@ -79,7 +79,9 @@
       "Bash(cmd.exe /c \"gh --version\")",
       "Bash(cmd.exe /c \"gh run view 22756470592 --repo Xerolux/modbridge --log-failed\")",
       "Bash(git add .github/workflows/main.yml .github/workflows/release.yml .github/workflows/headless.yml)",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(find . -name \"package.json\" -type f -exec head -30 {} \\\\;)",
+      "Bash(git add:*)"
     ]
   }
 }

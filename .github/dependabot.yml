@@ -1,7 +1,6 @@
 version: 2
 
 updates:
-  # Enable version updates for Go modules
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
@@ -19,7 +18,6 @@ updates:
       prefix: "chore(deps)"
       include: "scope"
 
-  # Enable version updates for GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -37,9 +35,8 @@ updates:
       prefix: "chore(ci)"
       include: "scope"
 
-  # Enable version updates for Docker
-  - package-ecosystem: "docker"
-    directory: "/"
+  - package-ecosystem: "npm"
+    directory: "/frontend"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -50,7 +47,7 @@ updates:
       - "Xerolux"
     labels:
       - "dependencies"
-      - "docker"
+      - "frontend"
     commit-message:
-      prefix: "chore(docker)"
+      prefix: "chore(deps)"
       include: "scope"

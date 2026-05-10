@@ -1,69 +1,55 @@
 name: Release
 
 on:
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       version_mode:
-        description: 'Version-Modus'
+        description: 'Version mode'
         required: true
         default: auto
         type: choice
-        options:
-          - auto
-          - manual
+        options: [auto, manual]
       version:
-        description: 'Version (nur bei manual, z.B. v1.0.0)'
+        description: 'Version (manual only, e.g. v1.0.0)'
         required: false
         type: string
       bump:
-        description: 'Auto-Inkrement (nur bei auto)'
+        description: 'Auto increment (auto only)'
         required: true
         default: patch
         type: choice
-        options:
-          - patch
-          - minor
-          - major
+        options: [patch, minor, major]
       release_type:
-        description: 'Release-Typ'
+        description: 'Release type'
         required: true
         default: release
         type: choice
-        options:
-          - release
-          - beta
-          - alpha
+        options: [release, beta, alpha]
       make_latest:
-        description: 'Als "Latest Release" auf GitHub markieren'
+        description: 'Mark as latest release'
         required: true
         type: boolean
         default: false
 
 permissions:
   contents: write
-  packages: write
 
 env:
-  GO_VERSION: '1.26.1'
+  GO_VERSION: '1.26.3'
   NODE_VERSION: '24'
-  REGISTRY: ghcr.io
-  IMAGE_NAME: xerolux/modbridge
 
 jobs:
-  # ─────────────────────────────────────────────────────────────────────────────
-  # 1. Prepare: Validate version, create git tag, compute all metadata
-  # ─────────────────────────────────────────────────────────────────────────────
   prepare:
     name: Prepare Release
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
-      tag:        ${{ steps.compute.outputs.tag }}
-      docker_tag: ${{ steps.compute.outputs.docker_tag }}
+      tag: ${{ steps.compute.outputs.tag }}
       prerelease: ${{ steps.compute.outputs.prerelease }}
-      docker_tags: ${{ steps.compute.outputs.docker_tags }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
 
       - name: Validate & compute release info
         id: compute
@@ -72,15 +58,13 @@ jobs:
           VERSION="${{ inputs.version }}"
           BUMP="${{ inputs.bump }}"
           TYPE="${{ inputs.release_type }}"
-          MAKE_LATEST="${{ inputs.make_latest }}"
 
           git fetch --tags --force
-
           LATEST_TAG=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1)
 
           if [ "$MODE" = "manual" ]; then
             if [ -z "$VERSION" ]; then
-              echo "❌ Bei version_mode=manual muss 'version' gesetzt werden."
+              echo "Manual mode requires version input."
               exit 1
             fi
             [[ "$VERSION" != v* ]] && VERSION="v${VERSION}"
@@ -89,92 +73,71 @@ jobs:
             if [ -z "$BASE_VERSION" ]; then
               BASE_VERSION=$(tr -d '[:space:]' < version.txt)
             fi
-
             if [[ ! "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "❌ Konnte keine gueltige Basisversion ermitteln (Tag/version.txt)."
+              echo "Cannot determine valid base version."
               exit 1
             fi
-
             IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
             case "$BUMP" in
-              major)
-                MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
-              minor)
-                MINOR=$((MINOR + 1)); PATCH=0 ;;
-              patch)
-                PATCH=$((PATCH + 1)) ;;
-              *)
-                echo "❌ Unbekannter bump-Wert: $BUMP"
-                exit 1 ;;
+              major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+              minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+              patch) PATCH=$((PATCH + 1)) ;;
+              *) echo "Unknown bump: $BUMP"; exit 1 ;;
             esac
-
             VERSION="v${MAJOR}.${MINOR}.${PATCH}"
           fi
 
-          # Validate semver format (vX.Y.Z)
           if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "❌ Ungültiges Format: '$VERSION'. Bitte v1.2.3 verwenden."
+            echo "Invalid format: '$VERSION'. Use v1.2.3"
             exit 1
           fi
 
-          # Compute tag and docker_tag
           if [ "$TYPE" = "release" ]; then
             TAG="$VERSION"
-            DOCKER_TAG="${VERSION#v}"   # strip leading 'v' for Docker
             PRERELEASE="false"
           else
             TAG="${VERSION}-${TYPE}"
-            DOCKER_TAG="${VERSION#v}-${TYPE}"
             PRERELEASE="true"
           fi
 
           if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
-            echo "❌ Tag ${TAG} existiert bereits."
+            echo "Tag ${TAG} already exists."
             exit 1
           fi
 
-          # Build comma-separated Docker tag list
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          TAGS="${IMAGE}:${TAG},${IMAGE}:${DOCKER_TAG}"
-
-          if [ "$TYPE" = "release" ]; then
-            MAJOR_MINOR=$(echo "${DOCKER_TAG}" | cut -d. -f1-2)
-            MAJOR=$(echo "${DOCKER_TAG}" | cut -d. -f1)
-            TAGS="${TAGS},${IMAGE}:${MAJOR_MINOR},${IMAGE}:${MAJOR}"
-            [ "$MAKE_LATEST" = "true" ] && TAGS="${TAGS},${IMAGE}:latest"
-          fi
-
-          echo "tag=${TAG}"               >> $GITHUB_OUTPUT
-          echo "docker_tag=${DOCKER_TAG}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "prerelease=${PRERELEASE}" >> $GITHUB_OUTPUT
-          echo "docker_tags=${TAGS}"      >> $GITHUB_OUTPUT
-
-          echo ""
-          echo "📦 Git Tag:      ${TAG}"
-          echo "🔢 Version mode: ${MODE}"
-          echo "🧮 Bump:         ${BUMP}"
-          echo "Last tag:       ${LATEST_TAG:-<none>}"
-          echo "🐳 Docker Tags:  ${TAGS}"
-          echo "🔖 Prerelease:   ${PRERELEASE}"
-          echo "⭐ Latest:        ${MAKE_LATEST}"
+          echo "Tag: ${TAG} | Prerelease: ${PRERELEASE}"
 
       - name: Create and push git tag
         run: |
-          git config user.name  "github-actions[bot]"
+          git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "${{ steps.compute.outputs.tag }}"
           git push origin "${{ steps.compute.outputs.tag }}"
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # 2. Test (parallel with build-frontend)
-  # ─────────────────────────────────────────────────────────────────────────────
+  resolve-tag:
+    name: Resolve Tag
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      prerelease: ${{ steps.resolve.outputs.prerelease }}
+    steps:
+      - id: resolve
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "prerelease=false" >> $GITHUB_OUTPUT
+
   test:
     name: Tests
     runs-on: ubuntu-latest
-    needs: prepare
+    needs: [prepare, resolve-tag]
+    if: always() && (needs.prepare.result == 'success' || needs.resolve-tag.result == 'success')
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -183,13 +146,11 @@ jobs:
           CGO_ENABLED: 1
         run: go test -race ./...
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # 3. Build Frontend (parallel with test)
-  # ─────────────────────────────────────────────────────────────────────────────
   build-frontend:
     name: Build Frontend
     runs-on: ubuntu-latest
-    needs: prepare
+    needs: [prepare, resolve-tag]
+    if: always() && (needs.prepare.result == 'success' || needs.resolve-tag.result == 'success')
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -200,19 +161,17 @@ jobs:
       - name: Install & build
         working-directory: ./frontend
         run: npm ci && npm run build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: frontend-dist
           path: frontend/dist/
           retention-days: 1
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # 4. Build Go Binaries (Linux amd64 + arm64)
-  # ─────────────────────────────────────────────────────────────────────────────
   build-binaries:
-    name: Build Binary (${{ matrix.suffix }})
+    name: Build (${{ matrix.suffix }})
     runs-on: ubuntu-latest
-    needs: [prepare, test, build-frontend]
+    needs: [prepare, resolve-tag, test, build-frontend]
+    if: always() && needs.test.result == 'success' && needs.build-frontend.result == 'success'
     strategy:
       fail-fast: false
       matrix:
@@ -229,7 +188,7 @@ jobs:
             cc: aarch64-linux-gnu-gcc
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -252,24 +211,23 @@ jobs:
           CGO_ENABLED: 1
           CC: ${{ matrix.cc }}
         run: |
+          TAG="${{ needs.prepare.outputs.tag || needs.resolve-tag.outputs.tag || github.ref_name }}"
           go build \
-            -ldflags="-s -w -X main.Version=${{ needs.prepare.outputs.tag }}" \
+            -ldflags="-s -w -X main.Version=${TAG}" \
             -trimpath \
             -o "modbridge-${{ matrix.suffix }}" \
             .
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: modbridge-${{ matrix.suffix }}
           path: modbridge-${{ matrix.suffix }}
           retention-days: 7
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # 5. Build Headless Binaries (Linux amd64 + arm64 + arm)
-  # ─────────────────────────────────────────────────────────────────────────────
-  build-headless-binaries:
-    name: Build Headless Binary (${{ matrix.suffix }})
+  build-headless:
+    name: Headless (${{ matrix.suffix }})
     runs-on: ubuntu-latest
-    needs: [prepare, test]
+    needs: [prepare, resolve-tag, test]
+    if: always() && needs.test.result == 'success'
     strategy:
       fail-fast: false
       matrix:
@@ -292,7 +250,7 @@ jobs:
             cc: arm-linux-gnueabihf-gcc
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -307,54 +265,24 @@ jobs:
           CGO_ENABLED: 1
           CC: ${{ matrix.cc }}
         run: |
+          TAG="${{ needs.prepare.outputs.tag || needs.resolve-tag.outputs.tag || github.ref_name }}"
           go build \
             -tags headless \
-            -ldflags="-s -w -X main.Version=${{ needs.prepare.outputs.tag }}" \
+            -ldflags="-s -w -X main.Version=${TAG}" \
             -trimpath \
             -o "modbridge-${{ matrix.suffix }}" \
             .
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: modbridge-${{ matrix.suffix }}
           path: modbridge-${{ matrix.suffix }}
           retention-days: 7
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # 6. Build & Push Docker Image (Linux amd64 + arm64)
-  # AUSKOMMENTIERT: Docker build wurde in separaten Workflow ausgelagert (docker.yml)
-  # Kann manuell über GitHub Actions ausgelöst werden
-  # ─────────────────────────────────────────────────────────────────────────────
-  # build-docker:
-  #   name: Docker Build & Push
-  #   runs-on: ubuntu-latest
-  #   needs: [prepare, test]
-  #   steps:
-  #     - uses: actions/checkout@v6
-  #     - uses: docker/setup-qemu-action@v3
-  #     - uses: docker/setup-buildx-action@v3
-  #     - name: Login to GHCR
-  #       uses: docker/login-action@v3
-  #       with:
-  #         registry: ${{ env.REGISTRY }}
-  #         username: ${{ github.actor }}
-  #         password: ${{ secrets.GITHUB_TOKEN }}
-  #     - name: Build and push
-  #       uses: docker/build-push-action@v5
-  #       with:
-  #         context: .
-  #         platforms: linux/amd64,linux/arm64
-  #         push: true
-  #         tags: ${{ needs.prepare.outputs.docker_tags }}
-  #         cache-from: type=gha
-  #         cache-to: type=gha,mode=max
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # 6. Create GitHub Release
-  # ─────────────────────────────────────────────────────────────────────────────
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [prepare, build-binaries, build-headless-binaries]
+    needs: [prepare, resolve-tag, build-binaries, build-headless]
+    if: always() && needs.build-binaries.result == 'success' && needs.build-headless.result == 'success'
     steps:
       - uses: actions/checkout@v6
       - name: Download all artifacts
@@ -371,37 +299,29 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ needs.prepare.outputs.tag }}
-          name: "ModBridge ${{ needs.prepare.outputs.tag }}"
+          tag_name: ${{ needs.prepare.outputs.tag || needs.resolve-tag.outputs.tag || github.ref_name }}
+          name: "ModBridge ${{ needs.prepare.outputs.tag || needs.resolve-tag.outputs.tag || github.ref_name }}"
           files: release/*
           draft: false
-          prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
-          make_latest: ${{ inputs.make_latest == true && inputs.release_type == 'release' && 'true' || 'false' }}
+          prerelease: ${{ needs.prepare.outputs.prerelease == 'true' || needs.resolve-tag.outputs.prerelease == 'true' || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') }}
+          make_latest: ${{ !(contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta')) }}
           generate_release_notes: true
           body: |
-            ## ModBridge ${{ needs.prepare.outputs.tag }}
+            ## ModBridge ${{ needs.prepare.outputs.tag || needs.resolve-tag.outputs.tag || github.ref_name }}
 
-            **Typ:** ${{ inputs.release_type }}
-
-            ### Docker
-            Docker Images werden separat über den "Docker Build & Push" Workflow erstellt.
-            Bitte führe diesen Workflow manuell aus nach dem Release.
-
-            ### Binaries (mit WebUI)
-            | Plattform | Datei |
-            |-----------|-------|
+            ### Binaries (with WebUI)
+            | Platform | File |
+            |----------|------|
             | Linux x64 | `modbridge-linux-amd64` |
             | Linux ARM64 | `modbridge-linux-arm64` |
 
-            ### Headless Binaries (ohne WebUI)
-            Kleinere Binaries ohne eingebettetes Frontend – ideal für Server und Embedded-Systeme.
-
-            | Plattform | Datei |
-            |-----------|-------|
+            ### Headless Binaries (without WebUI)
+            | Platform | File |
+            |----------|------|
             | Linux x64 | `modbridge-linux-amd64-headless` |
             | Linux ARM64 | `modbridge-linux-arm64-headless` |
             | Linux ARMv6 (32-bit) | `modbridge-linux-arm-headless` |
 
-            SHA256-Prüfsummen: siehe `checksums.txt`
+            SHA256 checksums: see `checksums.txt`
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

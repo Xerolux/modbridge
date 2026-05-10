@@ -41,8 +41,6 @@ tests:
 
 ci/cd:
   - .github/**/*
-  - Dockerfile
-  - docker-compose.yml
   - Makefile
 
 dependencies:

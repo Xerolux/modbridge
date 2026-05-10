@@ -1,8 +1,6 @@
-.PHONY: help build test clean run docker-build docker-run lint coverage bench bench-ci openapi openapi-check
+.PHONY: help build test clean run lint coverage bench bench-ci openapi openapi-check fmt vet deps update-deps install dev
 
-# Variables
 BINARY_NAME=modbridge
-DOCKER_IMAGE=modbridge
 VERSION?=$(shell cat version.txt 2>/dev/null || echo "1.0.17")
 LDFLAGS=-ldflags "-s -w -X main.Version=$(VERSION)"
 
@@ -86,21 +84,6 @@ clean: ## Clean build artifacts
 run: build ## Build and run the application
 	@echo "Running $(BINARY_NAME)..."
 	./$(BINARY_NAME)
-
-docker-build: ## Build Docker image
-	@echo "Building Docker image..."
-	docker build -t $(DOCKER_IMAGE):$(VERSION) -t $(DOCKER_IMAGE):latest .
-
-docker-run: docker-build ## Build and run Docker container
-	@echo "Running Docker container..."
-	docker-compose up -d
-
-docker-stop: ## Stop Docker container
-	@echo "Stopping Docker container..."
-	docker-compose down
-
-docker-logs: ## Show Docker container logs
-	docker-compose logs -f
 
 deps: ## Download dependencies
 	@echo "Downloading dependencies..."
