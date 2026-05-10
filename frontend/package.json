@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@primeuix/themes": "^2.0.3",
-    "axios": "^1.13.2",
+    "axios": "^1.15.0",
     "gridstack": "^12.4.2",
     "lucide-vue-next": "^0.577.0",
     "pinia": "^3.0.4",
