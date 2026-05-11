@@ -35,7 +35,6 @@ on:
 
 permissions:
   contents: write
-  workflows: write
 
 env:
   GO_VERSION: '1.26.3'
@@ -51,6 +50,8 @@ jobs:
       prerelease: ${{ steps.compute.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Validate & compute release info
         id: compute
