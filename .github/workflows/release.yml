@@ -50,8 +50,6 @@ jobs:
       prerelease: ${{ steps.compute.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v6
-        with:
-          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Validate & compute release info
         id: compute
@@ -111,12 +109,15 @@ jobs:
           echo "prerelease=${PRERELEASE}" >> $GITHUB_OUTPUT
           echo "Tag: ${TAG} | Prerelease: ${PRERELEASE}"
 
-      - name: Create and push git tag
+      - name: Create tag via GitHub API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "${{ steps.compute.outputs.tag }}"
-          git push origin "${{ steps.compute.outputs.tag }}"
+          SHA=$(git rev-parse HEAD)
+          TAG="${{ steps.compute.outputs.tag }}"
+          gh api repos/${{ github.repository }}/git/refs \
+            -f ref="refs/tags/${TAG}" \
+            -f sha="$SHA"
 
   resolve-tag:
     name: Resolve Tag
