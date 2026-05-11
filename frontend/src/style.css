@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.js";
 
 /* Ensure touch targets for PrimeVue components are adequately sized and prevent iOS zoom */
 .p-inputtext, .p-dropdown, .p-inputnumber-input, .p-password-input, input[type="text"], input[type="number"], input[type="email"], input[type="password"], select, textarea {
