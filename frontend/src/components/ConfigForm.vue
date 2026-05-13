@@ -3,7 +3,7 @@
     <div class="glass-hero rounded-[28px] p-5 sm:p-6">
       <div class="relative z-[1] flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div class="space-y-3">
-          <div class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.3em] text-[var(--text-muted)]">
+          <div class="inline-flex items-center gap-2 rounded-full border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.3em] text-[var(--text-muted)]">
             <i class="pi pi-sparkles"></i>
             Proxy Studio
           </div>
@@ -55,8 +55,8 @@
             />
           </div>
 
-          <div v-if="store.proxies.length === 0" class="empty-state rounded-[24px] border border-dashed border-white/15 p-8 text-center">
-            <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5">
+          <div v-if="store.proxies.length === 0" class="empty-state rounded-[24px] border border-dashed border-gray-300 dark:border-white/15 p-8 text-center">
+            <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-white/5">
               <i class="pi pi-inbox text-2xl text-[var(--text-secondary)]"></i>
             </div>
             <h4 class="text-lg font-semibold text-[var(--text-primary)]">Noch keine Proxies angelegt</h4>
@@ -88,7 +88,7 @@
                   <div class="flex items-start gap-3">
                     <button
                       type="button"
-                      class="proxy-drag-handle mt-1 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-[var(--text-secondary)] transition hover:border-white/20 hover:text-[var(--text-primary)]"
+                       class="proxy-drag-handle mt-1 flex h-11 w-11 items-center justify-center rounded-2xl border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-[var(--text-secondary)] transition hover:border-gray-400 dark:hover:border-white/20 hover:text-[var(--text-primary)]"
                       title="Proxy verschieben"
                     >
                       <GripVerticalIcon class="h-5 w-5" />
@@ -96,7 +96,7 @@
 
                     <div class="space-y-2">
                       <div class="flex flex-wrap items-center gap-2">
-                        <span class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">
+                        <span class="inline-flex items-center gap-2 rounded-full border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">
                           <span class="status-dot" :class="statusDotClass(proxy.status)"></span>
                           {{ proxy.status || 'Draft' }}
                         </span>
@@ -178,7 +178,7 @@
                   </div>
                 </div>
 
-                <div class="flex flex-col gap-3 rounded-[20px] border border-white/10 bg-black/10 p-4 lg:flex-row lg:items-center lg:justify-between">
+                <div class="flex flex-col gap-3 rounded-[20px] border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/10 p-4 lg:flex-row lg:items-center lg:justify-between">
                   <div class="flex flex-wrap gap-3">
                     <label class="toggle-chip">
                       <input type="checkbox" v-model="proxy.enabled" @change="markDirty(proxy, index)" />
@@ -200,7 +200,7 @@
                   </div>
                 </div>
 
-                <div v-if="proxy._showAdvanced" class="advanced-grid rounded-[20px] border border-white/10 bg-black/10 p-4">
+                <div v-if="proxy._showAdvanced" class="advanced-grid rounded-[20px] border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/10 p-4">
                   <div class="field-group">
                     <label>Conn Timeout (s)</label>
                     <input v-model.number="proxy.connection_timeout" type="number" min="1" max="300" @input="markDirty(proxy, index)" />
@@ -231,8 +231,7 @@
           <div class="side-card rounded-[24px] p-5">
             <div class="space-y-3">
               <div>
-                <p class="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Web Interface</p>
-                <h3 class="mt-1 text-xl font-bold text-[var(--text-primary)]">Port und Zugriff</h3>
+                <p class="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Web Interface</p>                <h3 class="mt-1 text-xl font-bold text-[var(--text-primary)]">Port und Zugriff</h3>
               </div>
               <div class="field-group">
                 <label>Web Interface Address</label>
@@ -423,8 +422,8 @@ const onReorder = () => {
 .empty-state {
   position: relative;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-panel-item);
+  border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
@@ -458,7 +457,7 @@ const onReorder = () => {
 
 .proxy-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.18);
+  border-color: var(--border-strong);
 }
 
 .proxy-card--dirty {
@@ -475,8 +474,8 @@ const onReorder = () => {
   align-items: center;
   gap: 0.35rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-panel-item);
   padding: 0.3rem 0.65rem;
   font-size: 0.72rem;
   color: var(--text-secondary);
@@ -507,8 +506,8 @@ const onReorder = () => {
 .field-group input {
   width: 100%;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-input);
   color: var(--text-primary);
   padding: 0.9rem 1rem;
   outline: none;
@@ -521,8 +520,10 @@ const onReorder = () => {
 }
 
 .field-error {
+  color: #dc2626;
+}
+:root:not(.light) .field-error {
   color: #fda4af;
-  font-size: 0.8rem;
 }
 
 .toggle-chip {
@@ -530,8 +531,8 @@ const onReorder = () => {
   align-items: center;
   gap: 0.6rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-panel-item);
   padding: 0.65rem 0.95rem;
   color: var(--text-secondary);
   cursor: pointer;
@@ -560,7 +561,7 @@ const onReorder = () => {
   width: 1.8rem;
   height: 1.8rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-panel-item);
   color: var(--text-primary);
   font-weight: 800;
   flex-shrink: 0;

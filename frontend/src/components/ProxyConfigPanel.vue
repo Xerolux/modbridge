@@ -57,7 +57,7 @@
       <div v-if="selectedProxies.length > 0" class="section">
         <h3 class="section-title">
           Batch-Konfiguration
-          <span class="text-sm font-normal text-gray-400">({{ selectedProxies.length }} ausgewählt)</span>
+          <span class="text-sm font-normal text-gray-500 dark:text-gray-400">({{ selectedProxies.length }} ausgewählt)</span>
         </h3>
 
         <div class="config-form">
@@ -149,8 +149,8 @@
 
       <!-- Empty State -->
       <div v-else class="empty-state">
-        <i class="pi pi-arrow-left text-4xl text-gray-500 mb-3"></i>
-        <p class="text-gray-400">Wähle Proxies aus, um sie zu konfigurieren</p>
+         <i class="pi pi-arrow-left text-4xl text-gray-400 dark:text-gray-500 mb-3"></i>
+         <p class="text-gray-500 dark:text-gray-400">Wähle Proxies aus, um sie zu konfigurieren</p>
       </div>
     </div>
   </div>
@@ -318,11 +318,11 @@ onUnmounted(() => {
   width: 95vw;
   max-width: 400px;
   max-height: 80vh;
-  background: rgba(31, 41, 55, 0.95);
+  background: var(--bg-surface-strong);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(75, 85, 99, 0.5);
+  border: 1px solid var(--border-soft);
   border-radius: 16px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-strong);
   z-index: 1000;
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -344,8 +344,8 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  background: rgba(59, 130, 246, 0.1);
-  border-bottom: 1px solid rgba(75, 85, 99, 0.3);
+  background: var(--bg-soft);
+  border-bottom: 1px solid var(--border-soft);
   cursor: move;
   user-select: none;
 }
@@ -372,17 +372,17 @@ onUnmounted(() => {
 }
 
 .panel-content::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-soft);
   border-radius: 3px;
 }
 
 .panel-content::-webkit-scrollbar-thumb {
-  background: rgba(75, 85, 99, 0.5);
+  background: var(--border-soft);
   border-radius: 3px;
 }
 
 .panel-content::-webkit-scrollbar-thumb:hover {
-  background: rgba(75, 85, 99, 0.7);
+  background: var(--border-strong);
 }
 
 .section {
@@ -396,7 +396,7 @@ onUnmounted(() => {
 .section-title {
   font-size: 14px;
   font-weight: 600;
-  color: #e5e7eb;
+  color: var(--text-primary);
   margin-bottom: 12px;
 }
 
@@ -411,8 +411,8 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 12px;
-  background: rgba(17, 24, 39, 0.5);
-  border: 1px solid rgba(75, 85, 99, 0.3);
+  background: var(--bg-panel-item);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -425,8 +425,8 @@ onUnmounted(() => {
 }
 
 .proxy-item.selected {
-  background: rgba(59, 130, 246, 0.2);
-  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
 }
 
 .proxy-info {
@@ -459,7 +459,7 @@ onUnmounted(() => {
 .config-label {
   font-size: 12px;
   font-weight: 500;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .actions {

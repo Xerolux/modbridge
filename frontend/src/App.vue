@@ -32,11 +32,14 @@ watch(() => store.darkMode, applyTheme, { immediate: true });
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap');
 
-:root {
+ :root {
   --bg-canvas: #09111f;
   --bg-surface: rgba(14, 22, 39, 0.72);
   --bg-surface-strong: rgba(11, 18, 32, 0.9);
   --bg-soft: rgba(148, 163, 184, 0.12);
+  --bg-input: rgba(255, 255, 255, 0.05);
+  --bg-panel-item: rgba(255, 255, 255, 0.04);
+  --bg-dark-overlay: rgba(15, 23, 42, 0.55);
   --text-primary: #f3f7fb;
   --text-secondary: #c4d2e3;
   --text-muted: #8ba0b8;
@@ -48,11 +51,13 @@ watch(() => store.darkMode, applyTheme, { immediate: true });
   --danger: #fb7185;
   --border-soft: rgba(255, 255, 255, 0.12);
   --border-strong: rgba(255, 255, 255, 0.2);
+  --border-subtle: rgba(255, 255, 255, 0.08);
   --shadow-soft: 0 20px 60px rgba(2, 6, 23, 0.35);
   --shadow-strong: 0 35px 80px rgba(2, 6, 23, 0.5);
   --glass-blur: blur(24px);
   --hero-gradient: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(192, 132, 252, 0.18));
   --panel-gradient: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+  --grid-line: rgba(255, 255, 255, 0.035);
 }
 
 .light {
@@ -60,13 +65,20 @@ watch(() => store.darkMode, applyTheme, { immediate: true });
   --bg-surface: rgba(255, 255, 255, 0.7);
   --bg-surface-strong: rgba(255, 255, 255, 0.92);
   --bg-soft: rgba(15, 23, 42, 0.05);
+  --bg-input: rgba(15, 23, 42, 0.06);
+  --bg-panel-item: rgba(15, 23, 42, 0.04);
+  --bg-dark-overlay: rgba(0, 0, 0, 0.04);
   --text-primary: #102038;
   --text-secondary: #334155;
   --text-muted: #64748b;
   --border-soft: rgba(15, 23, 42, 0.08);
   --border-strong: rgba(56, 189, 248, 0.22);
+  --border-subtle: rgba(15, 23, 42, 0.1);
   --shadow-soft: 0 18px 45px rgba(148, 163, 184, 0.18);
   --shadow-strong: 0 28px 60px rgba(148, 163, 184, 0.24);
+  --hero-gradient: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(192, 132, 252, 0.12));
+  --panel-gradient: linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.3));
+  --grid-line: rgba(15, 23, 42, 0.06);
 }
 
 * {
@@ -136,8 +148,8 @@ textarea,
 .ambient-grid {
   opacity: 0.4;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
   background-size: 28px 28px;
   mask-image: radial-gradient(circle at center, black 30%, transparent 90%);
 }
@@ -240,16 +252,16 @@ textarea,
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.12);
+  background: var(--bg-soft);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(125, 211, 252, 0.3);
+  background: var(--border-strong);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(125, 211, 252, 0.48);
+  background: var(--accent);
 }
 
 @keyframes floatOrb {
@@ -345,7 +357,7 @@ textarea,
 .p-textarea,
 .p-multiselect,
 .p-chips-input-token input {
-  background: rgba(255, 255, 255, 0.05) !important;
+  background: var(--bg-input) !important;
   border: 1px solid var(--border-soft) !important;
   color: var(--text-primary) !important;
   border-radius: 16px !important;
@@ -376,7 +388,7 @@ textarea,
 }
 
 .p-datatable-thead > tr > th {
-  background: rgba(255, 255, 255, 0.04) !important;
+  background: var(--bg-panel-item) !important;
   color: var(--text-secondary) !important;
 }
 
@@ -385,7 +397,7 @@ textarea,
 }
 
 .p-datatable-tbody > tr:hover {
-  background: rgba(255, 255, 255, 0.04) !important;
+  background: var(--bg-panel-item) !important;
 }
 
 .p-tag {

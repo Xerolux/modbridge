@@ -106,7 +106,7 @@
         </div>
 
         <div
-          class="grid-stack-dashboard grid-stack min-h-[60vh] sm:min-h-[520px] rounded-[24px] border border-white/10"
+          class="grid-stack-dashboard grid-stack min-h-[60vh] sm:min-h-[520px] rounded-[24px] border border-gray-200 dark:border-white/10"
           :class="{ 'grid-stack-dashboard--editing': layoutEditing, 'hidden': widgets.length === 0 }"
         >
           <div v-if="layoutEditing" class="layout-edit-banner">
@@ -565,8 +565,8 @@ const goToLogs = () => {
 .dashboard-stat {
   border-radius: 20px;
   padding: 0.9rem 1rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-panel-item);
+  border: 1px solid var(--border-subtle);
 }
 
 .dashboard-stat-label {
@@ -593,7 +593,7 @@ const goToLogs = () => {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-panel-item);
 }
 
 .loading-spinner::before {
@@ -608,8 +608,7 @@ const goToLogs = () => {
   position: relative;
   padding: 0.35rem;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015)),
-    rgba(15, 23, 42, 0.18);
+    linear-gradient(180deg, var(--bg-panel-item), var(--bg-dark-overlay));
 }
 
 .grid-stack-dashboard--editing {
@@ -625,8 +624,8 @@ const goToLogs = () => {
   align-items: center;
   gap: 0.55rem;
   border-radius: 999px;
-  border: 1px solid rgba(125, 211, 252, 0.18);
-  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface-strong);
   padding: 0.45rem 0.8rem;
   font-size: 0.78rem;
   color: var(--text-secondary);
@@ -644,7 +643,7 @@ const goToLogs = () => {
   height: 2rem;
   border: 0;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.72);
+  background: var(--bg-surface-strong);
   color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
@@ -657,25 +656,23 @@ const goToLogs = () => {
 }
 
 .empty-grid {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-panel-item);
 }
 
 .grid-stack-item-content {
   height: 100%;
   border-radius: 24px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03)),
-    rgba(15, 23, 42, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 18px 45px rgba(2, 6, 23, 0.35);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow-soft);
   overflow: hidden;
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 .grid-stack-item:hover .grid-stack-item-content {
   transform: translateY(-2px);
-  border-color: rgba(125, 211, 252, 0.22);
-  box-shadow: 0 28px 60px rgba(2, 6, 23, 0.42);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-strong);
 }
 
 @media (max-width: 640px) {

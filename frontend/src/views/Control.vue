@@ -40,14 +40,14 @@
 
          <div v-if="loading" class="flex justify-center min-h-[400px] items-center">
              <div class="text-center">
-                 <i class="pi pi-spin pi-spinner text-4xl text-purple-400"></i>
-                 <p class="mt-4 text-gray-400">Loading proxies...</p>
+                  <i class="pi pi-spin pi-spinner text-4xl text-purple-500"></i>
+                  <p class="mt-4 text-gray-500 dark:text-gray-400">Loading proxies...</p>
              </div>
          </div>
 
          <div v-else-if="proxies.length === 0" class="flex justify-center items-center min-h-[300px]">
-             <div class="text-center text-gray-400 glass-card p-12 rounded-3xl">
-                 <i class="pi pi-inbox text-5xl mb-4 block text-purple-400/50"></i>
+              <div class="text-center text-gray-500 dark:text-gray-400 glass-card p-12 rounded-3xl">
+                  <i class="pi pi-inbox text-5xl mb-4 block text-purple-400/50"></i>
                  <p>No proxies configured. Click "{{ $t('common.add') }} Proxy" to get started.</p>
              </div>
          </div>
@@ -72,13 +72,13 @@
                              @end="(e) => onDragEnd(group.name, e)"
                          >
                              <div v-for="proxy in group.proxies" :key="proxy.id"
-                                  class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10 cursor-default"
+                                  class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10 cursor-default"
                                   :class="{ 'ring-2 ring-purple-500/50': editMode }">
                                      <div class="p-5">
                                          <div class="flex justify-between items-center mb-4 gap-2">
                                              <div class="flex items-center gap-3 min-w-0">
-                                                 <div v-if="editMode" class="drag-handle shrink-0 cursor-grab active:cursor-grabbing p-1 rounded-lg hover:bg-white/10 transition-colors">
-                                                     <i class="pi pi-bars text-gray-400 text-sm"></i>
+                                                  <div v-if="editMode" class="drag-handle shrink-0 cursor-grab active:cursor-grabbing p-1 rounded-lg hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">
+                                                      <i class="pi pi-bars text-gray-400 text-sm"></i>
                                                  </div>
                                                  <span class="text-lg font-semibold text-surface-900 dark:text-white truncate" :title="proxy.name">{{ proxy.name }}</span>
                                              </div>
@@ -86,11 +86,11 @@
                                          </div>
 
                                               <div class="flex flex-col gap-3">
-                                              <div class="text-gray-400 text-sm break-words" :title="proxy.description">{{ proxy.description || 'No description' }}</div>
-                                              <div class="flex items-center gap-2 text-sm text-gray-300 min-w-0 flex-wrap">
+                                               <div class="text-gray-500 dark:text-gray-400 text-sm break-words" :title="proxy.description">{{ proxy.description || 'No description' }}</div>
+                                               <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 min-w-0 flex-wrap">
                                                   <i class="pi pi-arrow-right-arrow-left text-purple-400 text-xs shrink-0"></i>
                                                   <span class="truncate" :title="proxy.listen_addr">{{ proxy.listen_addr }}</span>
-                                                  <i class="pi pi-arrow-right text-gray-500 text-xs shrink-0"></i>
+                                                   <i class="pi pi-arrow-right text-gray-500 text-xs shrink-0"></i>
                                                   <span class="truncate" :title="proxy.target_addr">{{ proxy.target_addr }}</span>
                                               </div>
 
@@ -124,13 +124,13 @@
                                                    />
                                               </div>
 
-                                             <div v-if="connectionStatus[proxy.id]" class="mt-3 p-3 rounded-2xl" :class="connectionStatus[proxy.id].reachable ? 'glass-card border-green-500/30 text-green-300' : 'glass-card border-red-500/30 text-red-300'">
+                                              <div v-if="connectionStatus[proxy.id]" class="mt-3 p-3 rounded-2xl" :class="connectionStatus[proxy.id].reachable ? 'glass-card border-green-500/30 text-green-600 dark:text-green-300' : 'glass-card border-red-500/30 text-red-600 dark:text-red-300'">
                                                  <div class="flex items-center gap-2 mb-1">
                                                      <i :class="connectionStatus[proxy.id].reachable ? 'pi pi-check-circle' : 'pi pi-times-circle'"></i>
                                                      <span class="font-semibold text-sm">{{ connectionStatus[proxy.id].reachable ? 'Reachable' : 'Unreachable' }}</span>
                                                  </div>
-                                                 <div class="text-xs text-gray-300">{{ connectionStatus[proxy.id].target }}</div>
-                                                 <div v-if="!connectionStatus[proxy.id].reachable" class="text-xs mt-1 text-yellow-300">{{ connectionStatus[proxy.id].error }}</div>
+                                                  <div class="text-xs text-gray-600 dark:text-gray-300">{{ connectionStatus[proxy.id].target }}</div>
+                                                  <div v-if="!connectionStatus[proxy.id].reachable" class="text-xs mt-1 text-yellow-600 dark:text-yellow-300">{{ connectionStatus[proxy.id].error }}</div>
                                              </div>
                                          </div>
                                      </div>
@@ -201,11 +201,11 @@
          </Dialog>
 
          <Dialog v-model:visible="showLogsDialog" :header="`Logs - ${currentProxy?.name}`" modal class="w-full max-w-4xl">
-             <div class="rounded-2xl p-4 font-mono text-sm h-[500px] overflow-y-auto bg-black/40 border border-white/5">
-                 <div v-if="proxyLogs.length === 0" class="text-gray-500">No logs available</div>
-                 <div v-else class="space-y-1">
-                     <div v-for="(log, index) in proxyLogs" :key="index" class="border-b border-white/5 pb-1">
-                          <span class="text-gray-400">[{{ formatTime(log.timestamp) }}]</span>
+              <div class="rounded-2xl p-4 font-mono text-sm h-[500px] overflow-y-auto bg-gray-100 dark:bg-black/40 border border-gray-200 dark:border-white/5">
+                  <div v-if="proxyLogs.length === 0" class="text-gray-400 dark:text-gray-500">No logs available</div>
+                  <div v-else class="space-y-1">
+                      <div v-for="(log, index) in proxyLogs" :key="index" class="border-b border-gray-200 dark:border-white/5 pb-1">
+                           <span class="text-gray-500 dark:text-gray-400">[{{ formatTime(log.timestamp) }}]</span>
                          <span :class="getLogLevelColor(log.level)" class="mx-2 font-bold">{{ log.level }}</span>
                          <span class="text-surface-900 dark:text-white">{{ log.message }}</span>
                      </div>
@@ -598,17 +598,17 @@ const testConnectivity = async (proxy) => {
 }
 
 .glass-card {
-    background: rgba(31, 41, 55, 0.5);
+    background: var(--bg-surface);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-soft);
+    box-shadow: var(--shadow-soft);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glass-card:hover {
-    border-color: rgba(255, 255, 255, 0.2);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(168, 85, 247, 0.1);
+    border-color: var(--border-strong);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15), 0 0 20px rgba(168, 85, 247, 0.1);
     transform: translateY(-2px);
 }
 </style>

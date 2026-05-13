@@ -24,7 +24,11 @@
           return;
       }
 
-      router.push(path).catch(() => {});
+      router.push(path).catch((err) => {
+          if (err?.name !== 'NavigationDuplicated' && err?.name !== 'NavigationFailure') {
+              console.warn('Navigation failed:', err);
+          }
+      });
       mobileMenuVisible.value = false;
   };
 
@@ -122,10 +126,10 @@
 <template>
     <div class="min-h-screen flex flex-col bg-transparent">
         <header class="px-4 py-3 z-10">
-            <Menubar :model="isMobile ? [] : items" class="glass-card border border-white/10 rounded-2xl shadow-lg !bg-surface-800/40">
+             <Menubar :model="isMobile ? [] : items" class="glass-card border border-gray-200 dark:border-white/10 rounded-2xl shadow-lg !bg-surface-100/40 dark:!bg-surface-800/40">
                  <template #start>
                    <div class="flex items-center gap-4 pl-2">
-                        <Button v-if="isMobile" icon="pi pi-bars" text rounded @click="mobileMenuVisible = true" class="text-white hover:bg-white/10" aria-label="Open navigation" />
+                         <Button v-if="isMobile" icon="pi pi-bars" text rounded @click="mobileMenuVisible = true" class="text-gray-700 dark:text-white hover:bg-gray-200 dark:hover:bg-white/10" aria-label="Open navigation" />
                         <button type="button" class="flex items-center gap-2 cursor-pointer bg-transparent border-0 p-0" @click="navigate('/')" aria-label="Go to dashboard">
                             <img src="../assets/logo.png" alt="ModBridge Logo" class="w-12 h-12 object-contain" />
                             <span class="text-xl font-bold tracking-tight text-surface-900 dark:text-white hidden sm:block">ModBridge</span>
@@ -133,7 +137,7 @@
                    </div>
                  </template>
                  <template #item="{ item }">
-                     <a v-ripple class="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 rounded-xl cursor-pointer text-surface-200 transition-colors mx-1" :class="{'bg-white/10 text-white font-medium': isActiveRoute(item.path)}" @click.prevent="item.command">
+                      <a v-ripple class="flex items-center gap-2 px-4 py-2.5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-xl cursor-pointer text-gray-700 dark:text-surface-200 transition-colors mx-1" :class="{'bg-gray-200 dark:bg-white/10 text-gray-900 dark:text-white font-medium': isActiveRoute(item.path)}" @click.prevent="item.command">
                          <i :class="item.icon" class="text-lg"></i>
                          <span class="text-sm">{{ item.label }}</span>
                      </a>
@@ -141,15 +145,15 @@
                  <template #end>
                      <div class="flex items-center gap-3 pr-2">
                          <LanguageSelector class="hidden sm:flex" />
-                         <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-900/50 border border-white/5">
-                             <i :class="appStore.darkMode ? 'pi pi-moon' : 'pi pi-sun'" class="text-surface-300 text-sm"></i>
-                             <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" class="scale-75" />
-                         </div>
-                         <div v-if="auth.user.username" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-900/50 border border-white/5">
-                             <i class="pi pi-user text-surface-300 text-sm"></i>
-                             <span class="text-surface-200 text-sm">{{ auth.user.username }}</span>
-                             <span class="text-xs text-surface-400">({{ auth.user.role }})</span>
-                         </div>
+                          <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-surface-900/50 border border-gray-200 dark:border-white/5">
+                              <i :class="appStore.darkMode ? 'pi pi-moon' : 'pi pi-sun'" class="text-gray-500 dark:text-surface-300 text-sm"></i>
+                              <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" class="scale-75" />
+                          </div>
+                          <div v-if="auth.user.username" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-surface-900/50 border border-gray-200 dark:border-white/5">
+                              <i class="pi pi-user text-gray-500 dark:text-surface-300 text-sm"></i>
+                              <span class="text-gray-700 dark:text-surface-200 text-sm">{{ auth.user.username }}</span>
+                              <span class="text-xs text-gray-500 dark:text-surface-400">({{ auth.user.role }})</span>
+                          </div>
                           <Button icon="pi pi-power-off" severity="danger" rounded text @click="logout" class="hidden sm:flex hover:bg-red-500/20 w-10 h-10" aria-label="Logout" />
                      </div>
                  </template>
@@ -170,23 +174,23 @@
                         :label="item.label"
                         :icon="item.icon"
                         text
-                        :class="['w-full text-left rounded-xl py-3 px-4', isActiveRoute(item.path) ? 'bg-primary-500/20 text-primary-300 font-medium border border-primary-500/20' : 'text-surface-200 hover:bg-white/5']"
+                         :class="['w-full text-left rounded-xl py-3 px-4', isActiveRoute(item.path) ? 'bg-primary-500/20 text-primary-300 font-medium border border-primary-500/20' : 'text-gray-700 dark:text-surface-200 hover:bg-gray-200 dark:hover:bg-white/5']"
                     />
                 </div>
 
-                <div class="mt-auto border-t border-white/10 pt-6 flex flex-col gap-4">
-                    <div v-if="auth.user.username" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-900/50 border border-white/5">
-                        <i class="pi pi-user text-surface-400 text-sm"></i>
-                        <span class="text-surface-200 text-sm">{{ auth.user.username }}</span>
-                        <span class="text-xs text-surface-400">({{ auth.user.role }})</span>
-                    </div>
-                     <div class="flex items-center justify-between px-4 py-3 rounded-xl bg-surface-900/50 border border-white/5">
-                        <span class="text-surface-200 font-medium text-sm">Theme</span>
-                        <div class="flex items-center gap-3">
-                            <i :class="appStore.darkMode ? 'pi pi-moon text-surface-400' : 'pi pi-sun text-surface-400'"></i>
-                            <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" class="scale-90" />
-                        </div>
+                 <div class="mt-auto border-t border-gray-200 dark:border-white/10 pt-6 flex flex-col gap-4">
+                     <div v-if="auth.user.username" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 dark:bg-surface-900/50 border border-gray-200 dark:border-white/5">
+                         <i class="pi pi-user text-gray-500 dark:text-surface-400 text-sm"></i>
+                         <span class="text-gray-700 dark:text-surface-200 text-sm">{{ auth.user.username }}</span>
+                         <span class="text-xs text-gray-500 dark:text-surface-400">({{ auth.user.role }})</span>
                      </div>
+                      <div class="flex items-center justify-between px-4 py-3 rounded-xl bg-gray-100 dark:bg-surface-900/50 border border-gray-200 dark:border-white/5">
+                         <span class="text-gray-700 dark:text-surface-200 font-medium text-sm">Theme</span>
+                         <div class="flex items-center gap-3">
+                             <i :class="appStore.darkMode ? 'pi pi-moon text-gray-500 dark:text-surface-400' : 'pi pi-sun text-gray-500 dark:text-surface-400'"></i>
+                             <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" class="scale-90" />
+                         </div>
+                      </div>
                      <LanguageSelector class="w-full px-2" />
                     <Button
                         @click="logout"
@@ -200,9 +204,9 @@
             </div>
         </Sidebar>
 
-        <main class="flex-grow text-surface-900 dark:text-white w-full max-w-7xl mx-auto p-4 pt-0">
-             <router-view></router-view>
-        </main>
+         <main class="flex-grow text-surface-900 dark:text-white w-full max-w-7xl mx-auto p-4 pt-0">
+              <router-view :key="route.fullPath"></router-view>
+         </main>
     </div>
 </template>
 
@@ -215,10 +219,10 @@
 :deep(.p-menubar .p-menubar-button) {
 }
 :deep(.p-sidebar) {
-    background: rgba(17, 24, 39, 0.7) !important;
+    background: var(--bg-surface-strong) !important;
     backdrop-filter: blur(24px) !important;
     -webkit-backdrop-filter: blur(24px) !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    border-right: 1px solid var(--border-soft);
 }
 :deep(.p-sidebar-header) {
     padding: 1.5rem 1.5rem 0.5rem;

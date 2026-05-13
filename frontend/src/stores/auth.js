@@ -17,7 +17,7 @@ export const useAuthStore = defineStore('auth', () => {
   let lastAuthCheckAt = 0
 
   const isAdmin = computed(() => user.value.role === 'admin')
-  const isOperator = computed(() => user.value.role === 'operator' || user.value.role === 'admin')
+  const isOperator = computed(() => user.value.role === 'techniker' || user.value.role === 'operator' || user.value.role === 'admin')
 
   const hasPermission = (permission) => {
     if (isAdmin.value) return true

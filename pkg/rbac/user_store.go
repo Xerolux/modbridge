@@ -465,10 +465,10 @@ func RoleDescription(role Role) string {
 	switch role {
 	case RoleAdmin:
 		return "Full system access including user management"
-	case RoleOperator:
-		return "Operational access to control proxies and devices"
-	case RoleViewer:
-		return "Read-only access to view system state"
+	case RoleTechniker:
+		return "Can create, edit and delete proxies and devices"
+	case RoleBenutzer:
+		return "Can view and start/stop proxies, no editing"
 	case RoleAuditor:
 		return "Read-only access with audit log export capabilities"
 	default:

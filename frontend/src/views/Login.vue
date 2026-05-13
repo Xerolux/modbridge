@@ -44,10 +44,10 @@ const handleLogin = async () => {
 
 <template>
     <div class="flex items-center justify-center min-h-[80vh] px-4 py-8">
-        <Card class="w-full max-w-md glass-card border border-white/10 shadow-2xl overflow-hidden relative">
+         <Card class="w-full max-w-md glass-card border border-gray-200 dark:border-white/10 shadow-2xl overflow-hidden relative">
             <template #title>
                 <div class="text-2xl font-semibold tracking-tight text-surface-900 dark:text-white mb-2">Welcome Back</div>
-                <div class="text-sm font-normal text-surface-400">
+                <div class="text-sm font-normal text-gray-500 dark:text-surface-400">
                     <span v-if="multiUser">Enter your credentials to continue</span>
                     <span v-else>Enter your password to continue</span>
                 </div>
@@ -55,12 +55,12 @@ const handleLogin = async () => {
             <template #content>
                 <div class="flex flex-col gap-5 mt-4">
                     <div v-if="multiUser" class="flex flex-col gap-2">
-                        <label for="username" class="text-sm font-medium text-surface-200">Username</label>
-                        <InputText id="username" v-model="username" @keyup.enter="handleLogin" class="p-3 w-full bg-surface-800/50 border-surface-700/50 focus:border-primary-500 transition-colors rounded-xl" placeholder="Username" />
+                        <label for="username" class="text-sm font-medium text-gray-700 dark:text-surface-200">Username</label>
+                        <InputText id="username" v-model="username" @keyup.enter="handleLogin" class="p-3 w-full dark:bg-surface-800/50 dark:border-surface-700/50 focus:border-primary-500 transition-colors rounded-xl" placeholder="Username" />
                     </div>
                     <div class="flex flex-col gap-2">
-                        <label for="password" class="text-sm font-medium text-surface-200">Password</label>
-                        <InputText id="password" v-model="password" type="password" @keyup.enter="handleLogin" class="p-3 w-full bg-surface-800/50 border-surface-700/50 focus:border-primary-500 transition-colors rounded-xl" placeholder="••••••••" />
+                        <label for="password" class="text-sm font-medium text-gray-700 dark:text-surface-200">Password</label>
+                        <InputText id="password" v-model="password" type="password" @keyup.enter="handleLogin" class="p-3 w-full dark:bg-surface-800/50 dark:border-surface-700/50 focus:border-primary-500 transition-colors rounded-xl" placeholder="••••••••" />
                     </div>
                     <Message v-if="error" severity="error" class="text-sm rounded-xl">{{ error }}</Message>
                     <Button label="Login" @click="handleLogin" :loading="loading" class="btn-neon w-full p-3 font-semibold mt-2 rounded-xl" />
@@ -72,7 +72,7 @@ const handleLogin = async () => {
 
 <style scoped>
 :deep(.p-card) {
-    background: rgba(17, 24, 39, 0.4) !important;
+    background: var(--bg-surface-strong) !important;
     backdrop-filter: blur(24px) !important;
     -webkit-backdrop-filter: blur(24px) !important;
     border-radius: 24px;
@@ -81,12 +81,12 @@ const handleLogin = async () => {
     padding: 2.5rem;
 }
 :deep(.p-inputtext) {
-    background: rgba(31, 41, 55, 0.5);
-    border: 1px solid rgba(75, 85, 99, 0.4);
+    background: var(--bg-input);
+    border: 1px solid var(--border-soft);
 }
 :deep(.p-inputtext:focus) {
-    background: rgba(31, 41, 55, 0.8);
-    border-color: var(--p-primary-500);
+    background: var(--bg-surface);
+    border-color: var(--accent-strong);
     box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.2);
 }
 </style>

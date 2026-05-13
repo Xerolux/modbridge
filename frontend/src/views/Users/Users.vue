@@ -1,7 +1,7 @@
 <template>
   <div class="p-4 sm:p-6 flex flex-col gap-4">
     <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-      <h1 class="text-xl sm:text-2xl font-bold text-gray-200">User Management</h1>
+      <h1 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200">User Management</h1>
       <Button v-if="canCreateUsers" @click="openCreateModal" icon="pi pi-plus" label="Add User" class="w-full sm:w-auto" />
     </div>
 
@@ -15,7 +15,7 @@
       <Button @click="loadUsers" label="Retry" class="mt-4" />
     </div>
 
-    <div v-else class="glass-card rounded-3xl border border-white/10 overflow-hidden">
+    <div v-else class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden">
     <DataTable
       :value="users"
       :paginator="users.length > 10"
@@ -28,19 +28,19 @@
       <Column field="username" header="Username" sortable>
         <template #body="{ data }">
           <div class="flex items-center gap-2">
-            <i class="pi pi-user text-gray-400"></i>
-            <span class="text-gray-200">{{ data.username }}</span>
+             <i class="pi pi-user text-gray-400 dark:text-gray-400"></i>
+             <span class="text-gray-800 dark:text-gray-200">{{ data.username }}</span>
           </div>
         </template>
       </Column>
       <Column field="full_name" header="Name" sortable>
         <template #body="{ data }">
-          <span class="text-gray-300">{{ data.full_name || '-' }}</span>
+           <span class="text-gray-600 dark:text-gray-300">{{ data.full_name || '-' }}</span>
         </template>
       </Column>
       <Column field="email" header="Email" sortable class="hidden sm:table-cell">
         <template #body="{ data }">
-          <span class="text-gray-300">{{ data.email || '-' }}</span>
+           <span class="text-gray-600 dark:text-gray-300">{{ data.email || '-' }}</span>
         </template>
       </Column>
       <Column field="role" header="Role" sortable>
@@ -75,13 +75,13 @@
       </Column>
       <Column header="Expires" sortable field="expires_at">
         <template #body="{ data }">
-          <span v-if="data.expires_at" class="text-gray-300 text-sm">
+           <span v-if="data.expires_at" class="text-gray-600 dark:text-gray-300 text-sm">
             {{ formatDate(data.expires_at) }}
           </span>
-          <span v-else-if="data.auto_deactivate_days > 0" class="text-yellow-400 text-sm">
+           <span v-else-if="data.auto_deactivate_days > 0" class="text-yellow-600 dark:text-yellow-400 text-sm">
             After {{ data.auto_deactivate_days }} days
           </span>
-          <span v-else class="text-gray-500 text-sm">Never</span>
+           <span v-else class="text-gray-400 dark:text-gray-500 text-sm">Never</span>
         </template>
       </Column>
       <Column header="Actions" :exportable="false">
@@ -117,7 +117,7 @@
         </template>
       </Column>
       <template #empty>
-        <div class="text-center py-8 text-gray-500">
+         <div class="text-center py-8 text-gray-400 dark:text-gray-500">
           <i class="pi pi-users text-4xl mb-2 block"></i>
           <p>No users found</p>
         </div>
@@ -134,21 +134,21 @@
       <div class="flex flex-col gap-4">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-1">Username *</label>
+            <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Username *</label>
             <InputText v-model="formData.username" class="w-full" :disabled="isEditMode" placeholder="username" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-1">Full Name *</label>
+            <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Full Name *</label>
             <InputText v-model="formData.full_name" class="w-full" placeholder="Max Mustermann" />
           </div>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Email *</label>
+          <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Email *</label>
           <InputText v-model="formData.email" type="email" class="w-full" placeholder="user@example.com" />
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-1">Role *</label>
+            <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Role *</label>
             <Dropdown
               v-model="formData.role"
               :options="roles"
@@ -156,45 +156,45 @@
               optionValue="value"
               class="w-full"
             />
-            <small class="text-gray-500">{{ roleMeta[formData.role]?.description || '' }}</small>
+             <small class="text-gray-400 dark:text-gray-500">{{ roleMeta[formData.role]?.description || '' }}</small>
           </div>
           <div v-if="!isEditMode">
-            <label class="block text-sm font-medium text-gray-300 mb-1">Password *</label>
+            <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Password *</label>
             <Password v-model="formData.password" :feedback="true" toggleMask class="w-full" />
           </div>
         </div>
 
         <div v-if="isEditMode" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-1">New Password</label>
+            <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">New Password</label>
             <Password v-model="formData.password" :feedback="true" toggleMask class="w-full" placeholder="Leave empty to keep" />
-            <small class="text-gray-500">Leave empty to keep current password</small>
+             <small class="text-gray-400 dark:text-gray-500">Leave empty to keep current password</small>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-1">Description</label>
+            <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Description</label>
             <InputText v-model="formData.description" class="w-full" placeholder="Optional note" />
           </div>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-1">Auto-Deactivate (days)</label>
+            <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Auto-Deactivate (days)</label>
             <InputNumber v-model="formData.auto_deactivate_days" :min="0" :max="3650" class="w-full" placeholder="0 = never" />
-            <small class="text-gray-500">0 = no auto-deactivation</small>
+             <small class="text-gray-400 dark:text-gray-500">0 = no auto-deactivation</small>
           </div>
           <div v-if="formData.expires_at">
-            <label class="block text-sm font-medium text-gray-300 mb-1">Expires At</label>
+            <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Expires At</label>
             <InputText :modelValue="formatDate(formData.expires_at)" class="w-full" disabled />
           </div>
         </div>
 
         <div class="flex items-center gap-2">
           <Checkbox v-model="formData.enabled" binary inputId="enabled-cb" />
-          <label for="enabled-cb" class="text-sm text-gray-300">Enabled</label>
+           <label for="enabled-cb" class="text-sm text-gray-600 dark:text-gray-300">Enabled</label>
         </div>
 
-        <div class="rounded-2xl border border-white/10 bg-black/20 p-3">
-          <div class="text-sm font-medium text-gray-200 mb-2">Assigned permissions</div>
+         <div class="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 p-3">
+           <div class="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">Assigned permissions</div>
           <div class="flex flex-wrap gap-2">
             <Tag
               v-for="permission in selectedRolePermissions"
@@ -202,7 +202,7 @@
               :value="permission"
               severity="info"
             />
-            <span v-if="selectedRolePermissions.length === 0" class="text-gray-500 text-sm">No permissions</span>
+             <span v-if="selectedRolePermissions.length === 0" class="text-gray-400 dark:text-gray-500 text-sm">No permissions</span>
           </div>
         </div>
       </div>
@@ -256,7 +256,7 @@ const defaultFormData = () => ({
   username: '',
   full_name: '',
   email: '',
-  role: 'viewer',
+  role: 'benutzer',
   password: '',
   enabled: true,
   auto_deactivate_days: 0,
@@ -267,29 +267,30 @@ const defaultFormData = () => ({
 const formData = ref(defaultFormData());
 
 const roles = [
-  { label: 'Admin - Full access', value: 'admin' },
-  { label: 'Operator - Control proxies & devices', value: 'operator' },
-  { label: 'Viewer - Read-only access', value: 'viewer' },
-  { label: 'Auditor - Audit logs access', value: 'auditor' }
-];
+  { label: 'Admin - Vollzugriff', value: 'admin' },
+  { label: 'Techniker - Proxies anlegen und bearbeiten', value: 'techniker' },
+  { label: 'Benutzer - Ansehen, starten/stoppen', value: 'benutzer' },
+  { label: 'Auditor - Audit-Logs einsehen', value: 'auditor' }
+]
 
 const roleMeta = {
   admin: {
-    description: 'Full administration rights',
+    description: 'Vollständige Administration',
     permissions: ['proxy:*', 'device:*', 'config:*', 'system:*', 'user:*', 'audit:*', 'logs:*']
   },
-  operator: {
-    description: 'Operational control over proxies/devices',
-    permissions: ['proxy:view', 'proxy:control', 'device:view', 'device:edit', 'config:view', 'system:view', 'logs:view']
+  techniker: {
+    description: 'Proxies anlegen, bearbeiten, löschen; keine Admin-Einstellungen',
+    permissions: ['proxy:view', 'proxy:create', 'proxy:edit', 'proxy:delete', 'proxy:control', 'device:view', 'device:edit', 'config:view', 'system:view', 'logs:view']
   },
-  viewer: {
-    description: 'Read-only visibility',
-    permissions: ['proxy:view', 'device:view', 'config:view', 'system:view', 'logs:view']
+  benutzer: {
+    description: 'Proxies ansehen, starten/stoppen; keine Änderungen',
+    permissions: ['proxy:view', 'proxy:control', 'device:view', 'config:view', 'system:view', 'logs:view']
   },
   auditor: {
-    description: 'Audit and compliance visibility',
+    description: 'Audit- und Compliance-Einsicht',
     permissions: ['proxy:view', 'device:view', 'config:view', 'system:view', 'audit:view', 'audit:export', 'logs:view', 'logs:export']
   }
+}
 };
 
 const canCreateUsers = computed(() => auth.hasPermission('user:create'));
@@ -431,12 +432,12 @@ const closeModal = () => {
 const getRoleSeverity = (role) => {
   const severities = {
     admin: 'danger',
-    operator: 'info',
-    viewer: 'success',
+    techniker: 'info',
+    benutzer: 'success',
     auditor: 'warn'
-  };
-  return severities[role] || 'secondary';
-};
+  }
+  return severities[role] || 'secondary'
+}
 
 onMounted(() => {
   loadUsers();

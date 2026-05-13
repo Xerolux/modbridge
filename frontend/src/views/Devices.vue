@@ -56,7 +56,7 @@
         filterDisplay="row"
         responsiveLayout="scroll"
         stripedRows
-        class="p-datatable-sm glass-card rounded-3xl border border-white/10 overflow-hidden"
+        class="p-datatable-sm glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden"
       >
         <Column field="ip" header="IP-Adresse" sortable></Column>
          <Column field="name" header="Name" sortable filterMatchMode="contains">

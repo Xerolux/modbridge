@@ -93,20 +93,29 @@ const statusDotClass = {
   padding: 0.4rem 0.75rem;
   font-size: 0.72rem;
   font-weight: 700;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-panel-item);
   color: var(--text-secondary);
 }
 
 .widget-status--running {
+  color: #16a34a;
+}
+:root:not(.light) .widget-status--running {
   color: #bbf7d0;
 }
 
 .widget-status--stopped {
+  color: #ca8a04;
+}
+:root:not(.light) .widget-status--stopped {
   color: #fde68a;
 }
 
 .widget-status--error {
+  color: #dc2626;
+}
+:root:not(.light) .widget-status--error {
   color: #fecdd3;
 }
 
@@ -127,7 +136,7 @@ const statusDotClass = {
   align-items: center;
   gap: 0.45rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-panel-item);
   padding: 0.45rem 0.7rem;
   font-size: 0.72rem;
   color: var(--text-muted);

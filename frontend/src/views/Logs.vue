@@ -68,21 +68,21 @@
  <template>
     <div class="p-2 sm:p-4 flex flex-col gap-4 w-full">
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 sm:mb-4 gap-4 sm:gap-0">
-        <h1 class="text-xl sm:text-2xl font-bold">System Logs</h1>
+         <h1 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">System Logs</h1>
         <div class="flex flex-wrap items-center gap-2 sm:gap-4 w-full sm:w-auto">
           <div class="flex items-center gap-2 flex-1 sm:flex-none">
             <div
               class="w-2 h-2 rounded-full shrink-0 transition-colors duration-300"
               :class="isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'"
             ></div>
-            <span class="text-base text-gray-400 truncate">
+             <span class="text-base text-gray-500 dark:text-gray-400 truncate">
               {{ isConnected ? 'Connected' : 'Disconnected' }}
             </span>
           </div>
-          <div class="flex items-center gap-2 px-2 sm:px-3 py-1 bg-gray-800 rounded flex-1 sm:flex-none justify-center">
-            <i class="pi pi-arrow-down text-base text-gray-400"></i>
+           <div class="flex items-center gap-2 px-2 sm:px-3 py-1 bg-gray-200 dark:bg-gray-800 rounded flex-1 sm:flex-none justify-center">
+             <i class="pi pi-arrow-down text-base text-gray-500 dark:text-gray-400"></i>
             <Checkbox v-model="autoScroll" binary @change="toggleAutoScroll" inputId="auto-scroll-cb" />
-            <label for="auto-scroll-cb" class="text-base text-gray-400 whitespace-nowrap cursor-pointer">Auto-Scroll</label>
+            <label for="auto-scroll-cb" class="text-base text-gray-500 dark:text-gray-400 whitespace-nowrap cursor-pointer">Auto-Scroll</label>
           </div>
           <button
             @click="fetchInitialLogs"
@@ -96,26 +96,26 @@
       <div v-if="logs.length === 0" class="flex justify-center items-center h-[60vh] sm:h-[600px]">
         <div class="text-center">
           <i class="pi pi-spin pi-spinner text-3xl sm:text-4xl text-blue-500"></i>
-          <p class="mt-4 text-sm sm:text-base text-gray-400">Loading logs...</p>
+           <p class="mt-4 text-sm sm:text-base text-gray-500 dark:text-gray-400">Loading logs...</p>
         </div>
       </div>
 
       <div
         v-else
         ref="logsContainer"
-        class="glass-card rounded-3xl p-2 sm:p-4 font-mono text-base h-[60vh] sm:h-[600px] overflow-y-auto break-all sm:break-normal border border-white/10"
+        class="glass-card rounded-3xl p-2 sm:p-4 font-mono text-base h-[60vh] sm:h-[600px] overflow-y-auto break-all sm:break-normal border border-gray-200 dark:border-white/10"
       >
         <div
           v-for="(log, index) in logs"
           :key="index"
-          class="mb-1 border-b border-gray-700/50 pb-1 flex flex-col sm:block hover:bg-gray-700/30 px-1 rounded transition-colors"
+          class="mb-1 border-b border-gray-200 dark:border-gray-700/50 pb-1 flex flex-col sm:block hover:bg-gray-100 dark:hover:bg-gray-700/30 px-1 rounded transition-colors"
         >
           <div>
-              <span class="text-gray-400">[{{ formatDateTime(log.timestamp) }}]</span>
+              <span class="text-gray-500 dark:text-gray-400">[{{ formatDateTime(log.timestamp) }}]</span>
               <span :class="getLogLevelColor(log.level)" class="mx-2 font-bold">{{ log.level }}</span>
           </div>
           <div>
-              <span class="text-blue-300">{{ log.proxy_id || 'SYSTEM' }}:</span>
+              <span class="text-blue-600 dark:text-blue-300">{{ log.proxy_id || 'SYSTEM' }}:</span>
               <span class="text-surface-900 dark:text-white ml-2">{{ log.message }}</span>
           </div>
         </div>

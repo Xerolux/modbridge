@@ -1,107 +1,107 @@
 <template>
     <div class="p-2 sm:p-4 flex flex-col gap-4 w-full">
-        <h1 class="text-xl sm:text-2xl font-bold mb-2 sm:mb-4 text-gray-200">System Information</h1>
+        <h1 class="text-xl sm:text-2xl font-bold mb-2 sm:mb-4 text-gray-800 dark:text-gray-200">System Information</h1>
 
         <div v-if="loading" class="flex justify-center">
             <i class="pi pi-spin pi-spinner text-3xl sm:text-4xl text-blue-500"></i>
         </div>
 
         <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            <Card class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
+            <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
                 <template #title><div class="text-lg sm:text-xl">System</div></template>
                 <template #content>
                     <div class="space-y-2 text-sm sm:text-base">
                         <div class="flex justify-between">
-                            <span class="text-gray-400">Uptime:</span>
+                             <span class="text-gray-500 dark:text-gray-400">Uptime:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.uptime_human }}</span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-400">Go Version:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">Go Version:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.go_version }}</span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-400">OS:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">OS:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.os }}</span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-400">Architecture:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">Architecture:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.arch }}</span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-400">CPU Cores:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">CPU Cores:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.num_cpu }}</span>
                         </div>
                     </div>
                 </template>
             </Card>
 
-            <Card class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
+            <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
                 <template #title><div class="text-lg sm:text-xl">Memory</div></template>
                 <template #content>
                     <div class="space-y-2 text-sm sm:text-base">
                         <div class="flex justify-between">
-                            <span class="text-gray-400">Allocated:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">Allocated:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.memory_alloc_mb }} MB</span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-400">System:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">System:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.memory_sys_mb }} MB</span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-400">Next GC:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">Next GC:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.memory_gc_mb }} MB</span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-400">Goroutines:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">Goroutines:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.goroutines }}</span>
                         </div>
                     </div>
                 </template>
             </Card>
 
-            <Card class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
+            <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
                 <template #title><div class="text-lg sm:text-xl">Proxies</div></template>
                 <template #content>
                     <div class="space-y-2 text-sm sm:text-base">
                         <div class="flex justify-between">
-                            <span class="text-gray-400">Total:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">Total:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.total_proxies }}</span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-400">Running:</span>
-                            <span class="font-semibold text-green-400 text-right pl-2">{{ systemInfo.running_proxies }}</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">Running:</span>
+                             <span class="font-semibold text-green-600 dark:text-green-400 text-right pl-2">{{ systemInfo.running_proxies }}</span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-400">Stopped:</span>
-                            <span class="font-semibold text-red-400 text-right pl-2">{{ systemInfo.total_proxies - systemInfo.running_proxies }}</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">Stopped:</span>
+                             <span class="font-semibold text-red-600 dark:text-red-400 text-right pl-2">{{ systemInfo.total_proxies - systemInfo.running_proxies }}</span>
                         </div>
                     </div>
                 </template>
             </Card>
 
-            <Card class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
+            <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
                 <template #title><div class="text-lg sm:text-xl">Configuration</div></template>
                 <template #content>
                     <div class="space-y-2 text-sm sm:text-base">
                         <div class="flex justify-between">
-                            <span class="text-gray-400">Log Level:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">Log Level:</span>
                             <span class="font-semibold text-right pl-2">{{ config.log_level }}</span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-400">Debug Mode:</span>
-                            <span class="font-semibold text-right pl-2" :class="config.debug_mode ? 'text-green-400' : 'text-red-400'">
+                                                         <span class="text-gray-500 dark:text-gray-400">Debug Mode:</span>
+                            <span class="font-semibold text-right pl-2" :class="config.debug_mode ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
                                 {{ config.debug_mode ? 'Enabled' : 'Disabled' }}
                             </span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-400">Metrics:</span>
-                            <span class="font-semibold text-right pl-2" :class="config.metrics_enabled ? 'text-green-400' : 'text-red-400'">
+                                                         <span class="text-gray-500 dark:text-gray-400">Metrics:</span>
+                            <span class="font-semibold text-right pl-2" :class="config.metrics_enabled ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
                                 {{ config.metrics_enabled ? 'Enabled' : 'Disabled' }}
                             </span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-400">TLS:</span>
-                            <span class="font-semibold text-right pl-2" :class="config.tls_enabled ? 'text-green-400' : 'text-red-400'">
+                                                         <span class="text-gray-500 dark:text-gray-400">TLS:</span>
+                            <span class="font-semibold text-right pl-2" :class="config.tls_enabled ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
                                 {{ config.tls_enabled ? 'Enabled' : 'Disabled' }}
                             </span>
                         </div>
@@ -109,31 +109,31 @@
                 </template>
             </Card>
 
-            <Card class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
+            <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
                 <template #title><div class="text-lg sm:text-xl">Security</div></template>
                 <template #content>
                     <div class="space-y-2 text-sm sm:text-base">
                         <div class="flex justify-between">
-                            <span class="text-gray-400">Rate Limiting:</span>
-                            <span class="font-semibold text-right pl-2" :class="config.rate_limit_enabled ? 'text-green-400' : 'text-red-400'">
+                                                         <span class="text-gray-500 dark:text-gray-400">Rate Limiting:</span>
+                            <span class="font-semibold text-right pl-2" :class="config.rate_limit_enabled ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
                                 {{ config.rate_limit_enabled ? 'Enabled' : 'Disabled' }}
                             </span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-400">IP Whitelist:</span>
-                            <span class="font-semibold text-right pl-2" :class="config.ip_whitelist_enabled ? 'text-green-400' : 'text-red-400'">
+                                                         <span class="text-gray-500 dark:text-gray-400">IP Whitelist:</span>
+                            <span class="font-semibold text-right pl-2" :class="config.ip_whitelist_enabled ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
                                 {{ config.ip_whitelist_enabled ? 'Enabled' : 'Disabled' }}
                             </span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-400">IP Blacklist:</span>
-                            <span class="font-semibold text-right pl-2" :class="config.ip_blacklist_enabled ? 'text-green-400' : 'text-red-400'">
+                                                         <span class="text-gray-500 dark:text-gray-400">IP Blacklist:</span>
+                            <span class="font-semibold text-right pl-2" :class="config.ip_blacklist_enabled ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
                                 {{ config.ip_blacklist_enabled ? 'Enabled' : 'Disabled' }}
                             </span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-400">Email Alerts:</span>
-                            <span class="font-semibold text-right pl-2" :class="config.email_enabled ? 'text-green-400' : 'text-red-400'">
+                                                         <span class="text-gray-500 dark:text-gray-400">Email Alerts:</span>
+                            <span class="font-semibold text-right pl-2" :class="config.email_enabled ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
                                 {{ config.email_enabled ? 'Enabled' : 'Disabled' }}
                             </span>
                         </div>
@@ -141,7 +141,7 @@
                 </template>
             </Card>
 
-            <Card class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
+            <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
                 <template #title><div class="text-lg sm:text-xl">Server Control</div></template>
                 <template #content>
                     <div class="flex flex-col gap-3">
@@ -151,7 +151,7 @@
                 </template>
             </Card>
 
-            <Card class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
+            <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
                 <template #title><div class="text-lg sm:text-xl">Proxy Control</div></template>
                 <template #content>
                     <div class="flex flex-col gap-3">
@@ -163,43 +163,43 @@
                 </template>
             </Card>
 
-            <Card class="glass-card rounded-3xl border border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
+            <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
                 <template #title><div class="text-lg sm:text-xl">Port Management</div></template>
                 <template #content>
                     <div class="flex flex-col gap-3">
                         <Button @click="checkPorts" label="Check Ports" icon="pi pi-search" severity="info" class="w-full p-3 sm:p-2" :loading="portCheckLoading" />
 
                         <div v-if="portStatus.summary" class="grid grid-cols-3 gap-2 text-sm sm:text-base">
-                            <div class="text-center p-2 bg-gray-700 rounded">
-                                <div class="text-gray-400">Total</div>
+                            <div class="text-center p-2 bg-gray-200 dark:bg-gray-700 rounded">
+                                <div class="text-gray-500 dark:text-gray-400">Total</div>
                                 <div class="font-bold">{{ portStatus.summary.total }}</div>
                             </div>
-                            <div class="text-center p-2 bg-green-900 rounded">
-                                <div class="text-gray-400">Free</div>
-                                <div class="font-bold text-green-400">{{ portStatus.summary.free }}</div>
+                            <div class="text-center p-2 bg-green-100 dark:bg-green-900 rounded">
+                                <div class="text-gray-500 dark:text-gray-400">Free</div>
+                                <div class="font-bold text-green-600 dark:text-green-400">{{ portStatus.summary.free }}</div>
                             </div>
-                            <div class="text-center p-2 bg-red-900 rounded">
-                                <div class="text-gray-400">In Use</div>
-                                <div class="font-bold text-red-400">{{ portStatus.summary.in_use }}</div>
+                            <div class="text-center p-2 bg-red-100 dark:bg-red-900 rounded">
+                                <div class="text-gray-500 dark:text-gray-400">In Use</div>
+                                <div class="font-bold text-red-600 dark:text-red-400">{{ portStatus.summary.in_use }}</div>
                             </div>
                         </div>
 
-                        <div v-if="blockedPorts.length > 0" class="mt-2 p-2 bg-red-900 rounded text-sm">
-                            <div class="font-bold text-red-400 mb-2">⚠️ Blocked Ports:</div>
-                            <div v-for="(port, idx) in blockedPorts" :key="idx" class="mb-2 p-2 bg-gray-700 rounded">
+                        <div v-if="blockedPorts.length > 0" class="mt-2 p-2 bg-red-100 dark:bg-red-900 rounded text-sm">
+                            <div class="font-bold text-red-600 dark:text-red-400 mb-2">⚠️ Blocked Ports:</div>
+                            <div v-for="(port, idx) in blockedPorts" :key="idx" class="mb-2 p-2 bg-gray-200 dark:bg-gray-700 rounded">
                                 <div class="flex justify-between items-center mb-1">
                                     <span class="font-semibold">Port {{ port.port }}</span>
-                                    <span class="text-xs text-gray-400">PID: {{ port.pid }}</span>
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">PID: {{ port.pid }}</span>
                                 </div>
-                                <div class="text-xs text-gray-300 mb-1">
+                                <div class="text-xs text-gray-600 dark:text-gray-300 mb-1">
                                     <div>Process: {{ port.process }} (User: {{ port.user }})</div>
-                                    <div class="truncate text-gray-500">{{ port.command }}</div>
+                                    <div class="truncate text-gray-500 dark:text-gray-500">{{ port.command }}</div>
                                 </div>
                                 <Button v-if="auth.hasPermission('system:manage')" @click="releasePort(port)" label="Release Port" icon="pi pi-trash" severity="danger" size="small" class="w-full p-2" />
                             </div>
                         </div>
 
-                        <div v-else-if="portStatus.summary" class="text-center p-2 bg-green-900 rounded text-green-400">
+                        <div v-else-if="portStatus.summary" class="text-center p-2 bg-green-100 dark:bg-green-900 rounded text-green-600 dark:text-green-400">
                             ✓ All ports are free
                         </div>
                     </div>

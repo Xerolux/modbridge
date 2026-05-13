@@ -15,10 +15,10 @@ import (
 type Role string
 
 const (
-	RoleAdmin    Role = "admin"
-	RoleOperator Role = "operator"
-	RoleViewer   Role = "viewer"
-	RoleAuditor  Role = "auditor"
+	RoleAdmin     Role = "admin"
+	RoleTechniker Role = "techniker"
+	RoleBenutzer  Role = "benutzer"
+	RoleAuditor   Role = "auditor"
 )
 
 // Permission represents a specific action
@@ -74,15 +74,15 @@ var RolePermissions = map[Role][]Permission{
 		PermAuditView, PermAuditExport,
 		PermLogsView, PermLogsExport,
 	},
-	RoleOperator: {
-		PermProxyView, PermProxyControl,
+	RoleTechniker: {
+		PermProxyView, PermProxyCreate, PermProxyEdit, PermProxyDelete, PermProxyControl,
 		PermDeviceView, PermDeviceEdit,
 		PermConfigView,
 		PermSystemView,
 		PermLogsView,
 	},
-	RoleViewer: {
-		PermProxyView,
+	RoleBenutzer: {
+		PermProxyView, PermProxyControl,
 		PermDeviceView,
 		PermConfigView,
 		PermSystemView,
@@ -124,8 +124,12 @@ func HasPermission(role Role, permission Permission) bool {
 func ParseRole(roleStr string) (Role, error) {
 	role := Role(strings.ToLower(roleStr))
 	switch role {
-	case RoleAdmin, RoleOperator, RoleViewer, RoleAuditor:
+	case RoleAdmin, RoleTechniker, RoleBenutzer, RoleAuditor:
 		return role, nil
+	case "operator":
+		return RoleTechniker, nil
+	case "viewer":
+		return RoleBenutzer, nil
 	default:
 		return "", errors.New("invalid role")
 	}

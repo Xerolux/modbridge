@@ -8,7 +8,7 @@
         'bg-yellow-500': status === 'Loading...'
       }"
     ></div>
-    <span class="font-medium text-gray-700">{{ status }}</span>
+    <span class="font-medium text-gray-700 dark:text-gray-300">{{ status }}</span>
   </div>
 </template>
 

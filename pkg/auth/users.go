@@ -15,22 +15,20 @@ import (
 type UserRole string
 
 const (
-	RoleAdmin    UserRole = "admin"
-	RoleEditor   UserRole = "editor"
-	RoleViewer   UserRole = "viewer"
-	RoleReadOnly UserRole = "readonly"
+	RoleAdmin     UserRole = "admin"
+	RoleTechniker UserRole = "techniker"
+	RoleBenutzer  UserRole = "benutzer"
+	RoleReadOnly  UserRole = "readonly"
 )
 
-// User represents a user in the system.
 type User struct {
 	ID        string    `json:"id"`
 	Username  string    `json:"username"`
-	Password  string    `json:"-"` // Never returned in JSON
+	Password  string    `json:"-"`
 	Role      UserRole  `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// UserStore manages users.
 type UserStore struct {
 	mu              sync.RWMutex
 	users           map[string]*User
@@ -38,10 +36,10 @@ type UserStore struct {
 }
 
 var roleHierarchy = map[UserRole]int{
-	RoleAdmin:    4,
-	RoleEditor:   3,
-	RoleViewer:   2,
-	RoleReadOnly: 1,
+	RoleAdmin:     4,
+	RoleTechniker: 3,
+	RoleBenutzer:  2,
+	RoleReadOnly:  1,
 }
 
 // NewUserStore creates a new user store.

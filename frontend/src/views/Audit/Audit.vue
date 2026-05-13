@@ -1,7 +1,7 @@
 <template>
   <div class="p-2 sm:p-4 flex flex-col gap-4 w-full">
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-2 sm:mb-4">
-      <h1 class="text-xl sm:text-2xl font-bold text-gray-200">Audit Log</h1>
+      <h1 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200">Audit Log</h1>
       <div class="flex gap-2 w-full sm:w-auto">
         <Button
           label="Export JSON"
@@ -29,7 +29,7 @@
       <Button @click="loadLogs" label="Retry" class="mt-4" />
     </div>
 
-    <div v-else class="glass-card rounded-3xl border border-white/10 overflow-hidden">
+    <div v-else class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden">
       <DataTable
         :value="auditLogs"
         :paginator="auditLogs.length >= limit"
@@ -42,14 +42,14 @@
       >
         <Column field="timestamp" header="Timestamp" sortable>
           <template #body="{ data }">
-            <span class="text-gray-300 text-sm">{{ formatTimestamp(data.timestamp) }}</span>
+             <span class="text-gray-600 dark:text-gray-300 text-sm">{{ formatTimestamp(data.timestamp) }}</span>
           </template>
         </Column>
         <Column field="username" header="User" sortable>
           <template #body="{ data }">
             <div class="flex items-center gap-2">
-              <i class="pi pi-user text-gray-400 text-sm"></i>
-              <span class="text-gray-200">{{ data.username || data.user_id || 'System' }}</span>
+               <i class="pi pi-user text-gray-400 text-sm"></i>
+               <span class="text-gray-800 dark:text-gray-200">{{ data.username || data.user_id || 'System' }}</span>
             </div>
           </template>
         </Column>
@@ -60,14 +60,14 @@
         </Column>
         <Column field="resource" header="Resource">
           <template #body="{ data }">
-            <span class="text-gray-300">
+             <span class="text-gray-600 dark:text-gray-300">
               {{ data.resource_type }}{{ data.resource_id ? ':' + data.resource_id : '' }}
             </span>
           </template>
         </Column>
         <Column field="ip_address" header="IP">
           <template #body="{ data }">
-            <span class="text-gray-300 text-sm" :title="data.ip_address || '-'">
+             <span class="text-gray-500 dark:text-gray-400 text-sm" :title="data.ip_address || '-'">
               {{ data.ip_address || '-' }}
             </span>
           </template>
@@ -75,10 +75,10 @@
         <Column field="mac_address" header="MAC">
           <template #body="{ data }">
             <div class="flex flex-col">
-              <span class="text-gray-300 text-sm" :title="data.mac_address || '-'">
-                {{ data.mac_address || '-' }}
-              </span>
-              <span v-if="data.device_name" class="text-gray-500 text-xs" :title="data.device_name">
+               <span class="text-gray-500 dark:text-gray-300 text-sm" :title="data.mac_address || '-'">
+                 {{ data.mac_address || '-' }}
+               </span>
+               <span v-if="data.device_name" class="text-gray-400 dark:text-gray-500 text-xs" :title="data.device_name">
                 {{ data.device_name }}
               </span>
             </div>
@@ -94,13 +94,13 @@
         </Column>
         <Column field="details" header="Details">
           <template #body="{ data }">
-            <span class="text-gray-400 text-sm truncate block max-w-[200px]" :title="data.details">
+             <span class="text-gray-500 dark:text-gray-400 text-sm truncate block max-w-[200px]" :title="data.details">
               {{ data.details || '-' }}
             </span>
           </template>
         </Column>
         <template #empty>
-          <div class="text-center py-8 text-gray-500">
+          <div class="text-center py-8 text-gray-400 dark:text-gray-500">
             <i class="pi pi-history text-4xl mb-2 block"></i>
             <p>No audit logs found</p>
           </div>

@@ -30,7 +30,7 @@ func TestNewUserStore(t *testing.T) {
 func TestUserStore_CreateUser(t *testing.T) {
 	store := NewUserStore()
 
-	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleOperator)
+	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleTechniker)
 	if err != nil {
 		t.Fatalf("Failed to create user: %v", err)
 	}
@@ -43,8 +43,8 @@ func TestUserStore_CreateUser(t *testing.T) {
 		t.Errorf("Expected email 'test@example.com', got '%s'", user.Email)
 	}
 
-	if user.Role != RoleOperator {
-		t.Errorf("Expected role '%s', got '%s'", RoleOperator, user.Role)
+	if user.Role != RoleTechniker {
+		t.Errorf("Expected role '%s', got '%s'", RoleTechniker, user.Role)
 	}
 
 	// Check user can be retrieved
@@ -61,19 +61,19 @@ func TestUserStore_CreateUser(t *testing.T) {
 func TestUserStore_CreateDuplicateUser(t *testing.T) {
 	store := NewUserStore()
 
-	_, err := store.CreateUser("testuser", "test1@example.com", "Str0ngP@ssw0rd!", RoleOperator)
+	_, err := store.CreateUser("testuser", "test1@example.com", "Str0ngP@ssw0rd!", RoleTechniker)
 	if err != nil {
 		t.Fatalf("Failed to create user: %v", err)
 	}
 
 	// Try to create user with same username
-	_, err = store.CreateUser("testuser", "test2@example.com", "Str0ngP@ssw0rd!", RoleViewer)
+	_, err = store.CreateUser("testuser", "test2@example.com", "Str0ngP@ssw0rd!", RoleBenutzer)
 	if err != ErrUserExists {
 		t.Errorf("Expected ErrUserExists, got: %v", err)
 	}
 
 	// Try to create user with same email
-	_, err = store.CreateUser("testuser2", "test1@example.com", "Str0ngP@ssw0rd!", RoleViewer)
+	_, err = store.CreateUser("testuser2", "test1@example.com", "Str0ngP@ssw0rd!", RoleBenutzer)
 	if err != ErrUserExists {
 		t.Errorf("Expected ErrUserExists for duplicate email, got: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestUserStore_GetUserNotFound(t *testing.T) {
 func TestUserStore_UpdateUser(t *testing.T) {
 	store := NewUserStore()
 
-	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleOperator)
+	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleTechniker)
 	if err != nil {
 		t.Fatalf("Failed to create user: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestUserStore_UpdateUser(t *testing.T) {
 func TestUserStore_UpdateUserReindexesUsername(t *testing.T) {
 	store := NewUserStore()
 
-	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleOperator)
+	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleTechniker)
 	if err != nil {
 		t.Fatalf("Failed to create user: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestUserStore_UpdateUserReindexesUsername(t *testing.T) {
 func TestUserStore_DeleteUser(t *testing.T) {
 	store := NewUserStore()
 
-	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleOperator)
+	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleTechniker)
 	if err != nil {
 		t.Fatalf("Failed to create user: %v", err)
 	}
@@ -174,8 +174,8 @@ func TestUserStore_ListUsers(t *testing.T) {
 	store := NewUserStore()
 
 	// Create some test users
-	store.CreateUser("user1", "user1@example.com", "Str0ngP@ssw0rd!", RoleOperator)
-	store.CreateUser("user2", "user2@example.com", "Str0ngP@ssw0rd!", RoleViewer)
+	store.CreateUser("user1", "user1@example.com", "Str0ngP@ssw0rd!", RoleTechniker)
+	store.CreateUser("user2", "user2@example.com", "Str0ngP@ssw0rd!", RoleBenutzer)
 
 	users := store.ListUsers()
 
@@ -188,7 +188,7 @@ func TestUserStore_ListUsers(t *testing.T) {
 func TestUserStore_AuthenticateUser(t *testing.T) {
 	store := NewUserStore()
 
-	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleOperator)
+	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleTechniker)
 	if err != nil {
 		t.Fatalf("Failed to create user: %v", err)
 	}
@@ -213,12 +213,12 @@ func TestUserStore_AuthenticateUser(t *testing.T) {
 func TestUserStore_ChangeUserRole(t *testing.T) {
 	store := NewUserStore()
 
-	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleOperator)
+	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleTechniker)
 	if err != nil {
 		t.Fatalf("Failed to create user: %v", err)
 	}
 
-	err = store.ChangeUserRole(user.ID, RoleViewer)
+	err = store.ChangeUserRole(user.ID, RoleBenutzer)
 	if err != nil {
 		t.Fatalf("Failed to change role: %v", err)
 	}
@@ -228,15 +228,15 @@ func TestUserStore_ChangeUserRole(t *testing.T) {
 		t.Fatalf("Failed to get user: %v", err)
 	}
 
-	if updated.Role != RoleViewer {
-		t.Errorf("Expected role '%s', got '%s'", RoleViewer, updated.Role)
+	if updated.Role != RoleBenutzer {
+		t.Errorf("Expected role '%s', got '%s'", RoleBenutzer, updated.Role)
 	}
 }
 
 func TestUserStore_SetUserActive(t *testing.T) {
 	store := NewUserStore()
 
-	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleOperator)
+	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleTechniker)
 	if err != nil {
 		t.Fatalf("Failed to create user: %v", err)
 	}
@@ -275,7 +275,7 @@ func TestUserStore_SetUserActive(t *testing.T) {
 func TestUserStore_GenerateAPIToken(t *testing.T) {
 	store := NewUserStore()
 
-	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleOperator)
+	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleTechniker)
 	if err != nil {
 		t.Fatalf("Failed to create user: %v", err)
 	}
@@ -303,7 +303,7 @@ func TestUserStore_GenerateAPIToken(t *testing.T) {
 func TestUserStore_ValidateAPIToken(t *testing.T) {
 	store := NewUserStore()
 
-	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleOperator)
+	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleTechniker)
 	if err != nil {
 		t.Fatalf("Failed to create user: %v", err)
 	}
@@ -341,7 +341,7 @@ func TestUserStore_ValidateAPIToken(t *testing.T) {
 func TestUserStore_RevokeAPIToken(t *testing.T) {
 	store := NewUserStore()
 
-	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleOperator)
+	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleTechniker)
 	if err != nil {
 		t.Fatalf("Failed to create user: %v", err)
 	}
@@ -367,7 +367,7 @@ func TestUserStore_CheckPermission(t *testing.T) {
 	store := NewUserStore()
 
 	adminUser, _ := store.GetUser("admin")
-	viewerUser, err := store.CreateUser("viewer", "viewer@example.com", "Str0ngP@ssw0rd!", RoleViewer)
+	viewerUser, err := store.CreateUser("viewer", "viewer@example.com", "Str0ngP@ssw0rd!", RoleBenutzer)
 	if err != nil {
 		t.Fatalf("Failed to create viewer: %v", err)
 	}
@@ -391,8 +391,8 @@ func TestUserStore_GetStats(t *testing.T) {
 	store := NewUserStore()
 
 	// Create some users
-	_, _ = store.CreateUser("user1", "user1@example.com", "Str0ngP@ssw0rd!", RoleOperator)
-	user2, _ := store.CreateUser("user2", "user2@example.com", "Str0ngP@ssw0rd!", RoleViewer)
+	_, _ = store.CreateUser("user1", "user1@example.com", "Str0ngP@ssw0rd!", RoleTechniker)
+	user2, _ := store.CreateUser("user2", "user2@example.com", "Str0ngP@ssw0rd!", RoleBenutzer)
 
 	// Deactivate user2
 	store.SetUserActive(user2.ID, false)
@@ -415,7 +415,7 @@ func TestUserStore_GetStats(t *testing.T) {
 func TestUserStore_UpdateLastLogin(t *testing.T) {
 	store := NewUserStore()
 
-	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleOperator)
+	user, err := store.CreateUser("testuser", "test@example.com", "Str0ngP@ssw0rd!", RoleTechniker)
 	if err != nil {
 		t.Fatalf("Failed to create user: %v", err)
 	}
@@ -477,8 +477,8 @@ func TestRoleDescription(t *testing.T) {
 		hasDescription bool
 	}{
 		{RoleAdmin, true},
-		{RoleOperator, true},
-		{RoleViewer, true},
+		{RoleTechniker, true},
+		{RoleBenutzer, true},
 		{RoleAuditor, true},
 		{Role("invalid"), false},
 	}
@@ -520,12 +520,28 @@ func TestCheckPermission(t *testing.T) {
 	}
 
 	// Test viewer has limited permissions
-	if HasPermission(RoleViewer, PermProxyCreate) {
-		t.Error("Expected viewer to not have PermProxyCreate")
+	if HasPermission(RoleBenutzer, PermProxyCreate) {
+		t.Error("Expected benutzer to not have PermProxyCreate")
 	}
 
-	if !HasPermission(RoleViewer, PermProxyView) {
-		t.Error("Expected viewer to have PermProxyView")
+	if !HasPermission(RoleBenutzer, PermProxyView) {
+		t.Error("Expected benutzer to have PermProxyView")
+	}
+
+	if !HasPermission(RoleBenutzer, PermProxyControl) {
+		t.Error("Expected benutzer to have PermProxyControl (start/stop)")
+	}
+
+	if !HasPermission(RoleTechniker, PermProxyCreate) {
+		t.Error("Expected techniker to have PermProxyCreate")
+	}
+
+	if !HasPermission(RoleTechniker, PermProxyEdit) {
+		t.Error("Expected techniker to have PermProxyEdit")
+	}
+
+	if HasPermission(RoleTechniker, PermConfigEdit) {
+		t.Error("Expected techniker to not have PermConfigEdit")
 	}
 }
 
@@ -537,8 +553,10 @@ func TestParseRole(t *testing.T) {
 	}{
 		{"admin", RoleAdmin, false},
 		{"ADMIN", RoleAdmin, false},
-		{"operator", RoleOperator, false},
-		{"viewer", RoleViewer, false},
+		{"techniker", RoleTechniker, false},
+		{"operator", RoleTechniker, false},
+		{"benutzer", RoleBenutzer, false},
+		{"viewer", RoleBenutzer, false},
 		{"auditor", RoleAuditor, false},
 		{"invalid", "", true},
 	}
