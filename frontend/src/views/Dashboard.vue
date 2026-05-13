@@ -200,7 +200,12 @@ let sseDisconnect = null;
 let unwatchData = null;
 let gridInitialized = false;
 let fetchVersion = 0;
+// SSE update batching — coalesce rapid updates into a single rAF flush
+let pendingSSEUpdates = new Map();
+let sseBatchFrame = null;
 
+// O(1) proxy lookup map — avoids O(n) find() calls inside per-widget render functions
+const proxyMap = computed(() => new Map(proxies.value.map(p => [p.id, p])));
 const runningProxyCount = computed(() => proxies.value.filter(proxy => proxy.status === 'Running').length);
 const errorProxyCount = computed(() => proxies.value.filter(proxy => proxy.status === 'Error').length);
 const availableProxyOptions = computed(() => {
@@ -277,8 +282,10 @@ const initializeGrid = () => {
 
   syncGridInteractivity();
 
+  // Debounce intermediate change events (fires on every grid mutation during drag)
+  const debouncedSaveLayout = debounce(saveLayout, 500);
   grid.value.on('change', () => {
-    if (gridInitialized) saveLayout();
+    if (gridInitialized) debouncedSaveLayout();
   });
   grid.value.on('dragstart', () => {
     layoutEditing.value = true;
@@ -318,22 +325,32 @@ onMounted(async () => {
     const { data, disconnect } = useEventSource('/api/proxies/stream');
     sseDisconnect = disconnect;
 
+    const flushSSEUpdates = () => {
+      pendingSSEUpdates.forEach((proxyData) => updateProxyCollection(proxyData));
+      pendingSSEUpdates.clear();
+      sseBatchFrame = null;
+    };
+
     unwatchData = watch(data, (eventData) => {
       if (!eventData) return;
 
       fetchVersion++;
-      const proxyData = eventData.proxy;
 
       switch (eventData.type) {
         case 'proxy_added':
         case 'proxy_updated':
         case 'proxy_started':
-        case 'proxy_stopped':
+        case 'proxy_stopped': {
+          const proxyData = eventData.proxy;
           if (!proxyData) return;
-          updateProxyCollection(proxyData);
+          // Batch rapid SSE updates into a single rAF — prevents jank on high-frequency streams
+          pendingSSEUpdates.set(proxyData.id, proxyData);
+          if (!sseBatchFrame) sseBatchFrame = requestAnimationFrame(flushSSEUpdates);
           break;
+        }
         case 'proxy_removed':
           if (!eventData.proxy_id) return;
+          pendingSSEUpdates.delete(eventData.proxy_id);
           proxies.value = proxies.value.filter(proxy => proxy.id !== eventData.proxy_id);
           widgets.value = widgets.value.filter(widget => widget.proxy_id !== eventData.proxy_id);
           saveLayout();
@@ -354,6 +371,7 @@ const handleResize = debounce(() => {
 
 onUnmounted(() => {
   if (unwatchData) unwatchData();
+  if (sseBatchFrame) cancelAnimationFrame(sseBatchFrame);
   window.removeEventListener('resize', handleResize);
   if (grid.value) {
     grid.value.destroy(false);
@@ -473,7 +491,7 @@ const fetchData = async (isInitial = false) => {
 };
 
 const getWidgetValue = (widget) => {
-  const proxy = proxies.value.find(entry => entry.id === widget.proxy_id);
+  const proxy = proxyMap.value.get(widget.proxy_id);
   if (!proxy) return t('common.error');
   if (proxy.status === 'Running') {
     return `${formatNumber(proxy.requests || 0)} ${t("units.requests")}`;
@@ -482,12 +500,12 @@ const getWidgetValue = (widget) => {
 };
 
 const getWidgetConnections = (widget) => {
-  const proxy = proxies.value.find(entry => entry.id === widget.proxy_id);
+  const proxy = proxyMap.value.get(widget.proxy_id);
   return proxy ? proxy.active_connections ?? 0 : null;
 };
 
 const getWidgetStatus = (widget) => {
-  const proxy = proxies.value.find(entry => entry.id === widget.proxy_id);
+  const proxy = proxyMap.value.get(widget.proxy_id);
   return proxy ? proxy.status : widget.status || t('common.error');
 };
 

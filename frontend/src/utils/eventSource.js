@@ -58,11 +58,14 @@ export function useEventSource(url, options = {}) {
           return;
         }
 
-        // Reconnect with exponential backoff — including when server closes (CLOSED state after 30min timeout)
-        const backoffDelay = Math.min(
+        // Exponential backoff with ±30% jitter — prevents thundering herd
+        // when many clients reconnect simultaneously after a server restart
+        const base = Math.min(
           EVENT_SOURCE_CONFIG.INITIAL_DELAY * Math.pow(2, reconnectAttempts),
           EVENT_SOURCE_CONFIG.MAX_DELAY
         );
+        const jitter = (Math.random() * 0.6 - 0.3) * base;
+        const backoffDelay = Math.max(100, base + jitter);
         reconnectAttempts++;
 
         reconnectTimeout = setTimeout(() => {

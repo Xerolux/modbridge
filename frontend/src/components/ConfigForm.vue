@@ -285,7 +285,7 @@
 import { computed, ref } from 'vue';
 import Button from 'primevue/button';
 import { VueDraggable } from 'vue-draggable-plus';
-import { GripVerticalIcon } from 'lucide-vue-next';
+import GripVerticalIcon from './icons/GripVertical.vue';
 import { useAppStore } from '../stores/appStore';
 import validators from '../utils/validators';
 

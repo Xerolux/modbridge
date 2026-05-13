@@ -37,6 +37,7 @@ export const useAppStore = defineStore('app', () => {
     isLoading.value = true;
     try {
       await axios.post('/api/proxies', proxyData);
+      // Full refetch needed to get the server-assigned ID and canonical state
       await fetchProxies();
       return true;
     } catch (e) {
@@ -49,11 +50,17 @@ export const useAppStore = defineStore('app', () => {
 
   const updateProxy = async (proxyData) => {
     isLoading.value = true;
+    const index = proxies.value.findIndex(p => p.id === proxyData.id);
+    const snapshot = index >= 0 ? { ...proxies.value[index] } : null;
+    // Optimistic update — apply immediately, rollback on error
+    if (index >= 0) {
+      proxies.value[index] = { ...proxies.value[index], ...proxyData };
+    }
     try {
       await axios.put('/api/proxies', proxyData);
-      await fetchProxies();
       return true;
     } catch (e) {
+      if (index >= 0 && snapshot) proxies.value[index] = snapshot;
       error.value = e.response?.data || e.message;
       return false;
     } finally {
@@ -63,11 +70,15 @@ export const useAppStore = defineStore('app', () => {
 
   const deleteProxy = async (id) => {
     isLoading.value = true;
+    const index = proxies.value.findIndex(p => p.id === id);
+    const snapshot = index >= 0 ? { ...proxies.value[index] } : null;
+    // Optimistic removal — remove immediately, rollback on error
+    if (index >= 0) proxies.value.splice(index, 1);
     try {
       await axios.delete(`/api/proxies?id=${id}`);
-      await fetchProxies();
       return true;
     } catch (e) {
+      if (index >= 0 && snapshot) proxies.value.splice(index, 0, snapshot);
       error.value = e.response?.data || e.message;
       return false;
     } finally {

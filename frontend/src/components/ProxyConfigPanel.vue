@@ -158,6 +158,10 @@
 
 <script setup>
 import { ref, reactive, onUnmounted } from 'vue';
+
+let dragRafId = null;
+let pendingDragX = 0;
+let pendingDragY = 0;
 import InputNumber from 'primevue/inputnumber';
 import Checkbox from 'primevue/checkbox';
 import Button from 'primevue/button';
@@ -201,8 +205,15 @@ const startDrag = (e) => {
   dragging.value = true;
   dragOffset.x = e.clientX - position.x;
   dragOffset.y = e.clientY - position.y;
-  document.addEventListener('mousemove', onDrag);
-  document.addEventListener('mouseup', stopDrag);
+  // passive: true allows browser scroll optimizations; once: true auto-removes mouseup listener
+  document.addEventListener('mousemove', onDrag, { passive: true });
+  document.addEventListener('mouseup', stopDrag, { once: true });
+};
+
+const applyDragPosition = () => {
+  position.x = pendingDragX;
+  position.y = pendingDragY;
+  dragRafId = null;
 };
 
 const onDrag = (e) => {
@@ -212,17 +223,23 @@ const onDrag = (e) => {
   let newY = e.clientY - dragOffset.y;
 
   // Boundary constraints
-  newX = Math.max(0, Math.min(newX, window.innerWidth - 400));
-  newY = Math.max(0, Math.min(newY, window.innerHeight - 200));
+  pendingDragX = Math.max(0, Math.min(newX, window.innerWidth - 400));
+  pendingDragY = Math.max(0, Math.min(newY, window.innerHeight - 200));
 
-  position.x = newX;
-  position.y = newY;
+  // Throttle reactive updates to once per animation frame — prevents 60Hz re-render storm
+  if (!dragRafId) dragRafId = requestAnimationFrame(applyDragPosition);
 };
 
 const stopDrag = () => {
   dragging.value = false;
+  // Apply any pending position update from the last rAF
+  if (dragRafId) {
+    cancelAnimationFrame(dragRafId);
+    dragRafId = null;
+    position.x = pendingDragX;
+    position.y = pendingDragY;
+  }
   document.removeEventListener('mousemove', onDrag);
-  document.removeEventListener('mouseup', stopDrag);
 };
 
 const toggleMinimize = () => {
@@ -308,7 +325,7 @@ const batchAction = async (action) => {
 
 onUnmounted(() => {
   document.removeEventListener('mousemove', onDrag);
-  document.removeEventListener('mouseup', stopDrag);
+  if (dragRafId) cancelAnimationFrame(dragRafId);
 });
 </script>
 
