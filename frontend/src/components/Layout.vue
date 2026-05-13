@@ -1,230 +1,321 @@
 <script setup>
-  import { ref, computed, onMounted, onUnmounted } from "vue";
-  import { useRouter, useRoute } from 'vue-router'
-  import { useAuthStore } from "../stores/auth";
-  import { useAppStore } from "../stores/appStore";
-  import Menubar from 'primevue/menubar';
-  import Button from 'primevue/button';
-  import Sidebar from 'primevue/sidebar';
-  import InputSwitch from 'primevue/inputswitch';
-  import LanguageSelector from './LanguageSelector.vue';
-  import { debounce } from '../utils/helpers';
+import { ref, computed, onMounted, onUnmounted } from "vue";
+import { useRouter, useRoute } from 'vue-router';
+import { useAuthStore } from "../stores/auth";
+import { useAppStore } from "../stores/appStore";
+import LanguageSelector from './LanguageSelector.vue';
 
-  const router = useRouter();
-  const route = useRoute();
-  const auth = useAuthStore();
-  const appStore = useAppStore();
+const router = useRouter();
+const route = useRoute();
+const auth = useAuthStore();
+const appStore = useAppStore();
 
-  const mobileMenuVisible = ref(false);
-  const isMobile = ref(false);
+const mobileMenuOpen = ref(false);
 
-  const navigate = (path) => {
-      if (route.path === path) {
-          mobileMenuVisible.value = false;
-          return;
-      }
-
-      router.push(path).catch((err) => {
-          if (err?.name !== 'NavigationDuplicated' && err?.name !== 'NavigationFailure') {
-              console.warn('Navigation failed:', err);
-          }
-      });
-      mobileMenuVisible.value = false;
-  };
-
-  const allItems = [
-      {
-          label: 'Dashboard',
-          icon: 'pi pi-home',
-          path: '/',
-          permission: null,
-          command: () => navigate('/')
-      },
-      {
-          label: 'Control',
-          icon: 'pi pi-sliders-h',
-          path: '/control',
-          permission: 'proxy:view',
-          command: () => navigate('/control')
-      },
-      {
-          label: 'Devices',
-          icon: 'pi pi-desktop',
-          path: '/devices',
-          permission: 'device:view',
-          command: () => navigate('/devices')
-      },
-      {
-          label: 'Logs',
-          icon: 'pi pi-list',
-          path: '/logs',
-          permission: 'logs:view',
-          command: () => navigate('/logs')
-      },
-      {
-          label: 'System',
-          icon: 'pi pi-info-circle',
-          path: '/system',
-          permission: 'system:view',
-          command: () => navigate('/system')
-      },
-      {
-          label: 'Settings',
-          icon: 'pi pi-cog',
-          path: '/config',
-          permission: 'config:view',
-          command: () => navigate('/config')
-      },
-      {
-          label: 'Users',
-          icon: 'pi pi-users',
-          path: '/users',
-          permission: 'user:view',
-          command: () => navigate('/users')
-      },
-      {
-          label: 'Audit Log',
-          icon: 'pi pi-history',
-          path: '/audit',
-          permission: 'audit:view',
-          command: () => navigate('/audit')
-      }
-  ];
-
-  const items = computed(() => {
-      return allItems.filter(item => {
-          if (!item.permission) return true;
-          if (auth.isAdmin) return true;
-          return auth.hasPermission(item.permission);
-      });
-  });
-
-  const logout = async () => {
-      await auth.logout();
-      router.push('/login');
+const navigate = (path) => {
+  if (route.path !== path) {
+    router.push(path).catch((err) => {
+      if (err?.name !== 'NavigationDuplicated') console.warn('Navigation failed:', err);
+    });
   }
+  mobileMenuOpen.value = false;
+};
 
-  const isActiveRoute = (path) => {
-      if (path === '/') return route.path === '/';
-      return route.path.startsWith(path);
-  };
+const allItems = [
+  { label: 'Dashboard',  icon: 'pi pi-home',         path: '/',        permission: null },
+  { label: 'Control',    icon: 'pi pi-sliders-h',    path: '/control', permission: 'proxy:view' },
+  { label: 'Devices',    icon: 'pi pi-desktop',      path: '/devices', permission: 'device:view' },
+  { label: 'Logs',       icon: 'pi pi-list',         path: '/logs',    permission: 'logs:view' },
+  { label: 'System',     icon: 'pi pi-info-circle',  path: '/system',  permission: 'system:view' },
+  { label: 'Settings',   icon: 'pi pi-cog',          path: '/config',  permission: 'config:view' },
+  { label: 'Users',      icon: 'pi pi-users',        path: '/users',   permission: 'user:view' },
+  { label: 'Audit',      icon: 'pi pi-history',      path: '/audit',   permission: 'audit:view' },
+];
 
-  const checkMobile = debounce(() => {
-      isMobile.value = window.innerWidth < 768;
-  }, 150);
+const items = computed(() =>
+  allItems.filter(item => !item.permission || auth.isAdmin || auth.hasPermission(item.permission))
+);
 
-  onMounted(() => {
-      checkMobile();
-      window.addEventListener('resize', checkMobile);
-  });
+const logout = async () => {
+  await auth.logout();
+  router.push('/login');
+};
 
-  onUnmounted(() => {
-      window.removeEventListener('resize', checkMobile);
-  });
+const isActiveRoute = (path) => {
+  if (path === '/') return route.path === '/';
+  return route.path.startsWith(path);
+};
+
+const handleKeydown = (e) => {
+  if (e.key === 'Escape') mobileMenuOpen.value = false;
+};
+
+onMounted(() => document.addEventListener('keydown', handleKeydown));
+onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
 </script>
 
 <template>
-    <div class="min-h-screen flex flex-col bg-transparent">
-        <header class="px-4 py-3 z-10">
-             <Menubar :model="isMobile ? [] : items" class="glass-card border border-gray-200 dark:border-white/10 rounded-2xl shadow-lg !bg-surface-100/40 dark:!bg-surface-800/40">
-                 <template #start>
-                   <div class="flex items-center gap-4 pl-2">
-                         <Button v-if="isMobile" icon="pi pi-bars" text rounded @click="mobileMenuVisible = true" class="text-gray-700 dark:text-white hover:bg-gray-200 dark:hover:bg-white/10" aria-label="Open navigation" />
-                        <button type="button" class="flex items-center gap-2 cursor-pointer bg-transparent border-0 p-0" @click="navigate('/')" aria-label="Go to dashboard">
-                            <img src="../assets/logo.png" alt="ModBridge Logo" class="w-12 h-12 object-contain" />
-                            <span class="text-xl font-bold tracking-tight text-surface-900 dark:text-white hidden sm:block">ModBridge</span>
-                        </button>
-                   </div>
-                 </template>
-                 <template #item="{ item }">
-                      <a v-ripple class="flex items-center gap-2 px-4 py-2.5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-xl cursor-pointer text-gray-700 dark:text-surface-200 transition-colors mx-1" :class="{'bg-gray-200 dark:bg-white/10 text-gray-900 dark:text-white font-medium': isActiveRoute(item.path)}" @click.prevent="item.command">
-                         <i :class="item.icon" class="text-lg"></i>
-                         <span class="text-sm">{{ item.label }}</span>
-                     </a>
-                 </template>
-                 <template #end>
-                     <div class="flex items-center gap-3 pr-2">
-                         <LanguageSelector class="hidden sm:flex" />
-                          <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-surface-900/50 border border-gray-200 dark:border-white/5">
-                              <i :class="appStore.darkMode ? 'pi pi-moon' : 'pi pi-sun'" class="text-gray-500 dark:text-surface-300 text-sm"></i>
-                              <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" class="scale-75" />
-                          </div>
-                          <div v-if="auth.user.username" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-surface-900/50 border border-gray-200 dark:border-white/5">
-                              <i class="pi pi-user text-gray-500 dark:text-surface-300 text-sm"></i>
-                              <span class="text-gray-700 dark:text-surface-200 text-sm">{{ auth.user.username }}</span>
-                              <span class="text-xs text-gray-500 dark:text-surface-400">({{ auth.user.role }})</span>
-                          </div>
-                          <Button icon="pi pi-power-off" severity="danger" rounded text @click="logout" class="hidden sm:flex hover:bg-red-500/20 w-10 h-10" aria-label="Logout" />
-                     </div>
-                 </template>
-            </Menubar>
-        </header>
+  <div class="min-h-screen flex flex-col">
+    <!-- ── Top Navigation ─────────────────────────────────────────── -->
+    <header class="sticky top-0 z-50 px-3 py-2.5">
+      <nav class="glass-card rounded-2xl flex items-center px-3 py-1.5 gap-2">
 
-        <Sidebar v-model:visible="mobileMenuVisible" :baseZIndex="10000" class="glass-sidebar">
-            <template #header>
-                <button type="button" class="flex items-center gap-3 px-2 cursor-pointer bg-transparent border-0 p-0" @click="navigate('/')" aria-label="Go to dashboard">
-                     <img src="../assets/logo.png" alt="ModBridge Logo" class="w-12 h-12 object-contain" />
-                     <span class="text-xl font-bold tracking-tight text-surface-900 dark:text-white">ModBridge</span>
-                </button>
-            </template>
-            <div class="flex flex-col gap-2 h-full py-4">
-                <div v-for="item in items" :key="item.label">
-                    <Button
-                        @click="item.command"
-                        :label="item.label"
-                        :icon="item.icon"
-                        text
-                         :class="['w-full text-left rounded-xl py-3 px-4', isActiveRoute(item.path) ? 'bg-primary-500/20 text-primary-300 font-medium border border-primary-500/20' : 'text-gray-700 dark:text-surface-200 hover:bg-gray-200 dark:hover:bg-white/5']"
-                    />
-                </div>
+        <!-- Logo -->
+        <button
+          type="button"
+          class="nav-logo"
+          @click="navigate('/')"
+          aria-label="Dashboard"
+        >
+          <img src="../assets/logo.png" alt="ModBridge" class="w-8 h-8 object-contain" />
+          <span class="font-bold text-base tracking-tight hidden sm:block">ModBridge</span>
+        </button>
 
-                 <div class="mt-auto border-t border-gray-200 dark:border-white/10 pt-6 flex flex-col gap-4">
-                     <div v-if="auth.user.username" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 dark:bg-surface-900/50 border border-gray-200 dark:border-white/5">
-                         <i class="pi pi-user text-gray-500 dark:text-surface-400 text-sm"></i>
-                         <span class="text-gray-700 dark:text-surface-200 text-sm">{{ auth.user.username }}</span>
-                         <span class="text-xs text-gray-500 dark:text-surface-400">({{ auth.user.role }})</span>
-                     </div>
-                      <div class="flex items-center justify-between px-4 py-3 rounded-xl bg-gray-100 dark:bg-surface-900/50 border border-gray-200 dark:border-white/5">
-                         <span class="text-gray-700 dark:text-surface-200 font-medium text-sm">Theme</span>
-                         <div class="flex items-center gap-3">
-                             <i :class="appStore.darkMode ? 'pi pi-moon text-gray-500 dark:text-surface-400' : 'pi pi-sun text-gray-500 dark:text-surface-400'"></i>
-                             <InputSwitch :modelValue="appStore.darkMode" @update:modelValue="(val) => appStore.toggleDarkMode(val)" class="scale-90" />
-                         </div>
-                      </div>
-                     <LanguageSelector class="w-full px-2" />
-                    <Button
-                        @click="logout"
-                        label="Logout"
-                        icon="pi pi-power-off"
-                        severity="danger"
-                        text
-                        class="w-full text-left rounded-xl py-3 px-4 hover:bg-red-500/10"
-                    />
-                </div>
-            </div>
-        </Sidebar>
+        <div class="nav-divider hidden md:block"></div>
 
-         <main class="flex-grow text-surface-900 dark:text-white w-full max-w-7xl mx-auto p-4 pt-0">
-              <router-view :key="route.fullPath"></router-view>
-         </main>
-    </div>
+        <!-- Desktop nav links -->
+        <div class="hidden md:flex items-center gap-0.5 flex-1 overflow-x-auto">
+          <a
+            v-for="item in items"
+            :key="item.path"
+            class="nav-link"
+            :class="{ 'nav-link--active': isActiveRoute(item.path) }"
+            @click.prevent="navigate(item.path)"
+            :aria-current="isActiveRoute(item.path) ? 'page' : undefined"
+          >
+            <i :class="item.icon" class="text-sm shrink-0"></i>
+            <span class="whitespace-nowrap">{{ item.label }}</span>
+          </a>
+        </div>
+
+        <!-- Right controls -->
+        <div class="flex items-center gap-1.5 ml-auto pl-1">
+          <button
+            type="button"
+            class="nav-icon-btn"
+            @click="appStore.toggleDarkMode()"
+            :title="appStore.darkMode ? 'Light mode' : 'Dark mode'"
+          >
+            <i :class="appStore.darkMode ? 'pi pi-sun' : 'pi pi-moon'" class="text-sm"></i>
+          </button>
+
+          <LanguageSelector class="hidden sm:flex" />
+
+          <div
+            v-if="auth.user.username"
+            class="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel-item)] text-sm select-none"
+          >
+            <i class="pi pi-user text-xs text-[var(--text-muted)]"></i>
+            <span class="text-[var(--text-secondary)] max-w-[9rem] truncate">{{ auth.user.username }}</span>
+            <span class="text-xs text-[var(--text-muted)] hidden xl:inline">({{ auth.user.role }})</span>
+          </div>
+
+          <button
+            type="button"
+            class="nav-icon-btn nav-icon-btn--danger hidden sm:flex"
+            @click="logout"
+            title="Logout"
+            aria-label="Logout"
+          >
+            <i class="pi pi-power-off text-sm"></i>
+          </button>
+
+          <!-- Mobile hamburger -->
+          <button
+            type="button"
+            class="nav-icon-btn md:hidden"
+            @click="mobileMenuOpen = true"
+            aria-label="Navigation öffnen"
+          >
+            <i class="pi pi-bars text-sm"></i>
+          </button>
+        </div>
+      </nav>
+    </header>
+
+    <!-- ── Mobile backdrop ────────────────────────────────────────── -->
+    <Transition name="fade">
+      <div
+        v-if="mobileMenuOpen"
+        class="fixed inset-0 z-[9998] md:hidden bg-black/50 backdrop-blur-[2px]"
+        @click="mobileMenuOpen = false"
+        aria-hidden="true"
+      ></div>
+    </Transition>
+
+    <!-- ── Mobile drawer ──────────────────────────────────────────── -->
+    <Transition name="slide">
+      <div
+        v-if="mobileMenuOpen"
+        class="drawer fixed left-0 top-0 h-full z-[9999] md:hidden w-72 flex flex-col"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation"
+      >
+        <!-- Header -->
+        <div class="flex items-center justify-between px-5 py-4 border-b border-[var(--border-soft)]">
+          <div class="flex items-center gap-2.5">
+            <img src="../assets/logo.png" alt="ModBridge" class="w-9 h-9 object-contain" />
+            <span class="font-bold text-[17px] tracking-tight">ModBridge</span>
+          </div>
+          <button type="button" class="nav-icon-btn" @click="mobileMenuOpen = false" aria-label="Schließen">
+            <i class="pi pi-times text-sm"></i>
+          </button>
+        </div>
+
+        <!-- Links -->
+        <nav class="flex flex-col gap-1 p-4 flex-1 overflow-y-auto">
+          <a
+            v-for="item in items"
+            :key="item.path"
+            class="mobile-nav-link"
+            :class="{ 'mobile-nav-link--active': isActiveRoute(item.path) }"
+            @click.prevent="navigate(item.path)"
+          >
+            <i :class="item.icon" class="text-base w-5 text-center shrink-0"></i>
+            <span>{{ item.label }}</span>
+          </a>
+        </nav>
+
+        <!-- Footer -->
+        <div class="border-t border-[var(--border-soft)] p-4 flex flex-col gap-3">
+          <div
+            v-if="auth.user.username"
+            class="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--bg-panel-item)] border border-[var(--border-subtle)]"
+          >
+            <i class="pi pi-user text-sm text-[var(--text-muted)]"></i>
+            <span class="text-sm text-[var(--text-secondary)] truncate">{{ auth.user.username }}</span>
+            <span class="text-xs text-[var(--text-muted)] ml-auto shrink-0">({{ auth.user.role }})</span>
+          </div>
+
+          <div class="flex items-center justify-between px-3 py-1">
+            <span class="text-sm text-[var(--text-secondary)]">Theme</span>
+            <button type="button" class="nav-icon-btn" @click="appStore.toggleDarkMode()">
+              <i :class="appStore.darkMode ? 'pi pi-sun' : 'pi pi-moon'" class="text-sm"></i>
+            </button>
+          </div>
+
+          <LanguageSelector />
+
+          <button
+            type="button"
+            class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-[var(--danger)] hover:bg-[rgba(251,113,133,0.1)] transition-colors w-full"
+            @click="logout"
+          >
+            <i class="pi pi-power-off"></i>
+            <span>Logout</span>
+          </button>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ── Page content ───────────────────────────────────────────── -->
+    <main class="flex-grow w-full max-w-7xl mx-auto p-3 sm:p-4 pt-0">
+      <router-view :key="route.fullPath" />
+    </main>
+  </div>
 </template>
 
 <style scoped>
-:deep(.p-menubar) {
-    padding: 0.5rem;
-    backdrop-filter: blur(24px) !important;
-    -webkit-backdrop-filter: blur(24px) !important;
+/* ── Nav base ──────────────────────────────────────────────────────── */
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-primary);
+  transition: background 0.15s;
+  flex-shrink: 0;
 }
-:deep(.p-menubar .p-menubar-button) {
+.nav-logo:hover { background: var(--bg-soft); }
+
+.nav-divider {
+  width: 1px;
+  height: 1.4rem;
+  background: var(--border-subtle);
+  margin: 0 8px;
+  flex-shrink: 0;
 }
-:deep(.p-sidebar) {
-    background: var(--bg-surface-strong) !important;
-    backdrop-filter: blur(24px) !important;
-    -webkit-backdrop-filter: blur(24px) !important;
-    border-right: 1px solid var(--border-soft);
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 12px;
+  font-size: 0.84rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
 }
-:deep(.p-sidebar-header) {
-    padding: 1.5rem 1.5rem 0.5rem;
+.nav-link:hover { background: var(--bg-soft); color: var(--text-primary); }
+.nav-link--active {
+  background: rgba(125, 211, 252, 0.12);
+  color: var(--accent);
+  font-weight: 600;
 }
+
+.nav-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.nav-icon-btn:hover { background: var(--bg-soft); color: var(--text-primary); }
+.nav-icon-btn--danger:hover {
+  background: rgba(251, 113, 133, 0.15);
+  color: var(--danger);
+}
+
+/* ── Mobile nav ────────────────────────────────────────────────────── */
+.mobile-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+.mobile-nav-link:hover { background: var(--bg-soft); color: var(--text-primary); }
+.mobile-nav-link--active {
+  background: rgba(125, 211, 252, 0.1);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── Drawer ────────────────────────────────────────────────────────── */
+.drawer {
+  background: var(--bg-surface-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-right: 1px solid var(--border-soft);
+  box-shadow: var(--shadow-strong);
+}
+
+/* Backdrop transition */
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+/* Drawer slide transition */
+.slide-enter-active { transition: transform 0.26s cubic-bezier(0.4, 0, 0.2, 1); }
+.slide-leave-active { transition: transform 0.2s ease; }
+.slide-enter-from, .slide-leave-to { transform: translateX(-100%); }
 </style>

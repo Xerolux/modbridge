@@ -14,15 +14,15 @@ const props = defineProps({
 });
 
 const statusClass = {
-  Running: 'widget-status widget-status--running',
-  Error: 'widget-status widget-status--error',
-  Stopped: 'widget-status widget-status--stopped',
-  Unknown: 'widget-status widget-status--unknown'
+  Running: 'widget-badge widget-badge--running',
+  Error:   'widget-badge widget-badge--error',
+  Stopped: 'widget-badge widget-badge--stopped',
+  Unknown: 'widget-badge widget-badge--unknown'
 };
 
 const statusDotClass = {
   Running: 'status-dot status-dot--running',
-  Error: 'status-dot status-dot--error',
+  Error:   'status-dot status-dot--error',
   Stopped: 'status-dot status-dot--stopped',
   Unknown: 'status-dot status-dot--unknown'
 };
@@ -30,36 +30,37 @@ const statusDotClass = {
 
 <template>
   <div class="widget-shell h-full w-full">
-    <div class="widget-noise"></div>
+    <div class="widget-bg"></div>
 
     <div class="relative z-[1] flex h-full flex-col justify-between p-4 sm:p-5">
+      <!-- Header -->
       <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0">
-          <div class="text-[0.7rem] font-semibold uppercase tracking-[0.28em] text-[var(--text-muted)]">Proxy Widget</div>
-          <div class="mt-2 text-lg font-bold text-[var(--text-primary)] truncate" :title="title">{{ title }}</div>
+        <div class="min-w-0 flex-1">
+          <div class="text-[0.68rem] font-semibold uppercase tracking-[0.26em] text-[var(--text-muted)] mb-1.5">Modbus Proxy</div>
+          <div class="text-base font-bold text-[var(--text-primary)] truncate leading-tight" :title="title">{{ title }}</div>
         </div>
-
-        <div :class="statusClass[status] || statusClass.Unknown">
+        <div :class="statusClass[status] || statusClass.Unknown" class="shrink-0">
           <span :class="statusDotClass[status] || statusDotClass.Unknown"></span>
           {{ status }}
         </div>
       </div>
 
-      <div class="space-y-3">
-        <div class="text-2xl font-extrabold tracking-tight text-[var(--text-primary)] sm:text-[2rem] break-words" :title="String(value)">
+      <!-- Value -->
+      <div class="space-y-3 mt-4">
+        <div class="text-2xl font-extrabold tracking-tight text-[var(--text-primary)] sm:text-[1.9rem] break-words" :title="String(value)">
           {{ value }}
           <span v-if="unit" class="ml-1 text-sm font-medium text-[var(--text-muted)]">{{ unit }}</span>
         </div>
 
-        <div class="widget-footer">
-          <div v-if="activeConnections !== null" class="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+        <!-- Footer -->
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <div v-if="activeConnections !== null" class="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
             <span :class="statusDotClass[status] || statusDotClass.Unknown"></span>
             <span>{{ activeConnections }} {{ activeConnections === 1 ? 'Client' : 'Clients' }}</span>
           </div>
-
-          <div class="widget-footer-pill">
+          <div class="widget-drag-hint ml-auto">
             <i class="pi pi-arrows-alt text-xs"></i>
-            Drag to move
+            <span>Verschieben</span>
           </div>
         </div>
       </div>
@@ -72,73 +73,44 @@ const statusDotClass = {
   position: relative;
   height: 100%;
   border-radius: 20px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
-.widget-noise {
+.widget-bg {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at top right, rgba(125, 211, 252, 0.18), transparent 35%),
-    radial-gradient(circle at bottom left, rgba(192, 132, 252, 0.16), transparent 38%);
-  opacity: 0.9;
+    radial-gradient(circle at top right, rgba(125, 211, 252, 0.14), transparent 38%),
+    radial-gradient(circle at bottom left, rgba(192, 132, 252, 0.12), transparent 42%);
 }
 
-.widget-status {
+/* Status badge */
+.widget-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.4rem;
   border-radius: 999px;
-  padding: 0.4rem 0.75rem;
-  font-size: 0.72rem;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.7rem;
   font-weight: 700;
   border: 1px solid var(--border-subtle);
   background: var(--bg-panel-item);
   color: var(--text-secondary);
 }
+.widget-badge--running { color: var(--success); }
+.widget-badge--stopped { color: var(--warning); }
+.widget-badge--error   { color: var(--danger); }
+.widget-badge--unknown { color: var(--text-muted); }
 
-.widget-status--running {
-  color: #16a34a;
-}
-:root:not(.light) .widget-status--running {
-  color: #bbf7d0;
-}
-
-.widget-status--stopped {
-  color: #ca8a04;
-}
-:root:not(.light) .widget-status--stopped {
-  color: #fde68a;
-}
-
-.widget-status--error {
-  color: #dc2626;
-}
-:root:not(.light) .widget-status--error {
-  color: #fecdd3;
-}
-
-.widget-status--unknown {
-  color: var(--text-secondary);
-}
-
-.widget-footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.75rem;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.widget-footer-pill {
+/* Drag hint */
+.widget-drag-hint {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.4rem;
   border-radius: 999px;
   background: var(--bg-panel-item);
-  padding: 0.45rem 0.7rem;
-  font-size: 0.72rem;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.68rem;
   color: var(--text-muted);
 }
 </style>
