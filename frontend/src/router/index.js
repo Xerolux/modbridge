@@ -1,16 +1,23 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
- import { useAuthStore } from '../stores/auth'
+import { useAuthStore } from '../stores/auth'
 
- const Dashboard = () => import('../views/Dashboard.vue')
- const Login = () => import('../views/Login.vue')
- const Control = () => import('../views/Control.vue')
- const Config = () => import('../views/Config.vue')
- const Logs = () => import('../views/Logs.vue')
- const Devices = () => import('../views/Devices.vue')
- const SystemInfo = () => import('../views/SystemInfo.vue')
- const Users = () => import('../views/Users/Users.vue')
- const Audit = () => import('../views/Audit/Audit.vue')
- const Layout = () => import('../components/Layout.vue')
+const Dashboard = () => import(/* webpackChunkName: "dashboard" */ '../views/Dashboard.vue')
+const Login = () => import(/* webpackChunkName: "login" */ '../views/Login.vue')
+const Control = () => import(/* webpackChunkName: "control" */ '../views/Control.vue')
+const Config = () => import(/* webpackChunkName: "config" */ '../views/Config.vue')
+const Logs = () => import(/* webpackChunkName: "logs" */ '../views/Logs.vue')
+const Devices = () => import(/* webpackChunkName: "devices" */ '../views/Devices.vue')
+const SystemInfo = () => import(/* webpackChunkName: "system" */ '../views/SystemInfo.vue')
+const Users = () => import(/* webpackChunkName: "users" */ '../views/Users/Users.vue')
+const Audit = () => import(/* webpackChunkName: "audit" */ '../views/Audit/Audit.vue')
+const Layout = () => import(/* webpackChunkName: "layout" */ '../components/Layout.vue')
+
+const prefetchMainRoutes = () => {
+  Dashboard()
+  Layout()
+  Control()
+  Config()
+}
 
  const routes = [
   {
@@ -85,7 +92,13 @@ router.beforeEach(async (to) => {
   const auth = useAuthStore()
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
 
-  if (!requiresAuth) return true
+  if (!requiresAuth) {
+    // Prefetch main app chunks while user is on the login screen
+    if (to.name === 'Login') {
+      setTimeout(prefetchMainRoutes, 300)
+    }
+    return true
+  }
 
   const valid = await auth.checkAuth()
   if (!valid) {

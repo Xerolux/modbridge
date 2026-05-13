@@ -8,9 +8,16 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     minify: 'esbuild',
-    target: 'esnext',
+    target: 'es2020',
     rollupOptions: {
       output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+          if (id.includes('gridstack')) return 'vendor-grid';
+          if (id.includes('primevue') || id.includes('primeicons') || id.includes('@primeuix')) return 'vendor-ui';
+          if (id.includes('/vue/') || id.includes('vue-router') || id.includes('pinia')) return 'vendor-vue';
+          if (id.includes('vue-i18n') || id.includes('vue-draggable-plus')) return 'vendor-utils';
+        },
         // Prevent underscore-prefixed filenames that break Go's go:embed
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash][extname]',

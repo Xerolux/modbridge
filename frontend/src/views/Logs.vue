@@ -1,124 +1,188 @@
 <script setup>
- import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
- import { useEventSource } from '../utils/eventSource';
- import Checkbox from 'primevue/checkbox';
- import axios from '../axios.js';
- import { formatDateTime, getLogLevelColor } from '../utils/helpers';
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { useEventSource } from '../utils/eventSource';
+import axios from '../axios.js';
+import { formatDateTime, getLogLevelColor } from '../utils/helpers';
 
- const logs = ref([]);
- const isConnected = ref(false);
- const autoScroll = ref(localStorage.getItem('logsAutoScroll') !== 'false');
- const logsContainer = ref(null);
- let disconnectFn = null;
+const logs = ref([]);
+const isConnected = ref(false);
+const autoScroll = ref(localStorage.getItem('logsAutoScroll') !== 'false');
+const logsContainer = ref(null);
+let disconnectFn = null;
 
- const toggleAutoScroll = () => {
-   localStorage.setItem('logsAutoScroll', autoScroll.value.toString());
- };
+const toggleAutoScroll = () => {
+  localStorage.setItem('logsAutoScroll', autoScroll.value.toString());
+};
 
- const fetchInitialLogs = async () => {
-   try {
-     const res = await axios.get('/api/logs');
-     logs.value = res.data || [];
-   } catch (e) {
-     console.error('Failed to fetch initial logs', e);
-   }
- };
+const fetchInitialLogs = async () => {
+  try {
+    const res = await axios.get('/api/logs');
+    logs.value = res.data || [];
+  } catch (e) {
+    console.error('Failed to fetch initial logs', e);
+  }
+};
 
- onMounted(async () => {
-   await fetchInitialLogs();
+onMounted(async () => {
+  await fetchInitialLogs();
 
-   const { data, disconnect, isConnected: connected } = useEventSource('/api/logs/stream');
-   disconnectFn = disconnect;
+  const { data, disconnect, isConnected: connected } = useEventSource('/api/logs/stream');
+  disconnectFn = disconnect;
 
-   watch(connected, (val) => {
-     isConnected.value = val;
-   });
+  watch(connected, (val) => { isConnected.value = val; });
 
-    watch(data, (eventData) => {
-      if (!eventData) return;
-
-      if (Array.isArray(eventData)) {
-        logs.value = eventData;
-      } else {
-        logs.value.push(eventData);
-        if (logs.value.length > 500) {
-          logs.value = logs.value.slice(-500);
-        }
-      }
-    });
- });
-
- onUnmounted(() => {
-   if (disconnectFn) {
-     disconnectFn();
-   }
- });
-
-  watch(logs, (newVal) => {
-    if (autoScroll.value && logsContainer.value && newVal.length > 0) {
-      nextTick(() => {
-        if (logsContainer.value) {
-          logsContainer.value.scrollTop = logsContainer.value.scrollHeight;
-        }
-      });
+  watch(data, (eventData) => {
+    if (!eventData) return;
+    if (Array.isArray(eventData)) {
+      logs.value = eventData;
+    } else {
+      logs.value.push(eventData);
+      if (logs.value.length > 500) logs.value = logs.value.slice(-500);
     }
   });
- </script>
+});
 
- <template>
-    <div class="p-2 sm:p-4 flex flex-col gap-4 w-full">
-      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 sm:mb-4 gap-4 sm:gap-0">
-         <h1 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">System Logs</h1>
-        <div class="flex flex-wrap items-center gap-2 sm:gap-4 w-full sm:w-auto">
-          <div class="flex items-center gap-2 flex-1 sm:flex-none">
-            <div
-              class="w-2 h-2 rounded-full shrink-0 transition-colors duration-300"
-              :class="isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'"
-            ></div>
-             <span class="text-base text-gray-500 dark:text-gray-400 truncate">
-              {{ isConnected ? 'Connected' : 'Disconnected' }}
-            </span>
+onUnmounted(() => { if (disconnectFn) disconnectFn(); });
+
+watch(logs, (newVal) => {
+  if (autoScroll.value && logsContainer.value && newVal.length > 0) {
+    nextTick(() => {
+      if (logsContainer.value) logsContainer.value.scrollTop = logsContainer.value.scrollHeight;
+    });
+  }
+});
+</script>
+
+<template>
+  <div class="p-2 sm:p-4 flex flex-col gap-4 w-full">
+
+    <!-- ── Hero ─────────────────────────────────────────────────── -->
+    <section class="glass-hero rounded-[28px] p-5 sm:p-6">
+      <div class="relative z-[1] flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div class="space-y-3">
+          <div class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.28em] text-[var(--text-muted)]">
+            <i class="pi pi-list"></i>
+            System Logs
           </div>
-           <div class="flex items-center gap-2 px-2 sm:px-3 py-1 bg-gray-200 dark:bg-gray-800 rounded flex-1 sm:flex-none justify-center">
-             <i class="pi pi-arrow-down text-base text-gray-500 dark:text-gray-400"></i>
-            <Checkbox v-model="autoScroll" binary @change="toggleAutoScroll" inputId="auto-scroll-cb" />
-            <label for="auto-scroll-cb" class="text-base text-gray-500 dark:text-gray-400 whitespace-nowrap cursor-pointer">Auto-Scroll</label>
+          <div class="flex items-center gap-3">
+            <h1 class="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">Systemlogs</h1>
+            <span class="status-dot" :class="isConnected ? 'status-dot--running' : 'status-dot--error'"></span>
+            <span class="text-sm text-[var(--text-muted)]">{{ isConnected ? 'Live' : 'Getrennt' }}</span>
           </div>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <!-- Auto-Scroll toggle -->
           <button
-            @click="fetchInitialLogs"
-            class="px-3 py-2 sm:py-1 bg-blue-600 text-white text-base rounded hover:bg-blue-700 transition-colors flex-1 sm:flex-none"
+            type="button"
+            class="logs-ctrl-btn"
+            :class="{ 'logs-ctrl-btn--active': autoScroll }"
+            @click="autoScroll = !autoScroll; toggleAutoScroll()"
+            :title="autoScroll ? 'Auto-Scroll deaktivieren' : 'Auto-Scroll aktivieren'"
           >
-            Refresh
+            <i :class="autoScroll ? 'pi pi-lock' : 'pi pi-lock-open'" class="text-sm"></i>
+            <span>Auto-Scroll</span>
+            <span class="logs-ctrl-dot" :class="autoScroll ? 'logs-ctrl-dot--on' : 'logs-ctrl-dot--off'"></span>
+          </button>
+
+          <!-- Refresh -->
+          <button
+            type="button"
+            class="logs-ctrl-btn"
+            @click="fetchInitialLogs"
+            title="Logs neu laden"
+          >
+            <i class="pi pi-refresh text-sm"></i>
+            <span>Aktualisieren</span>
           </button>
         </div>
       </div>
+    </section>
 
-      <div v-if="logs.length === 0" class="flex justify-center items-center h-[60vh] sm:h-[600px]">
-        <div class="text-center">
-          <i class="pi pi-spin pi-spinner text-3xl sm:text-4xl text-blue-500"></i>
-           <p class="mt-4 text-sm sm:text-base text-gray-500 dark:text-gray-400">Loading logs...</p>
+    <!-- ── Loading ───────────────────────────────────────────────── -->
+    <div v-if="logs.length === 0" class="glass-panel rounded-[28px] p-10">
+      <div class="flex min-h-[320px] flex-col items-center justify-center text-center relative z-[1]">
+        <div class="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-[var(--bg-panel-item)] border border-[var(--border-subtle)]">
+          <i class="pi pi-spin pi-spinner text-3xl text-[var(--accent)]"></i>
         </div>
-      </div>
-
-      <div
-        v-else
-        ref="logsContainer"
-        class="glass-card rounded-3xl p-2 sm:p-4 font-mono text-base h-[60vh] sm:h-[600px] overflow-y-auto break-all sm:break-normal border border-gray-200 dark:border-white/10"
-      >
-        <div
-          v-for="(log, index) in logs"
-          :key="index"
-          class="mb-1 border-b border-gray-200 dark:border-gray-700/50 pb-1 flex flex-col sm:block hover:bg-gray-100 dark:hover:bg-gray-700/30 px-1 rounded transition-colors"
-        >
-          <div>
-              <span class="text-gray-500 dark:text-gray-400">[{{ formatDateTime(log.timestamp) }}]</span>
-              <span :class="getLogLevelColor(log.level)" class="mx-2 font-bold">{{ log.level }}</span>
-          </div>
-          <div>
-              <span class="text-blue-600 dark:text-blue-300">{{ log.proxy_id || 'SYSTEM' }}:</span>
-              <span class="text-surface-900 dark:text-white ml-2">{{ log.message }}</span>
-          </div>
-        </div>
+        <p class="text-[var(--text-secondary)] text-sm">Logs werden geladen…</p>
       </div>
     </div>
- </template>
+
+    <!-- ── Log list ──────────────────────────────────────────────── -->
+    <div
+      v-else
+      ref="logsContainer"
+      class="glass-panel rounded-[28px] p-3 sm:p-4 font-mono text-sm h-[60vh] sm:h-[calc(100vh-280px)] overflow-y-auto"
+    >
+      <div
+        v-for="(log, index) in logs"
+        :key="index"
+        class="log-row"
+      >
+        <span class="log-time">{{ formatDateTime(log.timestamp) }}</span>
+        <span :class="getLogLevelColor(log.level)" class="log-level">{{ log.level }}</span>
+        <span class="log-source">{{ log.proxy_id || 'SYSTEM' }}</span>
+        <span class="log-msg">{{ log.message }}</span>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+/* ── Header controls ─────────────────────────────────────────────── */
+.logs-ctrl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-panel-item);
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.logs-ctrl-btn:hover {
+  background: var(--bg-soft);
+  color: var(--text-primary);
+  border-color: var(--border-soft);
+}
+.logs-ctrl-btn--active {
+  border-color: rgba(125, 211, 252, 0.3);
+  color: var(--accent);
+}
+
+.logs-ctrl-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.logs-ctrl-dot--on  { background: var(--accent); }
+.logs-ctrl-dot--off { background: var(--text-muted); }
+
+/* ── Log row ─────────────────────────────────────────────────────── */
+.log-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 0.1s;
+  line-height: 1.5;
+}
+.log-row:hover { background: var(--bg-panel-item); }
+.log-row:last-child { border-bottom: none; }
+
+.log-time   { color: var(--text-muted); font-size: 0.78rem; white-space: nowrap; }
+.log-level  { font-weight: 700; font-size: 0.78rem; white-space: nowrap; }
+.log-source { color: var(--accent); white-space: nowrap; }
+.log-msg    { color: var(--text-primary); word-break: break-word; flex: 1 1 100%; }
+
+@media (min-width: 640px) {
+  .log-msg { flex: 1 1 auto; }
+}
+</style>

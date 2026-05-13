@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, watch } from 'vue';
+import { onMounted, onUnmounted, watch } from 'vue';
 import { useAppStore } from './stores/appStore';
 
 const store = useAppStore();
@@ -9,11 +9,20 @@ const applyTheme = (isDark) => {
   document.documentElement.classList.toggle('light', !isDark);
 };
 
-onMounted(() => {
-  applyTheme(store.darkMode);
-});
-
+// immediate: true handles initial application — no separate onMounted call needed
 watch(() => store.darkMode, applyTheme, { immediate: true });
+
+onMounted(() => {
+  // Pause ambient orb animations when the tab is hidden to save CPU/battery
+  const handleVisibility = () => {
+    const state = document.hidden ? 'paused' : 'running';
+    document.querySelectorAll('.ambient-orb').forEach(el => {
+      el.style.animationPlayState = state;
+    });
+  };
+  document.addEventListener('visibilitychange', handleVisibility);
+  onUnmounted(() => document.removeEventListener('visibilitychange', handleVisibility));
+});
 </script>
 
 <template>
