@@ -291,7 +291,6 @@ const roleMeta = {
     permissions: ['proxy:view', 'device:view', 'config:view', 'system:view', 'audit:view', 'audit:export', 'logs:view', 'logs:export']
   }
 }
-};
 
 const canCreateUsers = computed(() => auth.hasPermission('user:create'));
 const canEditUsers = computed(() => auth.hasPermission('user:edit'));
