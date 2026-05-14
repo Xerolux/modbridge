@@ -1,5 +1,5 @@
 <template>
-    <div class="p-2 sm:p-4 flex flex-col gap-4">
+    <div class="p-2 sm:p-4 flex flex-col gap-4 w-full min-w-0">
 
         <!-- ── Hero ────────────────────────────────────────────────── -->
         <section class="glass-hero rounded-[28px] p-5 sm:p-6">
@@ -53,7 +53,7 @@
                     :severity="editMode ? 'warn' : 'secondary'"
                     :label="editMode ? 'Sperren' : 'Bearbeiten'"
                     @click="editMode = !editMode"
-                    class="text-sm flex-1 sm:flex-none"
+                    class="text-sm shrink-0"
                 />
                 <Button
                     v-if="auth.hasPermission('proxy:create')"
@@ -61,7 +61,7 @@
                     severity="info"
                     :label="$t('common.add') + ' Proxy'"
                     @click="openAddProxyDialog"
-                    class="text-sm flex-1 sm:flex-none"
+                    class="text-sm shrink-0"
                 />
                 <Button
                     v-if="auth.hasPermission('proxy:control')"
@@ -69,7 +69,7 @@
                     severity="success"
                     :label="$t('control.startAll')"
                     @click="controlAllProxies('start_all')"
-                    class="text-sm flex-1 sm:flex-none"
+                    class="text-sm shrink-0"
                 />
                 <Button
                     v-if="auth.hasPermission('proxy:control')"
@@ -77,7 +77,7 @@
                     severity="danger"
                     :label="$t('control.stopAll')"
                     @click="controlAllProxies('stop_all')"
-                    class="text-sm flex-1 sm:flex-none"
+                    class="text-sm shrink-0"
                 />
             </div>
         </div>
@@ -239,7 +239,7 @@
                      <label class="block text-sm font-medium mb-1">Description</label>
                      <InputText v-model="proxyForm.description" class="w-full" />
                  </div>
-                 <div class="flex gap-4">
+                 <div class="flex flex-col sm:flex-row gap-4">
                      <div class="flex-1">
                          <label class="block text-sm font-medium mb-1">Connection Timeout (s)</label>
                          <InputNumber v-model="proxyForm.connection_timeout" :min="1" class="w-full" />
@@ -249,7 +249,7 @@
                          <InputNumber v-model="proxyForm.read_timeout" :min="1" class="w-full" />
                      </div>
                  </div>
-                 <div class="flex gap-4">
+                 <div class="flex flex-col sm:flex-row gap-4">
                      <div class="flex-1">
                          <label class="block text-sm font-medium mb-1">Max Retries</label>
                          <InputNumber v-model="proxyForm.max_retries" :min="0" class="w-full" />

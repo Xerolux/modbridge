@@ -64,10 +64,12 @@ watch(logs, (newVal) => {
             <i class="pi pi-list"></i>
             System Logs
           </div>
-          <div class="flex items-center gap-3">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h1 class="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">Systemlogs</h1>
-            <span class="status-dot" :class="isConnected ? 'status-dot--running' : 'status-dot--error'"></span>
-            <span class="text-sm text-[var(--text-muted)]">{{ isConnected ? 'Live' : 'Getrennt' }}</span>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <span class="status-dot" :class="isConnected ? 'status-dot--running' : 'status-dot--error'"></span>
+              <span class="text-sm text-[var(--text-muted)]">{{ isConnected ? 'Live' : 'Getrennt' }}</span>
+            </div>
           </div>
         </div>
 

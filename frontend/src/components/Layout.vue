@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
-import { useRouter, useRoute } from 'vue-router';
+import { RouterLink, useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from "../stores/auth";
 import { useAppStore } from "../stores/appStore";
 import LanguageSelector from './LanguageSelector.vue';
@@ -11,15 +11,6 @@ const auth = useAuthStore();
 const appStore = useAppStore();
 
 const mobileMenuOpen = ref(false);
-
-const navigate = (path) => {
-  if (route.path !== path) {
-    router.push(path).catch((err) => {
-      if (err?.name !== 'NavigationDuplicated') console.warn('Navigation failed:', err);
-    });
-  }
-  mobileMenuOpen.value = false;
-};
 
 const allItems = [
   { label: 'Dashboard',  icon: 'pi pi-home',         path: '/',        permission: null },
@@ -64,7 +55,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
         <button
           type="button"
           class="nav-logo"
-          @click="navigate('/')"
+          @click="router.push('/')"
           aria-label="Dashboard"
         >
           <img src="../assets/logo.png" alt="ModBridge" class="w-8 h-8 object-contain" />
@@ -75,17 +66,19 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
 
         <!-- Desktop nav links -->
         <div class="hidden md:flex items-center gap-0.5 flex-1 overflow-x-auto">
-          <a
+          <RouterLink
             v-for="item in items"
             :key="item.path"
+            :to="item.path"
             class="nav-link"
             :class="{ 'nav-link--active': isActiveRoute(item.path) }"
-            @click.prevent="navigate(item.path)"
+            active-class=""
+            exact-active-class=""
             :aria-current="isActiveRoute(item.path) ? 'page' : undefined"
           >
             <i :class="item.icon" class="text-sm shrink-0"></i>
             <span class="whitespace-nowrap">{{ item.label }}</span>
-          </a>
+          </RouterLink>
         </div>
 
         <!-- Right controls -->
@@ -165,16 +158,19 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
 
         <!-- Links -->
         <nav class="flex flex-col gap-1 p-4 flex-1 overflow-y-auto">
-          <a
+          <RouterLink
             v-for="item in items"
             :key="item.path"
+            :to="item.path"
             class="mobile-nav-link"
             :class="{ 'mobile-nav-link--active': isActiveRoute(item.path) }"
-            @click.prevent="navigate(item.path)"
+            active-class=""
+            exact-active-class=""
+            @click="mobileMenuOpen = false"
           >
             <i :class="item.icon" class="text-base w-5 text-center shrink-0"></i>
             <span>{{ item.label }}</span>
-          </a>
+          </RouterLink>
         </nav>
 
         <!-- Footer -->
