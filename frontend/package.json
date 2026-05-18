@@ -22,7 +22,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.0",
-    "@vitejs/plugin-vue": "^6.0.5",
+    "@vitejs/plugin-vue": "^6.0.7",
     "autoprefixer": "^10.4.27",
     "esbuild": "^0.28.0",
     "postcss": "^8.5.14",
