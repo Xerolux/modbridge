@@ -43,11 +43,11 @@ type Pool struct {
 	maxIdleTime    time.Duration
 	acquireTimeout time.Duration
 
-	closed bool
-	size   int
+	closed  bool
+	size    int
 	maxSize int
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
 type poolConn struct {
