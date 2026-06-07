@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   GO_VERSION: '1.26.3'
@@ -144,3 +144,77 @@ jobs:
           name: modbridge-${{ matrix.suffix }}
           path: modbridge-${{ matrix.suffix }}
           retention-days: 7
+
+  auto-release:
+    name: Auto Release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: [quality, test, build-frontend, build-binaries]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bump version
+        id: bump
+        run: |
+          CURRENT=$(tr -d '[:space:]' < version.txt)
+          IFS='.' read -r MAJOR MINOR PATCH BUILD <<< "$CURRENT"
+          BUILD=$((BUILD + 1))
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}.${BUILD}"
+          echo "$NEW_VERSION" > version.txt
+          TAG="v${NEW_VERSION}"
+          echo "version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Bumping ${CURRENT} -> ${NEW_VERSION} (${TAG})"
+
+      - name: Commit version bump & tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add version.txt
+          git commit -m "chore: bump version to ${{ steps.bump.outputs.version }}"
+          git tag -a "${{ steps.bump.outputs.tag }}" -m "Release ${{ steps.bump.outputs.tag }}"
+          git push origin main --follow-tags
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts/
+          pattern: modbridge-*
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: frontend-dist
+          path: frontend-dist/
+
+      - name: Prepare release files & checksums
+        run: |
+          mkdir -p release
+          find artifacts -type f -name 'modbridge*' -exec cp {} release/ \;
+          cd release && sha256sum modbridge-* > checksums.txt && ls -lh
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.bump.outputs.tag }}
+          name: "ModBridge ${{ steps.bump.outputs.tag }}"
+          files: release/*
+          draft: false
+          prerelease: false
+          make_latest: true
+          generate_release_notes: true
+          body: |
+            ## ModBridge ${{ steps.bump.outputs.tag }}
+
+            ### Binaries (with WebUI)
+            | Platform | File |
+            |----------|------|
+            | Linux x64 | `modbridge-linux-amd64` |
+            | Linux ARM64 | `modbridge-linux-arm64` |
+
+            SHA256 checksums: see `checksums.txt`
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
