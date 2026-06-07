@@ -28,7 +28,6 @@ type ResponseCache struct {
 	ttl            time.Duration
 	stats          CacheStats
 	evictionPolicy EvictionPolicy
-	muStats        sync.Mutex
 }
 
 // EvictionPolicy defines cache eviction strategy
@@ -81,42 +80,33 @@ func NewResponseCache(config ResponseCacheConfig) *ResponseCache {
 	}
 }
 
-// Get retrieves a cached response
 func (rc *ResponseCache) Get(hash uint64) ([]byte, bool) {
-	rc.mu.RLock()
-	defer rc.mu.RUnlock()
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
 
 	entry, exists := rc.cache[hash]
 	if !exists {
-		rc.recordMiss()
+		rc.stats.Misses++
 		return nil, false
 	}
 
-	// Check expiration
 	if time.Now().After(entry.ExpiresAt) {
-		rc.mu.RUnlock()
-		rc.mu.Lock()
 		delete(rc.cache, hash)
-		rc.mu.Unlock()
-		rc.mu.RLock()
-		rc.recordMiss()
+		rc.stats.Misses++
 		return nil, false
 	}
 
-	// Update access info
 	entry.LastAccess = time.Now()
 	entry.HitCount++
 
-	rc.recordHit()
+	rc.stats.Hits++
 	return entry.Response, true
 }
 
-// Set stores a response in the cache
 func (rc *ResponseCache) Set(hash uint64, response []byte) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 
-	// Check if we need to evict
 	if len(rc.cache) >= rc.maxSize {
 		rc.evict()
 	}
@@ -135,7 +125,6 @@ func (rc *ResponseCache) Set(hash uint64, response []byte) {
 	copy(rc.cache[hash].Response, response)
 }
 
-// evict removes entries based on eviction policy
 func (rc *ResponseCache) evict() {
 	switch rc.evictionPolicy {
 	case EvictLRU:
@@ -147,7 +136,6 @@ func (rc *ResponseCache) evict() {
 	}
 }
 
-// evictLRU removes least recently used entry
 func (rc *ResponseCache) evictLRU() {
 	var oldestHash uint64
 	var oldestTime time.Time
@@ -161,11 +149,10 @@ func (rc *ResponseCache) evictLRU() {
 
 	if oldestHash != 0 {
 		delete(rc.cache, oldestHash)
-		rc.recordEviction()
+		rc.stats.Evictions++
 	}
 }
 
-// evictLFU removes least frequently used entry
 func (rc *ResponseCache) evictLFU() {
 	var leastHash uint64
 	var leastHits int64
@@ -179,22 +166,20 @@ func (rc *ResponseCache) evictLFU() {
 
 	if leastHash != 0 {
 		delete(rc.cache, leastHash)
-		rc.recordEviction()
+		rc.stats.Evictions++
 	}
 }
 
-// evictExpired removes all expired entries
 func (rc *ResponseCache) evictExpired() {
 	now := time.Now()
 	for hash, entry := range rc.cache {
 		if now.After(entry.ExpiresAt) {
 			delete(rc.cache, hash)
-			rc.recordEviction()
+			rc.stats.Evictions++
 		}
 	}
 }
 
-// Clear clears the entire cache
 func (rc *ResponseCache) Clear() {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
@@ -202,35 +187,11 @@ func (rc *ResponseCache) Clear() {
 	rc.cache = make(map[uint64]*ResponseCacheEntry)
 }
 
-// recordHit records a cache hit
-func (rc *ResponseCache) recordHit() {
-	rc.muStats.Lock()
-	rc.stats.Hits++
-	rc.muStats.Unlock()
-}
-
-// recordMiss records a cache miss
-func (rc *ResponseCache) recordMiss() {
-	rc.muStats.Lock()
-	rc.stats.Misses++
-	rc.muStats.Unlock()
-}
-
-// recordEviction records a cache eviction
-func (rc *ResponseCache) recordEviction() {
-	rc.muStats.Lock()
-	rc.stats.Evictions++
-	rc.muStats.Unlock()
-}
-
-// GetStatsWithHitRate returns cache statistics with hit rate
 func (rc *ResponseCache) GetStatsWithHitRate() CacheStatsWithHitRate {
-	rc.muStats.Lock()
-	defer rc.muStats.Unlock()
-
 	rc.mu.RLock()
-	rc.stats.Size = len(rc.cache)
-	rc.mu.RUnlock()
+	defer rc.mu.RUnlock()
+
+	size := len(rc.cache)
 
 	hitRate := 0.0
 	total := rc.stats.Hits + rc.stats.Misses
@@ -242,12 +203,11 @@ func (rc *ResponseCache) GetStatsWithHitRate() CacheStatsWithHitRate {
 		Hits:      rc.stats.Hits,
 		Misses:    rc.stats.Misses,
 		Evictions: rc.stats.Evictions,
-		Size:      rc.stats.Size,
+		Size:      size,
 		HitRate:   hitRate,
 	}
 }
 
-// CacheStats with hit rate
 type CacheStatsWithHitRate struct {
 	Hits      int64
 	Misses    int64

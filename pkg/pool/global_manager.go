@@ -25,6 +25,9 @@ type GlobalConnectionManager struct {
 	healthChecker   *HealthChecker
 	muHealth        sync.RWMutex
 	lastHealthCheck time.Time
+	ctx             context.Context
+	cancel          context.CancelFunc
+	wg              sync.WaitGroup
 }
 
 // GlobalManagerConfig holds configuration for the global manager
@@ -72,10 +75,12 @@ func NewGlobalConnectionManager(config GlobalManagerConfig) (*GlobalConnectionMa
 		healthChecker: NewHealthChecker(config.HealthCheckInterval),
 	}
 
-	// Start background cleanup
-	go gm.cleanupLoop()
+	var cancel context.CancelFunc
+	gm.ctx, cancel = context.WithCancel(context.Background())
+	gm.cancel = cancel
 
-	// Start health checks
+	gm.wg.Add(2)
+	go gm.cleanupLoop()
 	go gm.healthCheckLoop()
 
 	return gm, nil
@@ -167,29 +172,40 @@ func (gm *GlobalConnectionManager) GetStats() map[string]interface{} {
 
 // cleanupLoop periodically cleans up idle connections
 func (gm *GlobalConnectionManager) cleanupLoop() {
+	defer gm.wg.Done()
 	ticker := time.NewTicker(gm.config.CleanupInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		gm.mu.RLock()
-		pools := make(map[string]*Pool)
-		for k, v := range gm.pools {
-			pools[k] = v
-		}
-		gm.mu.RUnlock()
+	for {
+		select {
+		case <-gm.ctx.Done():
+			return
+		case <-ticker.C:
+			gm.mu.RLock()
+			pools := make(map[string]*Pool)
+			for k, v := range gm.pools {
+				pools[k] = v
+			}
+			gm.mu.RUnlock()
 
-		// Each pool handles its own internal cleanup
-		_ = pools
+			_ = pools
+		}
 	}
 }
 
 // healthCheckLoop performs periodic health checks on all pools
 func (gm *GlobalConnectionManager) healthCheckLoop() {
+	defer gm.wg.Done()
 	ticker := time.NewTicker(gm.config.HealthCheckInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		gm.performHealthChecks()
+	for {
+		select {
+		case <-gm.ctx.Done():
+			return
+		case <-ticker.C:
+			gm.performHealthChecks()
+		}
 	}
 }
 
@@ -217,6 +233,9 @@ func (gm *GlobalConnectionManager) performHealthChecks() {
 
 // Close closes all pools and stops the manager
 func (gm *GlobalConnectionManager) Close() error {
+	gm.cancel()
+	gm.wg.Wait()
+
 	gm.mu.Lock()
 	defer gm.mu.Unlock()
 
@@ -301,12 +320,4 @@ func (hc *HealthChecker) ClearIssue(target string) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 	delete(hc.issues, target)
-}
-
-// min returns the minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

@@ -44,14 +44,6 @@ func (p *ProxyInstance) getNextRequestID() int64 {
 	return atomic.AddInt64(&p.requestID, 1)
 }
 
-// min returns the minimum of two unsigned integers
-func min(a, b uint) uint {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func tryAcquireConnSlot(sem chan struct{}) bool {
 	if sem == nil {
 		return true

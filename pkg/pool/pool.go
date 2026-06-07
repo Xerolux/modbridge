@@ -43,9 +43,11 @@ type Pool struct {
 	maxIdleTime    time.Duration
 	acquireTimeout time.Duration
 
-	closed  bool
-	size    int
+	closed bool
+	size   int
 	maxSize int
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 type poolConn struct {
@@ -76,6 +78,7 @@ func NewPool(cfg Config) (*Pool, error) {
 		acquireTimeout: cfg.AcquireTimeout,
 		maxSize:        cfg.MaxSize,
 	}
+	p.ctx, p.cancel = context.WithCancel(context.Background())
 
 	// Pre-populate pool
 	for i := 0; i < cfg.InitialSize; i++ {
@@ -84,11 +87,11 @@ func NewPool(cfg Config) (*Pool, error) {
 		cancel()
 
 		if err != nil {
-			// Close already-opened connections to avoid leaking them
 			close(p.conns)
 			for pc := range p.conns {
 				pc.conn.Close()
 			}
+			p.cancel()
 			return nil, err
 		}
 
@@ -99,7 +102,6 @@ func NewPool(cfg Config) (*Pool, error) {
 		p.size++
 	}
 
-	// Start cleanup goroutine
 	go p.cleanup()
 
 	return p, nil
@@ -261,6 +263,7 @@ func (p *Pool) Close() error {
 	}
 
 	p.closed = true
+	p.cancel()
 	close(p.conns)
 
 	for pc := range p.conns {
@@ -343,7 +346,13 @@ func (p *Pool) cleanup() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
+	for {
+		select {
+		case <-p.ctx.Done():
+			return
+		case <-ticker.C:
+		}
+
 		p.mu.Lock()
 		if p.closed {
 			p.mu.Unlock()
@@ -351,9 +360,6 @@ func (p *Pool) cleanup() {
 		}
 		p.mu.Unlock()
 
-		// Remove expired connections
-		// Iterate through the channel without blocking indefinitely
-		// We use the current length of the channel to determine how many items to check
 		count := len(p.conns)
 		for i := 0; i < count; i++ {
 			select {
@@ -364,14 +370,13 @@ func (p *Pool) cleanup() {
 					p.size--
 					p.mu.Unlock()
 				} else {
-					// Put it back
 					p.conns <- pc
 				}
 			default:
-				// Channel is empty, stop
-				break
+				goto done
 			}
 		}
+	done:
 	}
 }
 
@@ -408,7 +413,7 @@ func isConnHealthy(conn net.Conn) bool {
 		return false
 	}
 
-	err := conn.SetReadDeadline(time.Now().Add(1 * time.Millisecond))
+	err := conn.SetReadDeadline(time.Now().Add(5 * time.Millisecond))
 	if err != nil {
 		return false
 	}
@@ -424,9 +429,5 @@ func isConnHealthy(conn net.Conn) bool {
 		return false
 	}
 
-	if n > 0 {
-		return false
-	}
-
-	return true
+	return n == 0
 }

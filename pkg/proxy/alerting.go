@@ -6,6 +6,7 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -69,7 +70,7 @@ func (wc *WebhookChannel) Send(alert Alert) error {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", wc.URL, nil)
+	req, err := http.NewRequestWithContext(context.Background(), "POST", wc.URL, bytes.NewReader(jsonData))
 	if err != nil {
 		return err
 	}
@@ -88,8 +89,6 @@ func (wc *WebhookChannel) Send(alert Alert) error {
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
 	}
-
-	_ = jsonData // Unused for now, will be used in request body
 
 	return nil
 }

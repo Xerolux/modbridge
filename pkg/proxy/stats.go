@@ -13,31 +13,30 @@ import (
 
 // EnhancedStats provides detailed performance metrics
 type EnhancedStats struct {
-	// Basic counters (atomic for lock-free access)
 	requests     int64
 	errors       int64
 	bytesRead    int64
 	bytesWritten int64
 
-	// Timing metrics
 	mu                sync.RWMutex
-	latencies         []time.Duration // Sliding window of latencies
+	latencies         []time.Duration
+	latencyBuf        []time.Duration
+	latencyWriteIdx   int
+	latencyCount      int
 	maxLatency        time.Duration
 	minLatency        time.Duration
 	totalLatency      time.Duration
 	lastRequestTime   time.Time
-	requestStartTimes map[int64]time.Time // Track request start times
-	requestsResetTime time.Time           // When the current request window started
+	requestStartTimes map[int64]time.Time
+	requestsResetTime time.Time
 
-	// Connection stats
 	activeConnections int
 	maxConns          int
 	totalConnections  int64
 
-	// Configuration
-	latencyWindow  int           // Number of latencies to track
-	requestsWindow time.Duration // Time window for request counter (default: 60 minutes)
-	totalRequests  int64         // Total requests ever (for stats)
+	latencyWindow  int
+	requestsWindow time.Duration
+	totalRequests  int64
 }
 
 // LatencyPercentiles returns latency statistics
@@ -59,14 +58,16 @@ func NewEnhancedStats(latencyWindow int) *EnhancedStats {
 
 	now := time.Now()
 	return &EnhancedStats{
-		latencies:         make([]time.Duration, 0, latencyWindow),
+		latencyBuf:        make([]time.Duration, latencyWindow),
+		latencyWriteIdx:   0,
+		latencyCount:      0,
 		maxLatency:        0,
 		minLatency:        0,
 		latencyWindow:     latencyWindow,
 		requestStartTimes: make(map[int64]time.Time),
 		lastRequestTime:   now,
 		requestsResetTime: now,
-		requestsWindow:    60 * time.Minute, // Default 60 minute window
+		requestsWindow:    60 * time.Minute,
 	}
 }
 
@@ -134,14 +135,14 @@ func (s *EnhancedStats) RecordRequestComplete(requestID int64, bytesRead, bytesW
 
 // recordLatency records a latency measurement
 func (s *EnhancedStats) recordLatency(latency time.Duration) {
-	// Add to sliding window
-	if len(s.latencies) >= s.latencyWindow {
-		// Remove oldest
-		s.latencies = s.latencies[1:]
+	if s.latencyCount < s.latencyWindow {
+		s.latencyBuf[s.latencyWriteIdx] = latency
+		s.latencyCount++
+	} else {
+		s.latencyBuf[s.latencyWriteIdx] = latency
 	}
-	s.latencies = append(s.latencies, latency)
+	s.latencyWriteIdx = (s.latencyWriteIdx + 1) % s.latencyWindow
 
-	// Update min/max
 	if s.minLatency == 0 || latency < s.minLatency {
 		s.minLatency = latency
 	}
@@ -164,18 +165,17 @@ func (s *EnhancedStats) checkRequestWindow() {
 
 // getPercentilesLocked calculates latency percentiles (caller must hold at least RLock)
 func (s *EnhancedStats) getPercentilesLocked() LatencyPercentiles {
-	if len(s.latencies) == 0 {
+	n := s.latencyCount
+	if n == 0 {
 		return LatencyPercentiles{}
 	}
 
-	// Create sorted copy using efficient sort
-	sorted := make([]time.Duration, len(s.latencies))
-	copy(sorted, s.latencies)
+	sorted := make([]time.Duration, n)
+	copy(sorted, s.latencyBuf[:n])
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i] < sorted[j]
 	})
 
-	n := len(sorted)
 	p999Idx := n * 999 / 1000
 	if p999Idx >= n {
 		p999Idx = n - 1
@@ -252,10 +252,9 @@ func (s *EnhancedStats) GetThroughput(window time.Duration) float64 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if len(s.latencies) == 0 || window <= 0 {
+	if s.latencyCount == 0 || window <= 0 {
 		return 0
 	}
 
-	count := len(s.latencies)
-	return float64(count) / window.Seconds()
+	return float64(s.latencyCount) / window.Seconds()
 }

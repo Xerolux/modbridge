@@ -6,6 +6,7 @@
 package caching
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -21,19 +22,29 @@ type CacheEntry struct {
 
 // Manager manages register caching
 type Manager struct {
-	mu    sync.RWMutex
-	cache map[string]map[int]*CacheEntry // proxy_id -> register_address -> entry
-	ttl   time.Duration
+	mu     sync.RWMutex
+	cache  map[string]map[int]*CacheEntry // proxy_id -> register_address -> entry
+	ttl    time.Duration
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // NewManager creates a new cache manager
 func NewManager(defaultTTL time.Duration) *Manager {
+	ctx, cancel := context.WithCancel(context.Background())
 	m := &Manager{
-		cache: make(map[string]map[int]*CacheEntry),
-		ttl:   defaultTTL,
+		cache:  make(map[string]map[int]*CacheEntry),
+		ttl:    defaultTTL,
+		ctx:    ctx,
+		cancel: cancel,
 	}
 	go m.cleanupExpired()
 	return m
+}
+
+// Stop stops the cache manager and its background goroutine.
+func (m *Manager) Stop() {
+	m.cancel()
 }
 
 // Set sets a cached value
@@ -121,20 +132,25 @@ func (m *Manager) cleanupExpired() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		m.mu.Lock()
-		now := time.Now()
-		for proxyID, registers := range m.cache {
-			for addr, entry := range registers {
-				if now.Sub(entry.Timestamp) > entry.TTL {
-					delete(registers, addr)
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-ticker.C:
+			m.mu.Lock()
+			now := time.Now()
+			for proxyID, registers := range m.cache {
+				for addr, entry := range registers {
+					if now.Sub(entry.Timestamp) > entry.TTL {
+						delete(registers, addr)
+					}
+				}
+				if len(m.cache[proxyID]) == 0 {
+					delete(m.cache, proxyID)
 				}
 			}
-			if len(m.cache[proxyID]) == 0 {
-				delete(m.cache, proxyID)
-			}
+			m.mu.Unlock()
 		}
-		m.mu.Unlock()
 	}
 }
 

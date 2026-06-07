@@ -16,10 +16,21 @@ import (
 const MBAPHeaderLength = 6
 
 var (
-	// Buffer pool for MBAP headers
 	headerPool = sync.Pool{
 		New: func() interface{} {
 			return make([]byte, MBAPHeaderLength)
+		},
+	}
+	payloadPool = sync.Pool{
+		New: func() interface{} {
+			b := make([]byte, 0, 256)
+			return &b
+		},
+	}
+	framePool = sync.Pool{
+		New: func() interface{} {
+			b := make([]byte, 0, 260)
+			return &b
 		},
 	}
 )
@@ -45,14 +56,49 @@ func ReadFrame(r io.Reader) ([]byte, error) {
 		return nil, fmt.Errorf("invalid modbus length: %d", length)
 	}
 
-	payload := make([]byte, length)
+	var payload []byte
+	pp := payloadPool.Get().(*[]byte)
+	if cap(*pp) >= int(length) {
+		payload = (*pp)[:length]
+	} else {
+		payload = make([]byte, length)
+	}
+
 	if _, err := io.ReadFull(r, payload); err != nil {
+		if cap(payload) <= 256 {
+			*pp = payload[:0]
+			payloadPool.Put(pp)
+		}
 		return nil, err
 	}
 
-	// Build the full frame (pre-allocate with exact size)
-	frame := make([]byte, 0, MBAPHeaderLength+int(length))
+	fp := framePool.Get().(*[]byte)
+	totalLen := MBAPHeaderLength + int(length)
+	if cap(*fp) < totalLen {
+		*fp = make([]byte, 0, totalLen)
+	}
+	frame := (*fp)[:0]
 	frame = append(frame, header...)
 	frame = append(frame, payload...)
+
+	if cap(payload) <= 256 {
+		*pp = payload[:0]
+		payloadPool.Put(pp)
+	}
+
 	return frame, nil
+}
+
+// ReleaseFrame returns a frame buffer to the pool.
+func ReleaseFrame(frame []byte) {
+	if cap(frame) >= MBAPHeaderLength {
+		fp := framePool.Get().(*[]byte)
+		*fp = frame[:0]
+		framePool.Put(fp)
+	}
+}
+
+func init() {
+	_ = payloadPool.Get
+	_ = framePool.Get
 }

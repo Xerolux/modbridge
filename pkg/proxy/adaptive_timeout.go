@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"sort"
 	"sync"
 	"time"
 )
@@ -13,17 +14,21 @@ type AdaptiveTimeout struct {
 	currentConnect time.Duration
 	p95Latency     time.Duration
 	samples        []time.Duration
+	sampleWriteIdx int
+	sampleCount    int
 	maxSamples     int
 	scaleFactor    float64
 }
 
 func NewAdaptiveTimeout(baseRead, baseConnect time.Duration) *AdaptiveTimeout {
+	maxSamples := 100
 	return &AdaptiveTimeout{
 		baseRead:       baseRead,
 		baseConnect:    baseConnect,
 		currentRead:    baseRead,
 		currentConnect: baseConnect,
-		maxSamples:     100,
+		samples:        make([]time.Duration, maxSamples),
+		maxSamples:     maxSamples,
 		scaleFactor:    2.0,
 	}
 }
@@ -32,15 +37,16 @@ func (at *AdaptiveTimeout) Record(latency time.Duration) {
 	at.mu.Lock()
 	defer at.mu.Unlock()
 
-	if len(at.samples) >= at.maxSamples {
-		at.samples = at.samples[1:]
+	at.samples[at.sampleWriteIdx] = latency
+	at.sampleWriteIdx = (at.sampleWriteIdx + 1) % at.maxSamples
+	if at.sampleCount < at.maxSamples {
+		at.sampleCount++
 	}
-	at.samples = append(at.samples, latency)
 
-	if len(at.samples) >= 10 {
-		sorted := make([]time.Duration, len(at.samples))
-		copy(sorted, at.samples)
-		sortDurations(sorted)
+	if at.sampleCount >= 10 {
+		sorted := make([]time.Duration, at.sampleCount)
+		copy(sorted, at.samples[:at.sampleCount])
+		sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
 		p95Idx := len(sorted) * 95 / 100
 		if p95Idx >= len(sorted) {
 			p95Idx = len(sorted) - 1
@@ -89,14 +95,4 @@ func (at *AdaptiveTimeout) GetP95() time.Duration {
 	at.mu.RLock()
 	defer at.mu.RUnlock()
 	return at.p95Latency
-}
-
-func sortDurations(d []time.Duration) {
-	for i := 0; i < len(d); i++ {
-		for j := i + 1; j < len(d); j++ {
-			if d[j] < d[i] {
-				d[i], d[j] = d[j], d[i]
-			}
-		}
-	}
 }
