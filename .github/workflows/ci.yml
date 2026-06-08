@@ -58,7 +58,7 @@ jobs:
           PACKAGES=$(go list -f '{{if or (len .TestGoFiles) (len .XTestGoFiles)}}{{.ImportPath}}{{end}}' ./...)
           go test -v -race -coverprofile=coverage.txt -covermode=atomic $PACKAGES
 
-      - uses: codecov/codecov-action@v6
+      - uses: codecov/codecov-action@v7
         with:
           file: ./coverage.txt
         continue-on-error: true
