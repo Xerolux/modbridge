@@ -194,6 +194,11 @@ func (lb *LoadBalancer) weightedRoundRobin(healthy []*TargetEndpoint) *TargetEnd
 		totalWeight += ep.Weight
 	}
 
+	// Fall back to round-robin if all weights are zero
+	if totalWeight == 0 {
+		return lb.roundRobin(healthy)
+	}
+
 	// Simple weighted selection (could be improved with smooth weighted RR)
 	index := int(atomic.AddUint32(&lb.currentIndex, 1))
 	weightSum := 0

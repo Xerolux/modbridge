@@ -1,6 +1,6 @@
 <template>
     <div class="p-2 sm:p-4 flex flex-col gap-4 w-full">
-        <h1 class="text-xl sm:text-2xl font-bold mb-2 sm:mb-4 text-gray-800 dark:text-gray-200">System Information</h1>
+        <h1 class="text-xl sm:text-2xl font-bold mb-2 sm:mb-4 text-gray-800 dark:text-gray-200">{{ t('system.title') }}</h1>
 
         <div v-if="loading" class="flex justify-center">
             <i class="pi pi-spin pi-spinner text-3xl sm:text-4xl text-blue-500"></i>
@@ -8,27 +8,27 @@
 
         <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
-                <template #title><div class="text-lg sm:text-xl">System</div></template>
+                <template #title><div class="text-lg sm:text-xl">{{ t('system.system') }}</div></template>
                 <template #content>
                     <div class="space-y-2 text-sm sm:text-base">
                         <div class="flex justify-between">
-                             <span class="text-gray-500 dark:text-gray-400">Uptime:</span>
+                             <span class="text-gray-500 dark:text-gray-400">{{ t('system.uptime') }}:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.uptime_human }}</span>
                         </div>
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">Go Version:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.goVersion') }}:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.go_version }}</span>
                         </div>
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">OS:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.os') }}:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.os }}</span>
                         </div>
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">Architecture:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.arch') }}:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.arch }}</span>
                         </div>
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">CPU Cores:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.cpuCount') }}:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.num_cpu }}</span>
                         </div>
                     </div>
@@ -36,23 +36,23 @@
             </Card>
 
             <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
-                <template #title><div class="text-lg sm:text-xl">Memory</div></template>
+                <template #title><div class="text-lg sm:text-xl">{{ t('system.memory') }}</div></template>
                 <template #content>
                     <div class="space-y-2 text-sm sm:text-base">
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">Allocated:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.memoryAlloc') }}:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.memory_alloc_mb }} MB</span>
                         </div>
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">System:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.memorySys') }}:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.memory_sys_mb }} MB</span>
                         </div>
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">Next GC:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.memoryGc') }}:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.memory_gc_mb }} MB</span>
                         </div>
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">Goroutines:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.goroutines') }}:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.goroutines }}</span>
                         </div>
                     </div>
@@ -60,19 +60,19 @@
             </Card>
 
             <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
-                <template #title><div class="text-lg sm:text-xl">Proxies</div></template>
+                <template #title><div class="text-lg sm:text-xl">{{ t('system.proxies') }}</div></template>
                 <template #content>
                     <div class="space-y-2 text-sm sm:text-base">
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">Total:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.totalProxies') }}:</span>
                             <span class="font-semibold text-right pl-2">{{ systemInfo.total_proxies }}</span>
                         </div>
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">Running:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.runningProxies') }}:</span>
                              <span class="font-semibold text-green-600 dark:text-green-400 text-right pl-2">{{ systemInfo.running_proxies }}</span>
                         </div>
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">Stopped:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.stoppedProxies') }}:</span>
                              <span class="font-semibold text-red-600 dark:text-red-400 text-right pl-2">{{ systemInfo.total_proxies - systemInfo.running_proxies }}</span>
                         </div>
                     </div>
@@ -80,29 +80,29 @@
             </Card>
 
             <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
-                <template #title><div class="text-lg sm:text-xl">Configuration</div></template>
+                <template #title><div class="text-lg sm:text-xl">{{ t('system.configuration') }}</div></template>
                 <template #content>
                     <div class="space-y-2 text-sm sm:text-base">
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">Log Level:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.logLevel') }}:</span>
                             <span class="font-semibold text-right pl-2">{{ config.log_level }}</span>
                         </div>
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">Debug Mode:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.debugMode') }}:</span>
                             <span class="font-semibold text-right pl-2" :class="config.debug_mode ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
-                                {{ config.debug_mode ? 'Enabled' : 'Disabled' }}
+                                {{ config.debug_mode ? t('common.enabled') : t('common.disabled') }}
                             </span>
                         </div>
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">Metrics:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.metrics') }}:</span>
                             <span class="font-semibold text-right pl-2" :class="config.metrics_enabled ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
-                                {{ config.metrics_enabled ? 'Enabled' : 'Disabled' }}
+                                {{ config.metrics_enabled ? t('common.enabled') : t('common.disabled') }}
                             </span>
                         </div>
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">TLS:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.tls') }}:</span>
                             <span class="font-semibold text-right pl-2" :class="config.tls_enabled ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
-                                {{ config.tls_enabled ? 'Enabled' : 'Disabled' }}
+                                {{ config.tls_enabled ? t('common.enabled') : t('common.disabled') }}
                             </span>
                         </div>
                     </div>
@@ -110,31 +110,31 @@
             </Card>
 
             <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
-                <template #title><div class="text-lg sm:text-xl">Security</div></template>
+                <template #title><div class="text-lg sm:text-xl">{{ t('system.security') }}</div></template>
                 <template #content>
                     <div class="space-y-2 text-sm sm:text-base">
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">Rate Limiting:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.rateLimiting') }}:</span>
                             <span class="font-semibold text-right pl-2" :class="config.rate_limit_enabled ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
-                                {{ config.rate_limit_enabled ? 'Enabled' : 'Disabled' }}
+                                {{ config.rate_limit_enabled ? t('common.enabled') : t('common.disabled') }}
                             </span>
                         </div>
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">IP Whitelist:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.ipWhitelist') }}:</span>
                             <span class="font-semibold text-right pl-2" :class="config.ip_whitelist_enabled ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
-                                {{ config.ip_whitelist_enabled ? 'Enabled' : 'Disabled' }}
+                                {{ config.ip_whitelist_enabled ? t('common.enabled') : t('common.disabled') }}
                             </span>
                         </div>
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">IP Blacklist:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.ipBlacklist') }}:</span>
                             <span class="font-semibold text-right pl-2" :class="config.ip_blacklist_enabled ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
-                                {{ config.ip_blacklist_enabled ? 'Enabled' : 'Disabled' }}
+                                {{ config.ip_blacklist_enabled ? t('common.enabled') : t('common.disabled') }}
                             </span>
                         </div>
                         <div class="flex justify-between">
-                                                         <span class="text-gray-500 dark:text-gray-400">Email Alerts:</span>
+                                                         <span class="text-gray-500 dark:text-gray-400">{{ t('system.emailAlerts') }}:</span>
                             <span class="font-semibold text-right pl-2" :class="config.email_enabled ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
-                                {{ config.email_enabled ? 'Enabled' : 'Disabled' }}
+                                {{ config.email_enabled ? t('common.enabled') : t('common.disabled') }}
                             </span>
                         </div>
                     </div>
@@ -142,50 +142,50 @@
             </Card>
 
             <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
-                <template #title><div class="text-lg sm:text-xl">Server Control</div></template>
+                <template #title><div class="text-lg sm:text-xl">{{ t('system.serverControl') }}</div></template>
                 <template #content>
                     <div class="flex flex-col gap-3">
-                        <Button @click="refreshInfo" label="Refresh" icon="pi pi-refresh" class="w-full p-3 sm:p-2" />
-                        <Button v-if="auth.hasPermission('system:restart')" @click="restartSystem" label="Restart System" icon="pi pi-power-off" severity="warning" class="w-full p-3 sm:p-2" />
+                        <Button @click="refreshInfo" :label="t('system.refresh')" icon="pi pi-refresh" class="w-full p-3 sm:p-2" />
+                        <Button v-if="auth.hasPermission('system:restart')" @click="restartSystem" :label="t('system.restart')" icon="pi pi-power-off" severity="warning" class="w-full p-3 sm:p-2" />
                     </div>
                 </template>
             </Card>
 
             <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
-                <template #title><div class="text-lg sm:text-xl">Proxy Control</div></template>
+                <template #title><div class="text-lg sm:text-xl">{{ t('system.proxyControl') }}</div></template>
                 <template #content>
                     <div class="flex flex-col gap-3">
-                        <Button v-if="auth.hasPermission('proxy:control')" @click="startAllProxies" label="Start All Proxies" icon="pi pi-play" severity="success" class="w-full p-3 sm:p-2" />
-                        <Button v-if="auth.hasPermission('proxy:control')" @click="stopAllProxies" label="Stop All Proxies" icon="pi pi-stop" severity="danger" class="w-full p-3 sm:p-2" />
-                        <Button v-if="auth.hasPermission('proxy:control')" @click="restartAllProxies" label="Restart All Proxies" icon="pi pi-refresh" severity="warning" class="w-full p-3 sm:p-2" />
-                        <Button @click="downloadLogs" label="Download Logs" icon="pi pi-download" severity="secondary" class="w-full p-3 sm:p-2" />
+                        <Button v-if="auth.hasPermission('proxy:control')" @click="startAllProxies" :label="t('system.startAllProxies')" icon="pi pi-play" severity="success" class="w-full p-3 sm:p-2" />
+                        <Button v-if="auth.hasPermission('proxy:control')" @click="stopAllProxies" :label="t('system.stopAllProxies')" icon="pi pi-stop" severity="danger" class="w-full p-3 sm:p-2" />
+                        <Button v-if="auth.hasPermission('proxy:control')" @click="restartAllProxies" :label="t('system.restartAllProxies')" icon="pi pi-refresh" severity="warning" class="w-full p-3 sm:p-2" />
+                        <Button @click="downloadLogs" :label="t('system.downloadLogs')" icon="pi pi-download" severity="secondary" class="w-full p-3 sm:p-2" />
                     </div>
                 </template>
             </Card>
 
             <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
-                <template #title><div class="text-lg sm:text-xl">Port Management</div></template>
+                <template #title><div class="text-lg sm:text-xl">{{ t('system.portManagement') }}</div></template>
                 <template #content>
                     <div class="flex flex-col gap-3">
-                        <Button @click="checkPorts" label="Check Ports" icon="pi pi-search" severity="info" class="w-full p-3 sm:p-2" :loading="portCheckLoading" />
+                        <Button @click="checkPorts" :label="t('system.checkPorts')" icon="pi pi-search" severity="info" class="w-full p-3 sm:p-2" :loading="portCheckLoading" />
 
                         <div v-if="portStatus.summary" class="grid grid-cols-3 gap-2 text-sm sm:text-base">
                             <div class="text-center p-2 bg-gray-200 dark:bg-gray-700 rounded">
-                                <div class="text-gray-500 dark:text-gray-400">Total</div>
+                                <div class="text-gray-500 dark:text-gray-400">{{ t('system.total') }}</div>
                                 <div class="font-bold">{{ portStatus.summary.total }}</div>
                             </div>
                             <div class="text-center p-2 bg-green-100 dark:bg-green-900 rounded">
-                                <div class="text-gray-500 dark:text-gray-400">Free</div>
+                                <div class="text-gray-500 dark:text-gray-400">{{ t('system.free') }}</div>
                                 <div class="font-bold text-green-600 dark:text-green-400">{{ portStatus.summary.free }}</div>
                             </div>
                             <div class="text-center p-2 bg-red-100 dark:bg-red-900 rounded">
-                                <div class="text-gray-500 dark:text-gray-400">In Use</div>
+                                <div class="text-gray-500 dark:text-gray-400">{{ t('system.inUse') }}</div>
                                 <div class="font-bold text-red-600 dark:text-red-400">{{ portStatus.summary.in_use }}</div>
                             </div>
                         </div>
 
                         <div v-if="blockedPorts.length > 0" class="mt-2 p-2 bg-red-100 dark:bg-red-900 rounded text-sm">
-                            <div class="font-bold text-red-600 dark:text-red-400 mb-2">⚠️ Blocked Ports:</div>
+                            <div class="font-bold text-red-600 dark:text-red-400 mb-2">⚠️ {{ t('system.blockedPorts') }}:</div>
                             <div v-for="(port, idx) in blockedPorts" :key="idx" class="mb-2 p-2 bg-gray-200 dark:bg-gray-700 rounded">
                                 <div class="flex justify-between items-center mb-1">
                                     <span class="font-semibold">Port {{ port.port }}</span>
@@ -195,12 +195,12 @@
                                     <div>Process: {{ port.process }} (User: {{ port.user }})</div>
                                     <div class="truncate text-gray-500 dark:text-gray-500">{{ port.command }}</div>
                                 </div>
-                                <Button v-if="auth.hasPermission('system:manage')" @click="releasePort(port)" label="Release Port" icon="pi pi-trash" severity="danger" size="small" class="w-full p-2" />
+                                <Button v-if="auth.hasPermission('system:manage')" @click="releasePort(port)" :label="t('system.releasePort')" icon="pi pi-trash" severity="danger" size="small" class="w-full p-2" />
                             </div>
                         </div>
 
                         <div v-else-if="portStatus.summary" class="text-center p-2 bg-green-100 dark:bg-green-900 rounded text-green-600 dark:text-green-400">
-                            ✓ All ports are free
+                            ✓ {{ t('system.allPortsFree') }}
                         </div>
                     </div>
                 </template>
@@ -223,8 +223,10 @@
  import { useConfirm } from 'primevue/useconfirm';
  import { downloadBlob } from '../utils/helpers';
  import { useAuthStore } from '../stores/auth';
+ import { useI18n } from 'vue-i18n';
 
  const auth = useAuthStore();
+ const { t } = useI18n();
 
  const loading = ref(true);
  const toast = useToast();
@@ -306,13 +308,20 @@
  };
 
 const startAllProxies = async () => {
-    try {
-        await axios.post('/api/proxies/control', { action: 'start_all' });
-        toast.add({ severity: 'success', summary: 'Success', detail: 'All proxies started', life: 3000 });
-        await fetchInfo();
-    } catch (e) {
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to start proxies', life: 3000 });
-    }
+    confirm.require({
+        message: t('control.startAllConfirm'),
+        header: t('common.confirm'),
+        icon: 'pi pi-exclamation-triangle',
+        accept: async () => {
+            try {
+                await axios.post('/api/proxies/control', { action: 'start_all' });
+                toast.add({ severity: 'success', summary: 'Success', detail: 'All proxies started', life: 3000 });
+                await fetchInfo();
+            } catch (e) {
+                toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to start proxies', life: 3000 });
+            }
+        }
+    });
 };
 
 const stopAllProxies = async () => {
@@ -333,13 +342,20 @@ const stopAllProxies = async () => {
 };
 
 const restartAllProxies = async () => {
-    try {
-        await axios.post('/api/proxies/control', { action: 'restart_all' });
-        toast.add({ severity: 'success', summary: 'Success', detail: 'All proxies restarted', life: 3000 });
-        await fetchInfo();
-    } catch (e) {
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to restart proxies', life: 3000 });
-    }
+    confirm.require({
+        message: t('control.stopAllConfirm'),
+        header: t('common.confirm'),
+        icon: 'pi pi-exclamation-triangle',
+        accept: async () => {
+            try {
+                await axios.post('/api/proxies/control', { action: 'restart_all' });
+                toast.add({ severity: 'success', summary: 'Success', detail: 'All proxies restarted', life: 3000 });
+                await fetchInfo();
+            } catch (e) {
+                toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to restart proxies', life: 3000 });
+            }
+        }
+    });
 };
 
 const checkPorts = async () => {

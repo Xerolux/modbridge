@@ -279,17 +279,21 @@
       </div>
     </div>
   </section>
+  <ConfirmDialog />
 </template>
 
 <script setup>
 import { computed, ref } from 'vue';
 import Button from 'primevue/button';
+import ConfirmDialog from 'primevue/confirmdialog';
+import { useConfirm } from 'primevue/useconfirm';
 import { VueDraggable } from 'vue-draggable-plus';
 import GripVerticalIcon from './icons/GripVertical.vue';
 import { useAppStore } from '../stores/appStore';
 import validators from '../utils/validators';
 
 const store = useAppStore();
+const confirm = useConfirm();
 
 const validationErrors = ref({});
 const activeProxyKey = ref(null);
@@ -357,9 +361,14 @@ const removeProxy = async (id, index) => {
     return;
   }
 
-  if (confirm('Moechtest du diesen Proxy wirklich entfernen?')) {
-    await store.deleteProxy(id);
-  }
+  confirm.require({
+    message: 'Möchtest du diesen Proxy wirklich entfernen?',
+    header: 'Proxy entfernen',
+    icon: 'pi pi-exclamation-triangle',
+    accept: async () => {
+      await store.deleteProxy(id);
+    }
+  });
 };
 
 const saveProxy = async (proxy, index) => {
@@ -393,9 +402,14 @@ const saveProxy = async (proxy, index) => {
 };
 
 const savePort = async () => {
-  if (confirm('Eine Port-Aenderung erfordert einen Neustart. Fortfahren?')) {
-    await store.saveWebPort(store.webPort);
-  }
+  confirm.require({
+    message: 'Eine Port-Änderung erfordert einen Neustart. Fortfahren?',
+    header: 'Port speichern',
+    icon: 'pi pi-exclamation-triangle',
+    accept: async () => {
+      await store.saveWebPort(store.webPort);
+    }
+  });
 };
 
 const markDirty = (proxy, index) => {

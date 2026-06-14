@@ -19,13 +19,11 @@ type EnhancedStats struct {
 	bytesWritten int64
 
 	mu                sync.RWMutex
-	latencies         []time.Duration
 	latencyBuf        []time.Duration
 	latencyWriteIdx   int
 	latencyCount      int
 	maxLatency        time.Duration
 	minLatency        time.Duration
-	totalLatency      time.Duration
 	lastRequestTime   time.Time
 	requestStartTimes map[int64]time.Time
 	requestsResetTime time.Time
@@ -135,11 +133,9 @@ func (s *EnhancedStats) RecordRequestComplete(requestID int64, bytesRead, bytesW
 
 // recordLatency records a latency measurement
 func (s *EnhancedStats) recordLatency(latency time.Duration) {
+	s.latencyBuf[s.latencyWriteIdx] = latency
 	if s.latencyCount < s.latencyWindow {
-		s.latencyBuf[s.latencyWriteIdx] = latency
 		s.latencyCount++
-	} else {
-		s.latencyBuf[s.latencyWriteIdx] = latency
 	}
 	s.latencyWriteIdx = (s.latencyWriteIdx + 1) % s.latencyWindow
 
@@ -149,8 +145,6 @@ func (s *EnhancedStats) recordLatency(latency time.Duration) {
 	if latency > s.maxLatency {
 		s.maxLatency = latency
 	}
-
-	s.totalLatency += latency
 }
 
 // checkRequestWindow checks if the request window has expired and resets if needed
@@ -189,12 +183,17 @@ func (s *EnhancedStats) getPercentilesLocked() LatencyPercentiles {
 		p95Idx = n - 1
 	}
 
+	var total time.Duration
+	for _, d := range sorted {
+		total += d
+	}
+
 	return LatencyPercentiles{
 		P50:  sorted[n*50/100],
 		P95:  sorted[p95Idx],
 		P99:  sorted[p99Idx],
 		P999: sorted[p999Idx],
-		Mean: s.totalLatency / time.Duration(n),
+		Mean: total / time.Duration(n),
 		Min:  s.minLatency,
 		Max:  s.maxLatency,
 	}

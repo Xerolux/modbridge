@@ -43,6 +43,8 @@ func NewManager(cfgMgr *config.Manager, log *logger.Logger, db *database.DB) *Ma
 
 // Initialize loads config and starts enabled proxies.
 func (m *Manager) Initialize() {
+	m.stopHealthMonitor()
+
 	cfg := m.cfgMgr.Get()
 	for _, pCfg := range cfg.Proxies {
 		if err := m.AddProxy(pCfg, false); err != nil {
@@ -83,7 +85,7 @@ func (m *Manager) AddProxy(cfg config.ProxyConfig, save bool) error {
 	m.broadcaster.Broadcast(map[string]interface{}{
 		"type":      "proxy_added",
 		"timestamp": time.Now(),
-		"proxy":     m.getProxyStatus(cfg.ID),
+		"proxy":     m.getProxyStatusLocked(cfg.ID),
 	})
 
 	if save {
@@ -282,7 +284,7 @@ func (m *Manager) UpdateProxy(cfg config.ProxyConfig) error {
 	m.broadcaster.Broadcast(map[string]interface{}{
 		"type":      "proxy_updated",
 		"timestamp": time.Now(),
-		"proxy":     m.getProxyStatus(cfg.ID),
+		"proxy":     m.getProxyStatusLocked(cfg.ID),
 	})
 
 	// Update config
@@ -491,8 +493,17 @@ func (m *Manager) UnsubscribeProxyEvents(ch chan interface{}) {
 	m.broadcaster.Unsubscribe(ch)
 }
 
-// getProxyStatus returns proxy status information
+// getProxyStatus returns proxy status information. It acquires the manager read lock
+// and is safe to call when the caller does not already hold a lock.
 func (m *Manager) getProxyStatus(id string) map[string]interface{} {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.getProxyStatusLocked(id)
+}
+
+// getProxyStatusLocked returns proxy status information assuming the caller already
+// holds the manager lock (read or write).
+func (m *Manager) getProxyStatusLocked(id string) map[string]interface{} {
 	p, ok := m.proxies[id]
 	if !ok {
 		return nil

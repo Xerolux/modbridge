@@ -292,7 +292,12 @@ func (rm *RecoveryManager) GetStats() map[string]interface{} {
 	stats["completed"] = completed
 	stats["failed"] = failed
 	stats["cancelled"] = cancelled
-	stats["success_rate"] = float64(completed) / float64(len(rm.recoveryTasks)) * 100
+
+	successRate := 0.0
+	if total := len(rm.recoveryTasks); total > 0 {
+		successRate = float64(completed) / float64(total) * 100
+	}
+	stats["success_rate"] = successRate
 
 	return stats
 }
@@ -300,14 +305,16 @@ func (rm *RecoveryManager) GetStats() map[string]interface{} {
 // Stop stops the recovery manager
 func (rm *RecoveryManager) Stop() {
 	rm.mu.Lock()
-	defer rm.mu.Unlock()
 
 	if !rm.running {
+		rm.mu.Unlock()
 		return
 	}
 
 	rm.running = false
 	rm.cancel()
+	rm.mu.Unlock()
+
 	rm.wg.Wait()
 }
 

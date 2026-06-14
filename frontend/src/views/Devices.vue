@@ -189,11 +189,11 @@ import Dropdown from 'primevue/dropdown';
 import Badge from 'primevue/badge';
 import Dialog from 'primevue/dialog';
 import Toast from 'primevue/toast';
- import { useToast } from 'primevue/usetoast';
- import { useAppStore } from '../stores/appStore';
- import { formatDate, formatDateTime } from '../utils/helpers';
+import { useToast } from 'primevue/usetoast';
+import { useAppStore } from '../stores/appStore';
+import { formatDate, formatDateTime } from '../utils/helpers';
 
- const store = useAppStore();
+const store = useAppStore();
 const toast = useToast();
 
 const devices = ref([]);
@@ -214,12 +214,12 @@ const sortOptions = [
   { label: 'Zuerst gesehen', value: 'firstSeen_desc' }
 ];
 
-const filters = {
+const filters = ref({
   'ip': { value: null, matchMode: 'contains' },
   'name': { value: null, matchMode: 'contains' },
   'mac': { value: null, matchMode: 'contains' },
   'firstSeen': { value: null, matchMode: 'date' }
-};
+});
 
 const filteredDevices = computed(() => {
   let result = [...devices.value];
@@ -324,7 +324,7 @@ const exportDevices = async () => {
   }
 };
 
- const getConnectionSeverity = (count) => {
+const getConnectionSeverity = (count) => {
   if (count > 100) return 'danger';
   if (count > 50) return 'warning';
   return 'success';

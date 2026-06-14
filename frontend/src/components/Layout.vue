@@ -3,7 +3,10 @@ import { ref, computed, onMounted, onUnmounted } from "vue";
 import { RouterLink, useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from "../stores/auth";
 import { useAppStore } from "../stores/appStore";
+import { useI18n } from 'vue-i18n';
 import LanguageSelector from './LanguageSelector.vue';
+
+const { t } = useI18n();
 
 const router = useRouter();
 const route = useRoute();
@@ -13,14 +16,14 @@ const appStore = useAppStore();
 const mobileMenuOpen = ref(false);
 
 const allItems = [
-  { label: 'Dashboard',  icon: 'pi pi-home',         path: '/',        permission: null },
-  { label: 'Control',    icon: 'pi pi-sliders-h',    path: '/control', permission: 'proxy:view' },
-  { label: 'Devices',    icon: 'pi pi-desktop',      path: '/devices', permission: 'device:view' },
-  { label: 'Logs',       icon: 'pi pi-list',         path: '/logs',    permission: 'logs:view' },
-  { label: 'System',     icon: 'pi pi-info-circle',  path: '/system',  permission: 'system:view' },
-  { label: 'Settings',   icon: 'pi pi-cog',          path: '/config',  permission: 'config:view' },
-  { label: 'Users',      icon: 'pi pi-users',        path: '/users',   permission: 'user:view' },
-  { label: 'Audit',      icon: 'pi pi-history',      path: '/audit',   permission: 'audit:view' },
+  { labelKey: 'nav.dashboard', icon: 'pi pi-home',         path: '/',        permission: null },
+  { labelKey: 'nav.control',   icon: 'pi pi-sliders-h',    path: '/control', permission: 'proxy:view' },
+  { labelKey: 'nav.devices',   icon: 'pi pi-desktop',      path: '/devices', permission: 'device:view' },
+  { labelKey: 'nav.logs',      icon: 'pi pi-list',         path: '/logs',    permission: 'logs:view' },
+  { labelKey: 'nav.system',    icon: 'pi pi-info-circle',  path: '/system',  permission: 'system:view' },
+  { labelKey: 'nav.settings',  icon: 'pi pi-cog',          path: '/config',  permission: 'config:view' },
+  { labelKey: 'nav.users',     icon: 'pi pi-users',        path: '/users',   permission: 'user:view' },
+  { labelKey: 'nav.audit',     icon: 'pi pi-history',      path: '/audit',   permission: 'audit:view' },
 ];
 
 const items = computed(() =>
@@ -77,7 +80,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
             :aria-current="isActiveRoute(item.path) ? 'page' : undefined"
           >
             <i :class="item.icon" class="text-sm shrink-0"></i>
-            <span class="whitespace-nowrap">{{ item.label }}</span>
+            <span class="whitespace-nowrap">{{ t(item.labelKey) }}</span>
           </RouterLink>
         </div>
 
@@ -87,7 +90,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
             type="button"
             class="nav-icon-btn"
             @click="appStore.toggleDarkMode()"
-            :title="appStore.darkMode ? 'Light mode' : 'Dark mode'"
+            :title="appStore.darkMode ? t('nav.lightMode') : t('nav.darkMode')"
           >
             <i :class="appStore.darkMode ? 'pi pi-sun' : 'pi pi-moon'" class="text-sm"></i>
           </button>
@@ -107,8 +110,8 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
             type="button"
             class="nav-icon-btn nav-icon-btn--danger hidden sm:flex"
             @click="logout"
-            title="Logout"
-            aria-label="Logout"
+            :title="t('nav.logout')"
+            :aria-label="t('nav.logout')"
           >
             <i class="pi pi-power-off text-sm"></i>
           </button>
@@ -118,7 +121,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
             type="button"
             class="nav-icon-btn md:hidden"
             @click="mobileMenuOpen = true"
-            aria-label="Navigation öffnen"
+            :aria-label="t('nav.openNavigation')"
           >
             <i class="pi pi-bars text-sm"></i>
           </button>
@@ -151,7 +154,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
             <img src="../assets/logo.png" alt="ModBridge" class="w-9 h-9 object-contain" />
             <span class="font-bold text-[17px] tracking-tight">ModBridge</span>
           </div>
-          <button type="button" class="nav-icon-btn" @click="mobileMenuOpen = false" aria-label="Schließen">
+          <button type="button" class="nav-icon-btn" @click="mobileMenuOpen = false" :aria-label="t('nav.closeNavigation')">
             <i class="pi pi-times text-sm"></i>
           </button>
         </div>
@@ -169,7 +172,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
             @click="mobileMenuOpen = false"
           >
             <i :class="item.icon" class="text-base w-5 text-center shrink-0"></i>
-            <span>{{ item.label }}</span>
+            <span>{{ t(item.labelKey) }}</span>
           </RouterLink>
         </nav>
 
@@ -185,7 +188,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
           </div>
 
           <div class="flex items-center justify-between px-3 py-1">
-            <span class="text-sm text-[var(--text-secondary)]">Theme</span>
+            <span class="text-sm text-[var(--text-secondary)]">{{ t('nav.theme') }}</span>
             <button type="button" class="nav-icon-btn" @click="appStore.toggleDarkMode()">
               <i :class="appStore.darkMode ? 'pi pi-sun' : 'pi pi-moon'" class="text-sm"></i>
             </button>
@@ -199,7 +202,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
             @click="logout"
           >
             <i class="pi pi-power-off"></i>
-            <span>Logout</span>
+            <span>{{ t('nav.logout') }}</span>
           </button>
         </div>
       </div>

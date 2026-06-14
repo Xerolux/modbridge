@@ -248,9 +248,9 @@ func (pq *PriorityQueue) getNextRequest() *Request {
 // Stop stops the priority queue
 func (pq *PriorityQueue) Stop() {
 	pq.mu.Lock()
-	defer pq.mu.Unlock()
 
 	if !pq.running {
+		pq.mu.Unlock()
 		return
 	}
 
@@ -265,6 +265,7 @@ func (pq *PriorityQueue) Stop() {
 			close(req.ErrorChan)
 		}
 	}
+	pq.mu.Unlock()
 
 	pq.wg.Wait()
 }

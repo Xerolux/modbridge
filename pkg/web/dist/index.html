@@ -40,12 +40,24 @@
 
     <!-- Author -->
     <meta name="author" content="ModBridge Team" />
-    <script type="module" crossorigin src="/assets/index-DRA9vI-0.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/style-Cr3jq0ZU.js">
-    <link rel="modulepreload" crossorigin href="/assets/pinia-BLRwtRAy.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-fBsc6Kqa.css">
+    <script type="module" crossorigin src="/assets/index-r2wTHxCB.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-BQ-_32WO.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-ui-core-BJX_zlzZ.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-utils-DQm55mYB.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-ui-theme-Dpc4rBVm.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-vue-DpWXiv0G.js">
+    <link rel="stylesheet" crossorigin href="/assets/vendor-ui-theme-B_-Ydfw7.css">
+    <link rel="stylesheet" crossorigin href="/assets/index-Dni-1Oai.css">
   </head>
   <body>
-    <div id="app"></div>
+    <!-- Inline theme bootstrap — runs before first paint to prevent dark/light flash -->
+    <script>
+      (function () {
+        var t = localStorage.getItem('theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.classList.add(t);
+      })();
+    </script>
+    <div id="app"></div>
   </body>
 </html>

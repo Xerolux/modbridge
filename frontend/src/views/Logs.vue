@@ -8,6 +8,7 @@ const logs = ref([]);
 const isConnected = ref(false);
 const autoScroll = ref(localStorage.getItem('logsAutoScroll') !== 'false');
 const logsContainer = ref(null);
+const loadingInitial = ref(true);
 let disconnectFn = null;
 
 const toggleAutoScroll = () => {
@@ -15,11 +16,14 @@ const toggleAutoScroll = () => {
 };
 
 const fetchInitialLogs = async () => {
+  loadingInitial.value = true;
   try {
     const res = await axios.get('/api/logs');
     logs.value = res.data || [];
   } catch (e) {
     console.error('Failed to fetch initial logs', e);
+  } finally {
+    loadingInitial.value = false;
   }
 };
 
@@ -102,12 +106,23 @@ watch(logs, (newVal) => {
     </section>
 
     <!-- ── Loading ───────────────────────────────────────────────── -->
-    <div v-if="logs.length === 0" class="glass-panel rounded-[28px] p-10">
+    <div v-if="loadingInitial" class="glass-panel rounded-[28px] p-10">
       <div class="flex min-h-[320px] flex-col items-center justify-center text-center relative z-[1]">
         <div class="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-[var(--bg-panel-item)] border border-[var(--border-subtle)]">
           <i class="pi pi-spin pi-spinner text-3xl text-[var(--accent)]"></i>
         </div>
         <p class="text-[var(--text-secondary)] text-sm">Logs werden geladen…</p>
+      </div>
+    </div>
+
+    <!-- ── Empty state ───────────────────────────────────────────── -->
+    <div v-else-if="logs.length === 0" class="glass-panel rounded-[28px] p-10">
+      <div class="flex min-h-[320px] flex-col items-center justify-center text-center relative z-[1]">
+        <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--bg-panel-item)] border border-[var(--border-subtle)]">
+          <i class="pi pi-inbox text-2xl text-[var(--text-muted)]"></i>
+        </div>
+        <h3 class="text-lg font-semibold text-[var(--text-primary)]">Keine Logs vorhanden</h3>
+        <p class="mt-2 text-sm text-[var(--text-muted)] max-w-sm">Es wurden noch keine Log-Einträge empfangen.</p>
       </div>
     </div>
 

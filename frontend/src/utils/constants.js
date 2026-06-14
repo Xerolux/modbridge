@@ -34,7 +34,7 @@ export const GRID_CONFIG = {
 
 // EventSource Configuration
 export const EVENT_SOURCE_CONFIG = {
-  MAX_RECONNECT_ATTEMPTS: 10000,   // Retry indefinitely to recover from backend restarts
+  MAX_RECONNECT_ATTEMPTS: 20,      // Limit reconnect attempts to avoid infinite loops
   INITIAL_DELAY: 1000,             // Initial delay before reconnect
   MAX_DELAY: 10000                 // Maximum delay between reconnects (10s)
 }

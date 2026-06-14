@@ -10,6 +10,9 @@ function getCookie(name) {
 }
 
 axios.interceptors.request.use(config => {
+    if (config.skipAuth) {
+        return config;
+    }
     const csrfToken = getCookie('csrf_token');
     if (csrfToken) {
         config.headers['X-CSRF-Token'] = csrfToken;
@@ -22,7 +25,7 @@ axios.interceptors.request.use(config => {
 axios.interceptors.response.use(
     response => response,
     error => {
-        if (error.response && error.response.status === 401) {
+        if (error.response && error.response.status === 401 && !error.config?.skipAuth) {
             emitUnauthorized();
             if (window.location.hash !== '#/login') {
                 window.location.replace('/#/login');

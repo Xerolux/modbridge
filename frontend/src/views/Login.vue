@@ -4,7 +4,10 @@ import { useAuthStore } from '../stores/auth';
 import { useRouter } from 'vue-router';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
+import { useI18n } from 'vue-i18n';
 import axios from '../axios.js';
+
+const { t } = useI18n();
 
 const username = ref('');
 const password = ref('');
@@ -33,7 +36,7 @@ const handleLogin = async () => {
   if (result.success) {
     router.push('/');
   } else {
-    error.value = result.message || 'Ungültige Anmeldedaten';
+    error.value = result.message || t('login.invalidCredentials');
   }
 };
 </script>
@@ -56,29 +59,29 @@ const handleLogin = async () => {
       <!-- Form card -->
       <div class="login-card flex flex-col gap-5">
         <p class="text-sm text-center text-[var(--text-secondary)]">
-          {{ multiUser ? 'Mit Zugangsdaten anmelden' : 'Passwort eingeben um fortzufahren' }}
+          {{ multiUser ? t('login.loginWithCredentials') : t('login.enterPassword') }}
         </p>
 
         <div v-if="multiUser" class="flex flex-col gap-2">
-          <label for="login-username" class="login-label">Benutzername</label>
+          <label for="login-username" class="login-label">{{ t('login.username') }}</label>
           <InputText
             id="login-username"
             v-model="username"
             @keyup.enter="handleLogin"
-            placeholder="benutzername"
+            :placeholder="t('login.usernamePlaceholder')"
             class="w-full"
             autocomplete="username"
           />
         </div>
 
         <div class="flex flex-col gap-2">
-          <label for="login-password" class="login-label">Passwort</label>
+          <label for="login-password" class="login-label">{{ t('login.password') }}</label>
           <InputText
             id="login-password"
             v-model="password"
             type="password"
             @keyup.enter="handleLogin"
-            placeholder="••••••••"
+            :placeholder="t('login.passwordPlaceholder')"
             class="w-full"
             autocomplete="current-password"
           />
@@ -90,7 +93,7 @@ const handleLogin = async () => {
         </div>
 
         <Button
-          label="Anmelden"
+          :label="t('login.login')"
           icon="pi pi-sign-in"
           :loading="loading"
           @click="handleLogin"

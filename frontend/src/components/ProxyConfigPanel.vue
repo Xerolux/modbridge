@@ -154,21 +154,24 @@
       </div>
     </div>
   </div>
+  <ConfirmDialog />
 </template>
 
 <script setup>
 import { ref, reactive, onUnmounted } from 'vue';
-
-let dragRafId = null;
-let pendingDragX = 0;
-let pendingDragY = 0;
 import InputNumber from 'primevue/inputnumber';
 import Checkbox from 'primevue/checkbox';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
+import ConfirmDialog from 'primevue/confirmdialog';
 import { useToast } from 'primevue/usetoast';
+import { useConfirm } from 'primevue/useconfirm';
 import Toast from 'primevue/toast';
 import axios from '../axios.js';
+
+let dragRafId = null;
+let pendingDragX = 0;
+let pendingDragY = 0;
 
 const props = defineProps({
   visible: {
@@ -183,6 +186,7 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'refresh']);
 const toast = useToast();
+const confirm = useConfirm();
 
 const minimized = ref(false);
 const position = reactive({ x: Math.max(0, window.innerWidth - 420), y: 100 });
@@ -311,16 +315,26 @@ const applyBatchConfig = async () => {
 };
 
 const batchAction = async (action) => {
-  applying.value = true;
-  try {
-    await axios.post('/api/proxies/control', { action });
-    toast.add({ severity: 'success', summary: 'Erfolg', detail: `Aktion "${action}" ausgeführt`, life: 3000 });
-    emit('refresh');
-  } catch (error) {
-    toast.add({ severity: 'error', summary: 'Fehler', detail: error.response?.data || error.message, life: 5000 });
-  } finally {
-    applying.value = false;
-  }
+  const message = action === 'start_all'
+    ? 'Sollen wirklich alle ausgewählten Proxies gestartet werden?'
+    : 'Sollen wirklich alle ausgewählten Proxies gestoppt werden?';
+  confirm.require({
+    message,
+    header: 'Batch-Aktion bestätigen',
+    icon: 'pi pi-exclamation-triangle',
+    accept: async () => {
+      applying.value = true;
+      try {
+        await axios.post('/api/proxies/control', { action });
+        toast.add({ severity: 'success', summary: 'Erfolg', detail: `Aktion "${action}" ausgeführt`, life: 3000 });
+        emit('refresh');
+      } catch (error) {
+        toast.add({ severity: 'error', summary: 'Fehler', detail: error.response?.data || error.message, life: 5000 });
+      } finally {
+        applying.value = false;
+      }
+    }
+  });
 };
 
 onUnmounted(() => {

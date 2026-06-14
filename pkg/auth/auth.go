@@ -135,7 +135,8 @@ func (a *Authenticator) GetSession(token string) *Session {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	if session, ok := a.sessions[token]; ok {
-		return &session
+		copy := session
+		return &copy
 	}
 	return nil
 }

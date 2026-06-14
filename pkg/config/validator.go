@@ -17,6 +17,13 @@ import (
 	"strings"
 )
 
+var (
+	idRegex       = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+	hostnameRegex = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$`)
+	emailRegex    = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+	tagRegex      = regexp.MustCompile(`^[a-zA-Z0-9_\- ]+$`)
+)
+
 // ValidationError represents a configuration validation error with details
 type ValidationError struct {
 	Field   string `json:"field"`
@@ -457,9 +464,7 @@ func (v *Validator) IsValidID(id string) bool {
 	if id == "" {
 		return false
 	}
-	// Alphanumeric, hyphens, and underscores only
-	matched, _ := regexp.MatchString(`^[a-zA-Z0-9_-]+$`, id)
-	return matched
+	return idRegex.MatchString(id)
 }
 
 // IsValidIP checks if a string is a valid IP address (v4 or v6)
@@ -484,13 +489,7 @@ func (v *Validator) IsValidHostname(hostname string) bool {
 	if hostname == "" {
 		return false
 	}
-
-	// Basic hostname validation
-	// RFC 1123: hostname can contain letters, digits, hyphens, and dots
-	// Must not start or end with hyphen
-	// Must not have consecutive dots
-	matched, _ := regexp.MatchString(`^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$`, hostname)
-	return matched
+	return hostnameRegex.MatchString(hostname)
 }
 
 // IsValidPort checks if a string is a valid port specification
@@ -510,14 +509,14 @@ func (v *Validator) IsValidPort(portStr string) bool {
 
 // ParseHostPort parses a host:port string
 func (v *Validator) ParseHostPort(addr string) (host string, port int, err error) {
-	// Split by last colon to handle IPv6 addresses
-	lastColon := strings.LastIndex(addr, ":")
-	if lastColon == -1 {
-		return "", 0, errors.New("missing port")
+	if addr == "" {
+		return "", 0, errors.New("missing address")
 	}
 
-	host = addr[:lastColon]
-	portStr := addr[lastColon+1:]
+	host, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "", 0, fmt.Errorf("invalid address: %w", err)
+	}
 
 	port, err = strconv.Atoi(portStr)
 	if err != nil {
@@ -558,8 +557,6 @@ func (v *Validator) IsValidOrigin(origin string) bool {
 
 // IsValidEmail checks if a string is a valid email address
 func (v *Validator) IsValidEmail(email string) bool {
-	// Basic email validation
-	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 	return emailRegex.MatchString(email)
 }
 
@@ -568,9 +565,7 @@ func (v *Validator) IsValidTag(tag string) bool {
 	if tag == "" {
 		return false
 	}
-	// Alphanumeric, hyphens, underscores, and spaces allowed
-	matched, _ := regexp.MatchString(`^[a-zA-Z0-9_\- ]+$`, tag)
-	return matched
+	return tagRegex.MatchString(tag)
 }
 
 // IsValidPath checks if a string is a valid file path

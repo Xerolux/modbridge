@@ -781,6 +781,11 @@ func (s *Server) handleProxiesStream(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 	s.log.Info("API", fmt.Sprintf("handleProxies called: %s %s", r.Method, r.URL.Path))
 
+	if s.mgr == nil {
+		http.Error(w, "Proxy manager unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
 	if r.Method == http.MethodGet {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(s.mgr.GetProxies()); err != nil {
@@ -811,7 +816,11 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if req.Enabled && !req.Paused {
-			_ = s.mgr.StartProxy(req.ID)
+			if err := s.mgr.StartProxy(req.ID); err != nil {
+				s.log.Error(req.ID, fmt.Sprintf("Failed to start proxy after creation: %v", err))
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -962,7 +971,9 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 	case "stop":
 		err = s.mgr.StopProxy(req.ID)
 	case "restart":
-		_ = s.mgr.StopProxy(req.ID)
+		if err = s.mgr.StopProxy(req.ID); err != nil {
+			break
+		}
 		time.Sleep(100 * time.Millisecond)
 		err = s.mgr.StartProxy(req.ID)
 	case "pause":

@@ -106,7 +106,11 @@ func (cb *CircuitBreaker) AllowRequest() bool {
 		cb.rejectedRequests++
 		return false
 	case StateHalfOpen:
-		return cb.successCount < cb.halfOpenAttempts
+		if cb.successCount >= cb.halfOpenAttempts {
+			cb.transitionToClosed()
+			return true
+		}
+		return true
 	}
 
 	return false

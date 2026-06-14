@@ -63,6 +63,7 @@ func (s *Server) handleConfigExport(w http.ResponseWriter, r *http.Request) {
 
 	cfg := s.cfgMgr.Get()
 	cfg.AdminPassHash = ""
+	cfg.EmailPassword = ""
 	if err := json.NewEncoder(w).Encode(cfg); err != nil {
 		s.log.Error("API", fmt.Sprintf("Failed to encode config export response: %v", err))
 	}
@@ -87,8 +88,10 @@ func (s *Server) handleConfigRollback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Restart all proxies with the restored configuration.
-	s.mgr.StopAll()
-	s.mgr.Initialize()
+	if s.mgr != nil {
+		s.mgr.StopAll()
+		s.mgr.Initialize()
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]string{"status": "rolled back"}); err != nil {
@@ -108,21 +111,29 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := s.cfgMgr.Update(func(c *config.Config) error {
-		pass := c.AdminPassHash
-		*c = newCfg
-		c.AdminPassHash = pass
-		return nil
-	})
+	currentCfg := s.cfgMgr.Get()
+	newCfg.AdminPassHash = currentCfg.AdminPassHash
+	newCfg.EmailPassword = currentCfg.EmailPassword
 
-	if err != nil {
+	v := config.NewValidator()
+	if err := v.Validate(&newCfg); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := s.cfgMgr.Update(func(c *config.Config) error {
+		*c = newCfg
+		return nil
+	}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Stop all existing proxies before re-initializing with new config
-	s.mgr.StopAll()
-	s.mgr.Initialize()
+	if s.mgr != nil {
+		s.mgr.StopAll()
+		s.mgr.Initialize()
+	}
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -260,6 +271,12 @@ func (s *Server) handlePortDiagnostics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	const maxDiagnosticPorts = 1000
+	if len(req.Ports) > maxDiagnosticPorts {
+		http.Error(w, fmt.Sprintf("too many ports (max %d)", maxDiagnosticPorts), http.StatusBadRequest)
+		return
+	}
+
 	pm := portmanager.NewPortManager()
 	results := pm.CheckPorts(req.Ports)
 
@@ -350,13 +367,15 @@ func (s *Server) handleCheckProxyPorts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	freeCount := countFreePortsInMap(results)
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"ports": results,
 		"summary": map[string]int{
 			"total":  len(ports),
-			"free":   countFreePortsInMap(results),
-			"in_use": len(ports) - countFreePortsInMap(results),
+			"free":   freeCount,
+			"in_use": len(ports) - freeCount,
 		},
 	})
 }
@@ -422,9 +441,13 @@ func (s *Server) handleAuditLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	limit := 50
+	const maxAuditLimit = 1000
 	if v := r.URL.Query().Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			limit = n
+			if limit > maxAuditLimit {
+				limit = maxAuditLimit
+			}
 		}
 	}
 	offset := 0

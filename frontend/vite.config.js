@@ -14,7 +14,11 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes('node_modules')) return;
           if (id.includes('gridstack')) return 'vendor-grid';
-          if (id.includes('primevue') || id.includes('primeicons') || id.includes('@primeuix')) return 'vendor-ui';
+          if (id.includes('@primeuix/themes') || id.includes('primeicons')) return 'vendor-ui-theme';
+          if (id.includes('primevue/datatable') || id.includes('primevue/column') || id.includes('primevue/paginator')) return 'vendor-ui-data';
+          if (id.includes('primevue/dialog') || id.includes('primevue/confirmdialog') || id.includes('primevue/menu')) return 'vendor-ui-overlay';
+          if (id.includes('primevue/inputtext') || id.includes('primevue/inputnumber') || id.includes('primevue/checkbox') || id.includes('primevue/dropdown') || id.includes('primevue/chips') || id.includes('primevue/badge') || id.includes('primevue/tabs')) return 'vendor-ui-form';
+          if (id.includes('primevue')) return 'vendor-ui-core';
           if (id.includes('/vue/') || id.includes('vue-router') || id.includes('pinia')) return 'vendor-vue';
           if (id.includes('vue-i18n') || id.includes('vue-draggable-plus')) return 'vendor-utils';
         },

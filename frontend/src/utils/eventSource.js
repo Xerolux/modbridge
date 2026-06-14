@@ -46,7 +46,7 @@ export function useEventSource(url, options = {}) {
         }
       };
 
-      eventSource.value.onerror = () => {
+      eventSource.value.onerror = (err) => {
         isConnected.value = false;
 
         // Don't reconnect if the user explicitly disconnected
@@ -55,6 +55,13 @@ export function useEventSource(url, options = {}) {
         // Stop retrying after max attempts to prevent infinite loops
         if (reconnectAttempts >= maxReconnectAttempts) {
           error.value = new Error(`SSE: Max reconnect attempts (${maxReconnectAttempts}) reached`);
+          disconnect();
+          return;
+        }
+
+        // Give up on authentication errors; they will not recover by reconnecting
+        if (err?.target?.readyState === EventSource.CLOSED && err?.target?.status === 401) {
+          disconnect();
           return;
         }
 

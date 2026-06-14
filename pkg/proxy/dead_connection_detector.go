@@ -287,14 +287,16 @@ func (d *DeadConnectionDetector) GetStats() map[string]interface{} {
 // Stop stops the detector
 func (d *DeadConnectionDetector) Stop() {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 
 	if !d.running {
+		d.mu.Unlock()
 		return
 	}
 
 	d.running = false
 	d.cancel()
+	d.mu.Unlock()
+
 	d.wg.Wait()
 }
 
