@@ -1,8 +1,23 @@
 <template>
   <div class="p-4 sm:p-6 flex flex-col gap-4">
     <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-      <h1 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200">User Management</h1>
-      <Button v-if="canCreateUsers" @click="openCreateModal" icon="pi pi-plus" label="Add User" class="w-full sm:w-auto" />
+      <div class="flex items-center gap-3">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200">User Management</h1>
+        <div v-if="lastRefreshed" class="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+          <i class="pi pi-refresh text-[10px]" :class="{ 'pi-spin': isRefreshing }"></i>
+          <span>{{ t('common.lastRefreshed') }}: {{ timeAgo }}</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <Button
+          icon="pi pi-refresh"
+          severity="secondary"
+          :loading="isRefreshing"
+          @click="refreshNow"
+          v-tooltip="t('common.refreshNow')"
+        />
+        <Button v-if="canCreateUsers" @click="openCreateModal" icon="pi pi-plus" label="Add User" class="w-full sm:w-auto" />
+      </div>
     </div>
 
     <div v-if="loading" class="flex justify-center py-12">
@@ -223,7 +238,8 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import axios from '../../axios.js';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -240,6 +256,10 @@ import ConfirmDialog from 'primevue/confirmdialog';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 import { useAuthStore } from '../../stores/auth';
+import { useAutoRefresh } from '../../utils/useAutoRefresh';
+import { REFRESH_INTERVALS } from '../../utils/constants';
+
+const { t } = useI18n();
 
 const users = ref([]);
 const loading = ref(true);
@@ -438,7 +458,35 @@ const getRoleSeverity = (role) => {
   return severities[role] || 'secondary'
 }
 
+const silentFetchUsers = async () => {
+  try {
+    const response = await axios.get('/api/users');
+    users.value = response.data || [];
+  } catch (e) {
+    /* silent */
+  }
+};
+
+const { lastRefreshed, isRefreshing, refreshNow } = useAutoRefresh(silentFetchUsers, REFRESH_INTERVALS.USERS);
+
+const timeAgo = ref('');
+let timeAgoTimer = null;
+
+const updateTimeAgo = () => {
+  if (!lastRefreshed.value) { timeAgo.value = ''; return; }
+  const diff = Math.floor((Date.now() - lastRefreshed.value.getTime()) / 1000);
+  if (diff < 5) { timeAgo.value = t('common.justNow'); return; }
+  if (diff < 60) { timeAgo.value = t('common.secondsAgo', { n: diff }); return; }
+  if (diff < 120) { timeAgo.value = t('common.minuteAgo'); return; }
+  timeAgo.value = t('common.minutesAgo', { n: Math.floor(diff / 60) });
+};
+
 onMounted(() => {
   loadUsers();
+  timeAgoTimer = setInterval(updateTimeAgo, 5000);
+});
+
+onUnmounted(() => {
+  if (timeAgoTimer) clearInterval(timeAgoTimer);
 });
 </script>

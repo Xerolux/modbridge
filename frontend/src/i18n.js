@@ -244,7 +244,17 @@ const de = {
     disabled: 'Deaktiviert',
     language: 'Sprache',
     german: 'Deutsch',
-    english: 'Englisch'
+    english: 'Englisch',
+    lastRefreshed: 'Zuletzt aktualisiert',
+    refreshNow: 'Jetzt aktualisieren',
+    autoRefresh: 'Auto-Aktualisierung',
+    live: 'Live',
+    connected: 'Verbunden',
+    disconnected: 'Getrennt',
+    justNow: 'Gerade eben',
+    secondsAgo: 'vor {n}s',
+    minuteAgo: 'vor 1 Min.',
+    minutesAgo: 'vor {n} Min.'
   },
 
   // Units
@@ -499,7 +509,17 @@ const en = {
     info: 'Information',
     language: 'Language',
     german: 'German',
-    english: 'English'
+    english: 'English',
+    lastRefreshed: 'Last refreshed',
+    refreshNow: 'Refresh now',
+    autoRefresh: 'Auto-refresh',
+    live: 'Live',
+    connected: 'Connected',
+    disconnected: 'Disconnected',
+    justNow: 'Just now',
+    secondsAgo: '{n}s ago',
+    minuteAgo: '1 min ago',
+    minutesAgo: '{n} min ago'
   },
 
   // Units

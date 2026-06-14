@@ -1,7 +1,13 @@
 <template>
   <div class="p-2 sm:p-4 flex flex-col gap-4 w-full">
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-2 sm:mb-4">
-      <h1 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200">Audit Log</h1>
+      <div class="flex items-center gap-3">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200">Audit Log</h1>
+        <div v-if="lastRefreshed" class="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+          <i class="pi pi-refresh text-[10px]" :class="{ 'pi-spin': isRefreshing }"></i>
+          <span>{{ t('common.lastRefreshed') }}: {{ timeAgo }}</span>
+        </div>
+      </div>
       <div class="flex gap-2 w-full sm:w-auto">
         <Button
           label="Export JSON"
@@ -13,7 +19,8 @@
         <Button
           label="Refresh"
           icon="pi pi-refresh"
-          @click="loadLogs"
+          :loading="isRefreshing"
+          @click="refreshNow"
           class="flex-1 sm:flex-none"
         />
       </div>
@@ -113,7 +120,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import axios from '../../axios.js';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -121,6 +129,10 @@ import Button from 'primevue/button';
 import Tag from 'primevue/tag';
 import Toast from 'primevue/toast';
 import { useToast } from 'primevue/usetoast';
+import { useAutoRefresh } from '../../utils/useAutoRefresh';
+import { REFRESH_INTERVALS } from '../../utils/constants';
+
+const { t } = useI18n();
 
 const auditLogs = ref([]);
 const loading = ref(true);
@@ -182,7 +194,35 @@ const getActionSeverity = (action) => {
   return 'secondary';
 };
 
+const silentFetchLogs = async () => {
+  try {
+    const response = await axios.get(`/api/audit/logs?limit=${limit.value}&offset=0`);
+    auditLogs.value = response.data || [];
+  } catch (e) {
+    /* silent */
+  }
+};
+
+const { lastRefreshed, isRefreshing, refreshNow } = useAutoRefresh(silentFetchLogs, REFRESH_INTERVALS.AUDIT);
+
+const timeAgo = ref('');
+let timeAgoTimer = null;
+
+const updateTimeAgo = () => {
+  if (!lastRefreshed.value) { timeAgo.value = ''; return; }
+  const diff = Math.floor((Date.now() - lastRefreshed.value.getTime()) / 1000);
+  if (diff < 5) { timeAgo.value = t('common.justNow'); return; }
+  if (diff < 60) { timeAgo.value = t('common.secondsAgo', { n: diff }); return; }
+  if (diff < 120) { timeAgo.value = t('common.minuteAgo'); return; }
+  timeAgo.value = t('common.minutesAgo', { n: Math.floor(diff / 60) });
+};
+
 onMounted(() => {
   loadLogs();
+  timeAgoTimer = setInterval(updateTimeAgo, 5000);
+});
+
+onUnmounted(() => {
+  if (timeAgoTimer) clearInterval(timeAgoTimer);
 });
 </script>

@@ -1,6 +1,12 @@
 <template>
     <div class="p-2 sm:p-4 flex flex-col gap-4 w-full">
-        <h1 class="text-xl sm:text-2xl font-bold mb-2 sm:mb-4 text-gray-800 dark:text-gray-200">{{ t('system.title') }}</h1>
+        <div class="flex items-center gap-3 mb-2 sm:mb-4">
+          <h1 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200">{{ t('system.title') }}</h1>
+          <div v-if="lastRefreshed" class="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+            <i class="pi pi-refresh text-[10px]" :class="{ 'pi-spin': isRefreshing }"></i>
+            <span>{{ t('common.lastRefreshed') }}: {{ timeAgo }}</span>
+          </div>
+        </div>
 
         <div v-if="loading" class="flex justify-center">
             <i class="pi pi-spin pi-spinner text-3xl sm:text-4xl text-blue-500"></i>
@@ -145,7 +151,7 @@
                 <template #title><div class="text-lg sm:text-xl">{{ t('system.serverControl') }}</div></template>
                 <template #content>
                     <div class="flex flex-col gap-3">
-                        <Button @click="refreshInfo" :label="t('system.refresh')" icon="pi pi-refresh" class="w-full p-3 sm:p-2" />
+                        <Button @click="refreshNow" :label="t('system.refresh')" icon="pi pi-refresh" :loading="isRefreshing" class="w-full p-3 sm:p-2" />
                         <Button v-if="auth.hasPermission('system:restart')" @click="restartSystem" :label="t('system.restart')" icon="pi pi-power-off" severity="warning" class="w-full p-3 sm:p-2" />
                     </div>
                 </template>
@@ -212,74 +218,88 @@
     </div>
 </template>
 
-<script setup>
- import { ref, onMounted, onUnmounted } from 'vue';
- import axios from '../axios.js';
- import Card from 'primevue/card';
- import Button from 'primevue/button';
- import Toast from 'primevue/toast';
- import ConfirmDialog from 'primevue/confirmdialog';
- import { useToast } from 'primevue/usetoast';
- import { useConfirm } from 'primevue/useconfirm';
- import { downloadBlob } from '../utils/helpers';
- import { useAuthStore } from '../stores/auth';
- import { useI18n } from 'vue-i18n';
+ <script setup>
+  import { ref, onMounted, onUnmounted } from 'vue';
+  import axios from '../axios.js';
+  import Card from 'primevue/card';
+  import Button from 'primevue/button';
+  import Toast from 'primevue/toast';
+  import ConfirmDialog from 'primevue/confirmdialog';
+  import { useToast } from 'primevue/usetoast';
+  import { useConfirm } from 'primevue/useconfirm';
+  import { downloadBlob } from '../utils/helpers';
+  import { useAuthStore } from '../stores/auth';
+  import { useI18n } from 'vue-i18n';
+  import { useAutoRefresh } from '../utils/useAutoRefresh';
+  import { REFRESH_INTERVALS } from '../utils/constants';
 
- const auth = useAuthStore();
- const { t } = useI18n();
+  const auth = useAuthStore();
+  const { t } = useI18n();
 
- const loading = ref(true);
- const toast = useToast();
- const confirm = useConfirm();
+  const loading = ref(true);
+  const toast = useToast();
+  const confirm = useConfirm();
 
- const systemInfo = ref({
-     uptime_seconds: 0,
-     uptime_human: '',
-     goroutines: 0,
-     memory_alloc_mb: 0,
-     memory_sys_mb: 0,
-     memory_gc_mb: 0,
-     num_cpu: 0,
-     total_proxies: 0,
-     running_proxies: 0,
-     go_version: '',
-     os: '',
-     arch: ''
- });
+  const systemInfo = ref({
+      uptime_seconds: 0,
+      uptime_human: '',
+      goroutines: 0,
+      memory_alloc_mb: 0,
+      memory_sys_mb: 0,
+      memory_gc_mb: 0,
+      num_cpu: 0,
+      total_proxies: 0,
+      running_proxies: 0,
+      go_version: '',
+      os: '',
+      arch: ''
+  });
 
- const config = ref({
-     log_level: 'INFO',
-     debug_mode: false,
-     metrics_enabled: true,
-     tls_enabled: false,
-     rate_limit_enabled: true,
-     ip_whitelist_enabled: false,
-     ip_blacklist_enabled: false,
-     email_enabled: false
- });
+  const config = ref({
+      log_level: 'INFO',
+      debug_mode: false,
+      metrics_enabled: true,
+      tls_enabled: false,
+      rate_limit_enabled: true,
+      ip_whitelist_enabled: false,
+      ip_blacklist_enabled: false,
+      email_enabled: false
+  });
 
- const portCheckLoading = ref(false);
- const portStatus = ref({});
- const blockedPorts = ref([]);
+  const portCheckLoading = ref(false);
+  const portStatus = ref({});
+  const blockedPorts = ref([]);
 
- let refreshInterval = null;
+  const fetchInfo = async () => {
+      try {
+          const [infoRes, configRes] = await Promise.all([
+              axios.get('/api/system/info'),
+              axios.get('/api/config/system')
+          ]);
+          systemInfo.value = infoRes.data;
+          config.value = configRes.data;
+      } catch (e) {
+          console.error('Failed to fetch system info', e);
+      }
+  };
 
- const fetchInfo = async () => {
-     try {
-         const [infoRes, configRes] = await Promise.all([
-             axios.get('/api/system/info'),
-             axios.get('/api/config/system')
-         ]);
-         systemInfo.value = infoRes.data;
-         config.value = configRes.data;
-     } catch (e) {
-         console.error('Failed to fetch system info', e);
-     }
- };
+  const { lastRefreshed, isRefreshing, refreshNow } = useAutoRefresh(fetchInfo, REFRESH_INTERVALS.SYSTEM_INFO);
 
- const refreshInfo = () => {
-     fetchInfo();
- };
+  const timeAgo = ref('');
+  let timeAgoTimer = null;
+
+  const updateTimeAgo = () => {
+    if (!lastRefreshed.value) { timeAgo.value = ''; return; }
+    const diff = Math.floor((Date.now() - lastRefreshed.value.getTime()) / 1000);
+    if (diff < 5) { timeAgo.value = t('common.justNow'); return; }
+    if (diff < 60) { timeAgo.value = t('common.secondsAgo', { n: diff }); return; }
+    if (diff < 120) { timeAgo.value = t('common.minuteAgo'); return; }
+    timeAgo.value = t('common.minutesAgo', { n: Math.floor(diff / 60) });
+  };
+
+  const refreshInfo = () => {
+      refreshNow();
+  };
 
   const downloadLogs = async () => {
       try {
@@ -425,12 +445,10 @@ const releasePort = (portInfo) => {
   onMounted(async () => {
       await fetchInfo();
       loading.value = false;
-      refreshInterval = setInterval(fetchInfo, 15000);
+      timeAgoTimer = setInterval(updateTimeAgo, 5000);
   });
 
- onUnmounted(() => {
-     if (refreshInterval) {
-         clearInterval(refreshInterval);
-     }
- });
- </script>
+  onUnmounted(() => {
+      if (timeAgoTimer) clearInterval(timeAgoTimer);
+  });
+  </script>

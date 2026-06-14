@@ -54,3 +54,12 @@ export const ANIMATION_DURATION = {
   NORMAL: 300,        // Normal animation
   SLOW: 500           // Slow animation
 }
+
+// Auto-Refresh Intervals (in milliseconds)
+export const REFRESH_INTERVALS = {
+  DEVICES: 15000,     // Devices page: refresh every 15s
+  SYSTEM_INFO: 15000, // System Info page: refresh every 15s
+  USERS: 30000,       // Users page: refresh every 30s
+  AUDIT: 30000,       // Audit page: refresh every 30s
+  CONTROL: 10000,     // Control page: refresh every 10s
+}

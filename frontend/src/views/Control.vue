@@ -5,9 +5,13 @@
         <section class="glass-hero rounded-[28px] p-5 sm:p-6">
             <div class="relative z-[1] flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
                 <div class="space-y-3">
-                    <div class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.28em] text-[var(--text-muted)]">
+                    <div class="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.28em] text-[var(--text-muted)]">
                         <i class="pi pi-sliders-h"></i>
                         Control Center
+                        <span v-if="sseConnected !== null" class="flex items-center gap-1.5 ml-1">
+                            <span class="status-dot" :class="sseConnected ? 'status-dot--running' : 'status-dot--error'"></span>
+                            <span>{{ sseConnected ? t('common.connected') : t('common.disconnected') }}</span>
+                        </span>
                     </div>
                     <div>
                         <h1 class="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{{ $t('control.title') }}</h1>
@@ -328,6 +332,7 @@ const proxies = ref([]);
 const loading = ref(true);
 const editMode = ref(false);
 const searchQuery = ref('');
+const sseConnected = ref(false);
 
 const runningCount = computed(() => proxies.value.filter(p => p.status === 'Running').length);
 const stoppedCount = computed(() => proxies.value.filter(p => p.status === 'Stopped').length);
@@ -450,6 +455,7 @@ onMounted(async () => {
     disconnectFn = disconnect;
 
     unwatchConnected = watch(isConnected, (connected) => {
+        sseConnected.value = connected;
         if (!connected) {
             console.warn('SSE connection lost');
         }
