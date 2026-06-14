@@ -24,7 +24,7 @@
     "@tailwindcss/postcss": "^4.3.0",
     "@vitejs/plugin-vue": "^6.0.5",
     "autoprefixer": "^10.4.27",
-    "esbuild": "^0.28.0",
+    "esbuild": "^0.28.1",
     "postcss": "^8.5.14",
     "tailwindcss": "^4.3.0",
     "vite": "^8.0.5"
