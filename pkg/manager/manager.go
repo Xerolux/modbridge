@@ -277,7 +277,9 @@ func (m *Manager) UpdateProxy(cfg config.ProxyConfig) error {
 
 	// Start if it was enabled and not paused
 	if cfg.Enabled && !cfg.Paused {
-		p.Start()
+		if err := p.Start(); err != nil {
+			return fmt.Errorf("proxy %s failed to start after update: %w", cfg.ID, err)
+		}
 	}
 
 	// Broadcast event

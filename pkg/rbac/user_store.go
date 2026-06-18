@@ -74,6 +74,7 @@ func NewUserStore() *UserStore {
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
 		Active:       true,
+		Permissions:  copyPermissions(RolePermissions[RoleAdmin]),
 	}
 
 	store.users[admin.ID] = admin
@@ -118,7 +119,7 @@ func (s *UserStore) CreateUser(username, email, password string, role Role) (*Us
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
 		Active:       true,
-		Permissions:  RolePermissions[role],
+		Permissions:  copyPermissions(RolePermissions[role]),
 	}
 
 	s.users[id] = user
@@ -202,7 +203,7 @@ func (s *UserStore) UpdateUser(id string, updates func(*User) error) error {
 	user.UpdatedAt = time.Now()
 
 	// Update permissions based on role
-	user.Permissions = RolePermissions[user.Role]
+	user.Permissions = copyPermissions(RolePermissions[user.Role])
 
 	return nil
 }
@@ -264,14 +265,17 @@ func (s *UserStore) AuthenticateUser(username, password string) (*User, error) {
 		return nil, ErrInvalidCredentials
 	}
 
-	return user, nil
+	// Return a copy to avoid concurrent modification (consistent with the
+	// other read accessors, which all copy before returning).
+	copy := *user
+	return &copy, nil
 }
 
 // ChangeUserRole changes a user's role
 func (s *UserStore) ChangeUserRole(userID string, newRole Role) error {
 	return s.UpdateUser(userID, func(u *User) error {
 		u.Role = newRole
-		u.Permissions = RolePermissions[newRole]
+		u.Permissions = copyPermissions(RolePermissions[newRole])
 		return nil
 	})
 }
@@ -525,6 +529,15 @@ func GetRolePermissions(role Role) []Permission {
 		return result
 	}
 	return []Permission{}
+}
+
+// copyPermissions returns a fresh slice with its own backing array so a user's
+// Permissions never alias the package-level RolePermissions slices (which would
+// let one user's mutation affect every user sharing that role).
+func copyPermissions(perms []Permission) []Permission {
+	result := make([]Permission, len(perms))
+	copy(result, perms)
+	return result
 }
 
 // UserStats represents statistics about users

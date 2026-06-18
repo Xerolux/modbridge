@@ -296,7 +296,7 @@ func (s *Server) handlePortRelease(w http.ResponseWriter, r *http.Request) {
 		PID  int `json:"pid"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -305,8 +305,21 @@ func (s *Server) handlePortRelease(w http.ResponseWriter, r *http.Request) {
 
 	// Verify the port is actually in use before killing
 	portInfo := pm.CheckPort(req.Port)
-	if portInfo.IsOpen {
+	if !portInfo.IsOpen {
 		http.Error(w, "Port is already free", http.StatusConflict)
+		return
+	}
+
+	// Security: the PID to kill must actually be the process listening on
+	// req.Port. Without this check any authenticated user could kill arbitrary
+	// system processes (sshd, the database, PID 1, ...) by supplying any PID.
+	ownerPID := portInfo.ProcessPID
+	if ownerPID <= 0 {
+		http.Error(w, "Cannot determine the process owning this port", http.StatusBadRequest)
+		return
+	}
+	if req.PID != ownerPID {
+		http.Error(w, fmt.Sprintf("PID %d does not own port %d (owner is %d)", req.PID, req.Port, ownerPID), http.StatusBadRequest)
 		return
 	}
 

@@ -20,6 +20,11 @@ type Manager struct {
 	rules       map[string]*AlertRule
 	webhooks    map[string]*WebhookConfig
 	alertBuffer chan *Alert
+	webhookSem  chan struct{}  // bounds concurrent webhook deliveries
+	wg          sync.WaitGroup // tracks in-flight webhook goroutines
+	sendMu      sync.Mutex     // guards alertBuffer sends vs Close
+	closed      bool
+	stopOnce    sync.Once
 }
 
 // AlertRule represents an alert rule
@@ -67,9 +72,23 @@ func NewManager() *Manager {
 		rules:       make(map[string]*AlertRule),
 		webhooks:    make(map[string]*WebhookConfig),
 		alertBuffer: make(chan *Alert, 1000),
+		webhookSem:  make(chan struct{}, 16), // cap concurrent webhook deliveries
 	}
+	m.wg.Add(1)
 	go m.processAlerts()
 	return m
+}
+
+// Close stops the background alert processor and waits for in-flight webhook
+// deliveries to finish. It is safe to call multiple times.
+func (m *Manager) Close() {
+	m.stopOnce.Do(func() {
+		m.sendMu.Lock()
+		m.closed = true
+		close(m.alertBuffer)
+		m.sendMu.Unlock()
+	})
+	m.wg.Wait()
 }
 
 // AddRule adds an alert rule
@@ -126,15 +145,24 @@ func (m *Manager) GetWebhooks() []*WebhookConfig {
 
 // TriggerAlert triggers an alert
 func (m *Manager) TriggerAlert(alert *Alert) {
+	m.sendMu.Lock()
+	if m.closed {
+		m.sendMu.Unlock()
+		return
+	}
 	select {
 	case m.alertBuffer <- alert:
+		m.sendMu.Unlock()
 	default:
+		m.sendMu.Unlock()
 		log.Printf("WARNING: Alert buffer full, dropping alert")
 	}
 }
 
 // processAlerts processes buffered alerts
 func (m *Manager) processAlerts() {
+	defer m.wg.Done()
+
 	for alert := range m.alertBuffer {
 		m.sendAlert(alert)
 	}
@@ -142,17 +170,29 @@ func (m *Manager) processAlerts() {
 
 // sendAlert sends an alert to all configured destinations
 func (m *Manager) sendAlert(alert *Alert) {
+	// Snapshot the webhook configurations (by value) under the read lock so the
+	// goroutines below never race with AddWebhook/RemoveWebhook mutating the
+	// shared *WebhookConfig values.
 	m.mu.RLock()
-	webhooks := make([]*WebhookConfig, 0, len(m.webhooks))
+	webhooks := make([]WebhookConfig, 0, len(m.webhooks))
 	for _, webhook := range m.webhooks {
 		if webhook.Enabled {
-			webhooks = append(webhooks, webhook)
+			webhooks = append(webhooks, *webhook)
 		}
 	}
 	m.mu.RUnlock()
 
-	for _, webhook := range webhooks {
-		go m.sendWebhook(webhook, alert)
+	for i := range webhooks {
+		wh := webhooks[i] // local copy per goroutine
+		m.wg.Add(1)
+		go func() {
+			defer m.wg.Done()
+			// Bound concurrent deliveries so a flood of alerts can't spawn an
+			// unbounded number of goroutines.
+			m.webhookSem <- struct{}{}
+			defer func() { <-m.webhookSem }()
+			m.sendWebhook(&wh, alert)
+		}()
 	}
 }
 
@@ -201,8 +241,10 @@ func (m *Manager) sendWebhook(webhook *WebhookConfig, alert *Alert) {
 
 // EvaluateMetric evaluates a metric against alert rules
 func (m *Manager) EvaluateMetric(metricName string, value float64, labels map[string]string) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	// Use the write lock: triggering a rule mutates rule.LastTriggered, so an
+	// RLock here would race with concurrent evaluators.
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	for _, rule := range m.rules {
 		if !rule.Enabled {

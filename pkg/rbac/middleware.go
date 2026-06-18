@@ -161,14 +161,21 @@ func (m *Middleware) getUserFromRequest(r *http.Request) *User {
 	// Try session cookie
 	sessionToken, err := r.Cookie("session_token")
 	if err == nil && m.authenticator != nil {
-		if m.authenticator.ValidateSession(sessionToken.Value) {
-			// In a full implementation, the session would map to a user ID.
-			// For this implementation, since auth.Session doesn't store user ID natively,
-			// we assume standard admin access if the session is valid,
-			// or we look up the default admin user.
-			user, err := m.store.GetUser("admin")
-			if err == nil {
-				return user
+		// Resolve the user actually bound to the session rather than assuming
+		// every valid session belongs to "admin" (which would be a vertical
+		// privilege-escalation: any logged-in user would gain admin rights).
+		if session := m.authenticator.GetSession(sessionToken.Value); session != nil {
+			lookupKey := session.UserID
+			if lookupKey == "" {
+				lookupKey = session.Username
+			}
+			if lookupKey != "" {
+				if user, err := m.store.GetUser(lookupKey); err == nil {
+					return user
+				}
+				if user, err := m.store.GetUserByUsername(lookupKey); err == nil {
+					return user
+				}
 			}
 		}
 	}

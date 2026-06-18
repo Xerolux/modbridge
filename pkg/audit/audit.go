@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -83,10 +84,11 @@ type FileAuditLogger struct {
 	filePath    string
 	maxFileSize int64
 	currentSize int64
-	enabled     bool
+	enabled     atomic.Bool
 	eventChan   chan *Event
 	wg          sync.WaitGroup
 	stopChan    chan struct{}
+	closeOnce   sync.Once
 }
 
 // FileLoggerConfig holds file audit logger configuration
@@ -131,10 +133,10 @@ func NewFileAuditLogger(cfg FileLoggerConfig) (*FileAuditLogger, error) {
 		filePath:    cfg.FilePath,
 		maxFileSize: cfg.MaxFileSize,
 		currentSize: info.Size(),
-		enabled:     true,
 		eventChan:   make(chan *Event, cfg.BufferSize),
 		stopChan:    make(chan struct{}),
 	}
+	fal.enabled.Store(true)
 
 	// Start background writer
 	fal.wg.Add(1)
@@ -145,7 +147,7 @@ func NewFileAuditLogger(cfg FileLoggerConfig) (*FileAuditLogger, error) {
 
 // Log logs an audit event
 func (fal *FileAuditLogger) Log(event *Event) error {
-	if !fal.enabled {
+	if !fal.enabled.Load() {
 		return nil
 	}
 
@@ -353,24 +355,22 @@ func (fal *FileAuditLogger) rotateLogFile() error {
 
 // Enable enables audit logging
 func (fal *FileAuditLogger) Enable() {
-	fal.mu.Lock()
-	defer fal.mu.Unlock()
-	fal.enabled = true
+	fal.enabled.Store(true)
 }
 
 // Disable disables audit logging
 func (fal *FileAuditLogger) Disable() {
-	fal.mu.Lock()
-	defer fal.mu.Unlock()
-	fal.enabled = false
+	fal.enabled.Store(false)
 }
 
 // Close closes the file audit logger
 func (fal *FileAuditLogger) Close() error {
-	// Signal stop to background writer
-	close(fal.stopChan)
-
-	// Wait for writer to finish
+	fal.closeOnce.Do(func() {
+		// Signal stop to background writer
+		close(fal.stopChan)
+	})
+	// Wait for writer to finish (safe to call from only the first closer;
+	// subsequent callers fall through once the writer has exited).
 	fal.wg.Wait()
 
 	// Close file
@@ -454,9 +454,13 @@ func splitLines(data []byte) [][]byte {
 	return lines
 }
 
+// eventIDCounter guarantees uniqueness when several events are generated within
+// the same nanosecond (common under burst load / coarse clocks).
+var eventIDCounter atomic.Uint64
+
 // generateEventID generates a unique event ID
 func generateEventID() string {
-	return fmt.Sprintf("%d", time.Now().UnixNano())
+	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), eventIDCounter.Add(1))
 }
 
 // EventFilter is used to filter audit events
@@ -500,6 +504,7 @@ type Auditor struct {
 	db            *database.DB
 	mu            sync.Mutex
 	buf           chan *database.AuditLogEntry
+	closed        bool
 	fileLogger    *FileAuditLogger
 	enableFileLog bool
 }
@@ -577,9 +582,19 @@ func (a *Auditor) LogAction(action, resourceType, resourceID, userID, username, 
 		a.fileLogger.Log(fileEvent)
 	}
 
+	// Guard the channel send so it cannot race with Close() closing a.buf
+	// (sending on a closed channel panics). The mutex + closed flag make the
+	// check-and-send atomic with respect to Close's check-and-close.
+	a.mu.Lock()
+	if a.closed {
+		a.mu.Unlock()
+		return
+	}
 	select {
 	case a.buf <- entry:
+		a.mu.Unlock()
 	default:
+		a.mu.Unlock()
 		log.Printf("WARNING: Audit log buffer full, dropping entry")
 	}
 }
@@ -663,7 +678,15 @@ func (a *Auditor) GetFileLogger() *FileAuditLogger {
 
 // Close closes the auditor
 func (a *Auditor) Close() {
+	a.mu.Lock()
+	if a.closed {
+		a.mu.Unlock()
+		return
+	}
+	a.closed = true
 	close(a.buf)
+	a.mu.Unlock()
+
 	if a.fileLogger != nil {
 		a.fileLogger.Close()
 	}

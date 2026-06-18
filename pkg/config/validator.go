@@ -570,9 +570,20 @@ func (v *Validator) IsValidTag(tag string) bool {
 
 // IsValidPath checks if a string is a valid file path
 func (v *Validator) IsValidPath(path string) bool {
-	// Check if path is absolute or relative
-	if filepath.IsAbs(path) {
-		return true
+	if path == "" {
+		return false
+	}
+
+	// Reject Windows drive-relative segments and parent-directory traversal,
+	// which could let a configured backup path escape its intended directory.
+	cleaned := filepath.Clean(path)
+	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+		return false
+	}
+	for _, part := range strings.Split(filepath.ToSlash(cleaned), "/") {
+		if part == ".." {
+			return false
+		}
 	}
 
 	// Check for invalid characters

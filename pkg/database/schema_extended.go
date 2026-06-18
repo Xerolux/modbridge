@@ -7,6 +7,8 @@ package database
 
 import (
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -78,7 +80,13 @@ func (db *DB) migrateUsersTable() error {
 		"ALTER TABLE users ADD COLUMN expires_at DATETIME",
 	}
 	for _, m := range migrations {
-		db.conn.Exec(m)
+		if _, err := db.conn.Exec(m); err != nil {
+			// SQLite returns "duplicate column name: <col>" when the column already
+			// exists — that is the expected idempotent case. Anything else is real.
+			if !strings.Contains(err.Error(), "duplicate column name") {
+				return fmt.Errorf("migration failed (%s): %w", m, err)
+			}
+		}
 	}
 	return nil
 }
@@ -192,7 +200,7 @@ func (db *DB) GetAllUsers() ([]*User, error) {
 		}
 		users = append(users, &user)
 	}
-	return users, nil
+	return users, rows.Err()
 }
 
 // UpdateUser updates a user
@@ -274,7 +282,7 @@ func (db *DB) GetAuditLogs(limit, offset int) ([]*AuditLogEntry, error) {
 		}
 		entries = append(entries, &entry)
 	}
-	return entries, nil
+	return entries, rows.Err()
 }
 
 // SaveConfigVersion saves a configuration version
@@ -327,7 +335,7 @@ func (db *DB) GetConfigVersions(limit int) ([]map[string]interface{}, error) {
 		}
 		versions = append(versions, v)
 	}
-	return versions, nil
+	return versions, rows.Err()
 }
 
 // GetConfigVersionData retrieves the config data for a specific version

@@ -32,7 +32,7 @@ func TestNewFileAuditLogger(t *testing.T) {
 		t.Fatal("Logger is nil")
 	}
 
-	if !logger.enabled {
+	if !logger.enabled.Load() {
 		t.Error("Logger should be enabled by default")
 	}
 }

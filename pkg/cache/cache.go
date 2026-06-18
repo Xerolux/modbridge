@@ -6,6 +6,7 @@
 package cache
 
 import (
+	"strconv"
 	"sync"
 	"time"
 )
@@ -44,12 +45,13 @@ func DefaultConfig() *CacheConfig {
 
 // Cache implements an LRU cache with TTL support
 type Cache struct {
-	mu       sync.RWMutex
-	config   *CacheConfig
-	entries  map[string]*Entry
-	lruList  []string // LRU tracking (least recently used at end)
-	stopChan chan struct{}
-	stats    CacheStats
+	mu        sync.RWMutex
+	config    *CacheConfig
+	entries   map[string]*Entry
+	lruList   []string // LRU tracking (least recently used at end)
+	stopChan  chan struct{}
+	closeOnce sync.Once
+	stats     CacheStats
 }
 
 // CacheStats holds cache statistics
@@ -173,7 +175,9 @@ func (c *Cache) Stats() CacheStats {
 
 // Close stops the cleanup goroutine
 func (c *Cache) Close() error {
-	close(c.stopChan)
+	c.closeOnce.Do(func() {
+		close(c.stopChan)
+	})
 	return nil
 }
 
@@ -186,7 +190,11 @@ func (c *Cache) evictLRU() {
 	// Get LRU key (first in list)
 	key := c.lruList[0]
 	delete(c.entries, key)
-	c.lruList = c.lruList[1:]
+	// Copy-down so the abandoned first element's string header can be GC'd
+	// (a plain [1:] reslice keeps the old backing array alive forever).
+	copy(c.lruList, c.lruList[1:])
+	c.lruList[len(c.lruList)-1] = ""
+	c.lruList = c.lruList[:len(c.lruList)-1]
 	c.stats.Evictions++
 }
 
@@ -270,5 +278,5 @@ func (r *RegisterCache) SetRegister(deviceID string, address uint16, values []ui
 
 // makeRegisterKey creates a cache key for register values
 func makeRegisterKey(deviceID string, address uint16, quantity uint16) string {
-	return deviceID + ":" + string(rune(address)) + ":" + string(rune(quantity))
+	return deviceID + ":" + strconv.Itoa(int(address)) + ":" + strconv.Itoa(int(quantity))
 }

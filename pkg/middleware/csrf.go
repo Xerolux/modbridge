@@ -38,16 +38,23 @@ func NewCSRFMiddleware(secret string) *CSRFMiddleware {
 	return m
 }
 
-// GenerateToken generates a new CSRF token
+// GenerateToken generates a new CSRF token, or returns the still-valid token
+// already bound to the session. Reusing the existing token avoids invalidating
+// tokens held by other concurrent tabs/requests for the same session.
 func (m *CSRFMiddleware) GenerateToken(sessionID string) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if entry, ok := m.csrfTokens[sessionID]; ok && time.Since(entry.createdAt) <= m.maxAge {
+		return entry.token
+	}
+
 	token := generateRandomToken(32)
 	if token == "" {
 		// Retry once — if crypto/rand fails twice the system has a serious problem.
 		token = generateRandomToken(32)
 	}
 	// If both attempts failed, return empty string; the caller must handle this.
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.csrfTokens[sessionID] = csrfEntry{
 		token:     token,
 		createdAt: time.Now(),
