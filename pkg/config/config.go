@@ -85,6 +85,7 @@ type Config struct {
 	WebPort             string        `json:"web_port"`
 	AdminPassHash       string        `json:"admin_pass_hash"`       // Empty means first-run
 	ForcePasswordChange bool          `json:"force_password_change"` // Forces password change on next login
+	MultiUser           bool          `json:"multi_user"`            // Enable DB-backed multi-user authentication
 	Proxies             []ProxyConfig `json:"proxies"`
 
 	LogLevel      string `json:"log_level"`

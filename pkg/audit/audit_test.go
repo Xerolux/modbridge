@@ -67,7 +67,7 @@ func TestFileAuditLogger_Log(t *testing.T) {
 	}
 
 	// Give time for async write
-	time.Sleep(100 * time.Millisecond)
+	logger.Flush()
 
 	// Verify file exists and contains event
 	data, err := os.ReadFile(cfg.FilePath)
@@ -120,7 +120,7 @@ func TestFileAuditLogger_LogAuth(t *testing.T) {
 		t.Errorf("Failed to log failed auth: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	logger.Flush()
 
 	// Verify events
 	data, err := os.ReadFile(cfg.FilePath)
@@ -161,7 +161,7 @@ func TestFileAuditLogger_LogAccess(t *testing.T) {
 		t.Errorf("Failed to log denied access: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	logger.Flush()
 
 	// Verify events
 	data, err := os.ReadFile(cfg.FilePath)
@@ -220,7 +220,7 @@ func TestFileAuditLogger_LogUserAction(t *testing.T) {
 		t.Errorf("Failed to log user action: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	logger.Flush()
 
 	// Verify event
 	data, err := os.ReadFile(cfg.FilePath)
@@ -268,7 +268,7 @@ func TestFileAuditLogger_LogConfigChange(t *testing.T) {
 		t.Errorf("Failed to log config change: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	logger.Flush()
 
 	// Verify event
 	data, err := os.ReadFile(cfg.FilePath)
@@ -311,7 +311,7 @@ func TestFileAuditLogger_LogSystemEvent(t *testing.T) {
 		t.Errorf("Failed to log system event: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	logger.Flush()
 
 	// Verify event
 	data, err := os.ReadFile(cfg.FilePath)
@@ -356,7 +356,7 @@ func TestFileAuditLogger_DisableEnable(t *testing.T) {
 		t.Errorf("Failed to log event: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	logger.Flush()
 
 	// Disable logging
 	logger.Disable()
@@ -374,7 +374,7 @@ func TestFileAuditLogger_DisableEnable(t *testing.T) {
 		t.Errorf("Failed to log event after re-enabling: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	logger.Flush()
 
 	// Verify we have events (should have 2: one before disable, one after enable)
 	data, err := os.ReadFile(cfg.FilePath)
@@ -424,7 +424,7 @@ func TestFileAuditLogger_FileRotation(t *testing.T) {
 	}
 
 	// Wait for async writes
-	time.Sleep(200 * time.Millisecond)
+	logger.Flush()
 
 	// Check for rotated files
 	matches, err := filepath.Glob(filepath.Join(tempDir, "audit.log*"))
@@ -479,7 +479,7 @@ func TestFileAuditLogger_Export(t *testing.T) {
 		}
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	logger.Flush()
 
 	// Export without filter
 	outputPath := filepath.Join(tempDir, "export.json")
@@ -710,8 +710,8 @@ func TestFileAuditLogger_Close(t *testing.T) {
 		t.Errorf("Failed to close logger: %v", err)
 	}
 
-	// Wait for async writes
-	time.Sleep(200 * time.Millisecond)
+	// Close() drains the queue synchronously (background writer is guaranteed
+	// to have exited by the time it returns), so the event is already on disk.
 
 	// Verify event was written before close
 	data, err := os.ReadFile(cfg.FilePath)

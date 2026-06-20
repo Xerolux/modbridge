@@ -103,9 +103,23 @@ func main() {
 	// 5. API Server
 	apiServer := api.NewServer(cfgMgr, mgr, authenticator, l, db)
 
-	// 6. Auto-deactivate expired users periodically
+	// 6. Auto-deactivate expired users periodically + bootstrap multi-user store
 	if db != nil {
 		userMgr := users.NewManager(db)
+
+		// Bootstrap an initial admin when multi-user mode is enabled and the
+		// user store is still empty (first run).
+		if cfgMgr.Get().MultiUser {
+			randomPassword := generateSecurePassword(16)
+			created, err := userMgr.EnsureDefaultAdmin("admin", randomPassword, "system")
+			if err != nil {
+				l.Error("SYSTEM", fmt.Sprintf("Failed to bootstrap default admin user: %v", err))
+			} else if created {
+				l.Info("SYSTEM", fmt.Sprintf("Multi-user mode: created default admin 'admin' (password: %s) — change on first login", randomPassword))
+				log.Printf("Multi-user mode enabled. Default admin password: %s", randomPassword)
+			}
+		}
+
 		go func() {
 			ticker := time.NewTicker(1 * time.Hour)
 			defer ticker.Stop()

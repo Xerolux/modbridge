@@ -120,6 +120,18 @@ func HasPermission(role Role, permission Permission) bool {
 	return ok
 }
 
+// GetRolePermissions returns a fresh copy of all permissions granted to a role.
+// A copy (rather than the package-level slice) is returned so callers cannot
+// mutate the shared role definition.
+func GetRolePermissions(role Role) []Permission {
+	if perms, ok := RolePermissions[role]; ok {
+		result := make([]Permission, len(perms))
+		copy(result, perms)
+		return result
+	}
+	return []Permission{}
+}
+
 // ParseRole parses a role from string
 func ParseRole(roleStr string) (Role, error) {
 	role := Role(strings.ToLower(roleStr))

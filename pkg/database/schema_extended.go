@@ -25,6 +25,7 @@ func (db *DB) initExtendedSchema() error {
 		enabled BOOLEAN DEFAULT 1,
 		auto_deactivate_days INTEGER DEFAULT 0,
 		expires_at DATETIME,
+		must_change_password BOOLEAN DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		last_login DATETIME,
@@ -78,6 +79,7 @@ func (db *DB) migrateUsersTable() error {
 		"ALTER TABLE users ADD COLUMN full_name TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE users ADD COLUMN auto_deactivate_days INTEGER DEFAULT 0",
 		"ALTER TABLE users ADD COLUMN expires_at DATETIME",
+		"ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0",
 	}
 	for _, m := range migrations {
 		if _, err := db.conn.Exec(m); err != nil {
@@ -102,6 +104,7 @@ type User struct {
 	Enabled            bool       `json:"enabled"`
 	AutoDeactivateDays int        `json:"auto_deactivate_days"`
 	ExpiresAt          *time.Time `json:"expires_at,omitempty"`
+	MustChangePassword bool       `json:"must_change_password"`
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
 	LastLogin          *time.Time `json:"last_login,omitempty"`
@@ -112,23 +115,23 @@ type User struct {
 // CreateUser creates a new user
 func (db *DB) CreateUser(user *User) error {
 	query := `
-		INSERT INTO users (id, username, full_name, email, password_hash, role, enabled, auto_deactivate_days, expires_at, created_by, description)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO users (id, username, full_name, email, password_hash, role, enabled, auto_deactivate_days, expires_at, must_change_password, created_by, description)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := db.conn.Exec(query,
 		user.ID, user.Username, user.FullName, user.Email, user.PasswordHash,
-		user.Role, user.Enabled, user.AutoDeactivateDays, user.ExpiresAt, user.CreatedBy, user.Description)
+		user.Role, user.Enabled, user.AutoDeactivateDays, user.ExpiresAt, user.MustChangePassword, user.CreatedBy, user.Description)
 	return err
 }
 
 // GetUser retrieves a user by ID
 func (db *DB) GetUser(id string) (*User, error) {
-	query := `SELECT id, username, full_name, email, password_hash, role, enabled, auto_deactivate_days, expires_at, created_at, updated_at, last_login, created_by, description FROM users WHERE id = ?`
+	query := `SELECT id, username, full_name, email, password_hash, role, enabled, auto_deactivate_days, expires_at, must_change_password, created_at, updated_at, last_login, created_by, description FROM users WHERE id = ?`
 	var user User
 	var lastLogin, expiresAt sql.NullTime
 	err := db.conn.QueryRow(query, id).Scan(
 		&user.ID, &user.Username, &user.FullName, &user.Email, &user.PasswordHash,
-		&user.Role, &user.Enabled, &user.AutoDeactivateDays, &expiresAt,
+		&user.Role, &user.Enabled, &user.AutoDeactivateDays, &expiresAt, &user.MustChangePassword,
 		&user.CreatedAt, &user.UpdatedAt,
 		&lastLogin, &user.CreatedBy, &user.Description)
 	if err == sql.ErrNoRows {
@@ -148,12 +151,12 @@ func (db *DB) GetUser(id string) (*User, error) {
 
 // GetUserByUsername retrieves a user by username
 func (db *DB) GetUserByUsername(username string) (*User, error) {
-	query := `SELECT id, username, full_name, email, password_hash, role, enabled, auto_deactivate_days, expires_at, created_at, updated_at, last_login, created_by, description FROM users WHERE username = ?`
+	query := `SELECT id, username, full_name, email, password_hash, role, enabled, auto_deactivate_days, expires_at, must_change_password, created_at, updated_at, last_login, created_by, description FROM users WHERE username = ?`
 	var user User
 	var lastLogin, expiresAt sql.NullTime
 	err := db.conn.QueryRow(query, username).Scan(
 		&user.ID, &user.Username, &user.FullName, &user.Email, &user.PasswordHash,
-		&user.Role, &user.Enabled, &user.AutoDeactivateDays, &expiresAt,
+		&user.Role, &user.Enabled, &user.AutoDeactivateDays, &expiresAt, &user.MustChangePassword,
 		&user.CreatedAt, &user.UpdatedAt,
 		&lastLogin, &user.CreatedBy, &user.Description)
 	if err == sql.ErrNoRows {
@@ -173,7 +176,7 @@ func (db *DB) GetUserByUsername(username string) (*User, error) {
 
 // GetAllUsers retrieves all users
 func (db *DB) GetAllUsers() ([]*User, error) {
-	query := `SELECT id, username, full_name, email, password_hash, role, enabled, auto_deactivate_days, expires_at, created_at, updated_at, last_login, created_by, description FROM users ORDER BY username`
+	query := `SELECT id, username, full_name, email, password_hash, role, enabled, auto_deactivate_days, expires_at, must_change_password, created_at, updated_at, last_login, created_by, description FROM users ORDER BY username`
 	rows, err := db.conn.Query(query)
 	if err != nil {
 		return nil, err
@@ -186,7 +189,7 @@ func (db *DB) GetAllUsers() ([]*User, error) {
 		var lastLogin, expiresAt sql.NullTime
 		err := rows.Scan(
 			&user.ID, &user.Username, &user.FullName, &user.Email, &user.PasswordHash,
-			&user.Role, &user.Enabled, &user.AutoDeactivateDays, &expiresAt,
+			&user.Role, &user.Enabled, &user.AutoDeactivateDays, &expiresAt, &user.MustChangePassword,
 			&user.CreatedAt, &user.UpdatedAt,
 			&lastLogin, &user.CreatedBy, &user.Description)
 		if err != nil {
@@ -206,18 +209,37 @@ func (db *DB) GetAllUsers() ([]*User, error) {
 // UpdateUser updates a user
 func (db *DB) UpdateUser(user *User) error {
 	query := `
-		UPDATE users SET username = ?, full_name = ?, email = ?, role = ?, enabled = ?, description = ?, auto_deactivate_days = ?, expires_at = ?
+		UPDATE users SET username = ?, full_name = ?, email = ?, role = ?, enabled = ?, description = ?, auto_deactivate_days = ?, expires_at = ?, must_change_password = ?
 		WHERE id = ?
 	`
-	_, err := db.conn.Exec(query, user.Username, user.FullName, user.Email, user.Role, user.Enabled, user.Description, user.AutoDeactivateDays, user.ExpiresAt, user.ID)
+	_, err := db.conn.Exec(query, user.Username, user.FullName, user.Email, user.Role, user.Enabled, user.Description, user.AutoDeactivateDays, user.ExpiresAt, user.MustChangePassword, user.ID)
 	return err
 }
 
-// UpdateUserPassword updates a user's password
+// UpdateUserPassword updates a user's password hash and clears the
+// must-change-password flag (a password set by the user themselves is, by
+// definition, already known to them).
 func (db *DB) UpdateUserPassword(id, passwordHash string) error {
-	query := `UPDATE users SET password_hash = ? WHERE id = ?`
+	query := `UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?`
 	_, err := db.conn.Exec(query, passwordHash, id)
 	return err
+}
+
+// AdminResetUserPassword sets a new password hash and optionally forces the
+// user to change it on next login (used when an admin sets a password).
+func (db *DB) AdminResetUserPassword(id, passwordHash string, mustChange bool) error {
+	query := `UPDATE users SET password_hash = ?, must_change_password = ? WHERE id = ?`
+	_, err := db.conn.Exec(query, passwordHash, mustChange, id)
+	return err
+}
+
+// CountEnabledAdmins returns the number of enabled users with the admin role.
+// Used to prevent accidentally removing/disabling the last administrator.
+func (db *DB) CountEnabledAdmins() (int, error) {
+	query := `SELECT COUNT(*) FROM users WHERE role = 'admin' AND enabled = 1`
+	var count int
+	err := db.conn.QueryRow(query).Scan(&count)
+	return count, err
 }
 
 // DeleteUser deletes a user

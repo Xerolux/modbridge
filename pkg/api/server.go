@@ -348,6 +348,19 @@ func getFloat64MetricValue(v interface{}) float64 {
 	return 0
 }
 
+// multiUserEnabled reports whether DB-backed multi-user authentication is
+// active. It requires a working user manager and is enabled either via the
+// config flag or the MODBRIDGE_MULTI_USER environment override.
+func (s *Server) multiUserEnabled() bool {
+	if s.userMgr == nil || s.cfgMgr == nil {
+		return false
+	}
+	if s.cfgMgr.Get().MultiUser {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("MODBRIDGE_MULTI_USER")), "true")
+}
+
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	cfg := s.cfgMgr.Get()
 	proxies := []map[string]interface{}{}
@@ -356,6 +369,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	status := map[string]interface{}{
 		"setup_required": cfg.AdminPassHash == "",
+		"multi_user":     s.multiUserEnabled(),
 		"proxies":        proxies,
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -408,6 +422,35 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cfg := s.cfgMgr.Get()
+
+	// Multi-user mode: authenticate against the user database using real
+	// identity (username + password), honoring enabled/expiry state.
+	if s.multiUserEnabled() {
+		var req struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if req.Username == "" || req.Password == "" {
+			http.Error(w, "username and password are required", http.StatusBadRequest)
+			return
+		}
+
+		user, err := s.userMgr.AuthenticateUser(strings.TrimSpace(req.Username), req.Password)
+		if err != nil || user == nil {
+			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+			return
+		}
+
+		s.finalizeLogin(w, r, user.ID, user.Username, user.Role, user.MustChangePassword)
+		return
+	}
+
+	// Legacy single-user mode: a single global admin password from config.
 	var req struct {
 		Password string `json:"password"`
 	}
@@ -416,13 +459,21 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := s.cfgMgr.Get()
 	if !auth.CheckPasswordHash(req.Password, cfg.AdminPassHash) {
 		http.Error(w, "Invalid password", http.StatusUnauthorized)
 		return
 	}
 
-	token, err := s.auth.CreateSession("admin", "admin", "admin")
+	s.finalizeLogin(w, r, "admin", "admin", "admin", cfg.ForcePasswordChange)
+}
+
+// finalizeLogin creates a session for the authenticated identity and writes the
+// session/CSRF cookies plus the JSON success response. Shared by both login
+// paths so cookie handling stays consistent.
+func (s *Server) finalizeLogin(w http.ResponseWriter, r *http.Request, userID, username, role string, forcePasswordChange bool) {
+	cfg := s.cfgMgr.Get()
+
+	token, err := s.auth.CreateSession(userID, username, role)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -433,12 +484,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    token,
 		Expires:  time.Now().Add(24 * time.Hour),
 		HttpOnly: true,
-		Secure:   cfg.TLSEnabled, // Only send over HTTPS if TLS is enabled
+		Secure:   cfg.TLSEnabled,
 		SameSite: http.SameSiteStrictMode,
 		Path:     "/",
 	})
 
-	// Generate and set CSRF token
 	csrfToken := s.csrf.GenerateToken(token)
 	if csrfToken == "" {
 		http.Error(w, "Failed to generate CSRF token", http.StatusInternalServerError)
@@ -453,11 +503,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteStrictMode,
 	})
 
-	// Return login status including force_password_change flag
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":               true,
-		"force_password_change": cfg.ForcePasswordChange,
+		"force_password_change": forcePasswordChange,
 	}); err != nil {
 		s.log.Error("API", fmt.Sprintf("Failed to encode login response: %v", err))
 	}
@@ -519,6 +568,32 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Multi-user mode: change the currently logged-in user's DB password.
+	if s.multiUserEnabled() {
+		cookie, err := r.Cookie("session_token")
+		if err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		session := s.auth.GetSession(cookie.Value)
+		if session == nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		if err := s.userMgr.ChangePassword(session.UserID, req.CurrentPassword, req.NewPassword); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{"success": true}); err != nil {
+			s.log.Error("API", fmt.Sprintf("Failed to encode change-password response: %v", err))
+		}
+		return
+	}
+
+	// Legacy single-user mode: update the global admin hash.
 	cfg := s.cfgMgr.Get()
 	if !auth.CheckPasswordHash(req.CurrentPassword, cfg.AdminPassHash) {
 		http.Error(w, "Invalid current password", http.StatusUnauthorized)

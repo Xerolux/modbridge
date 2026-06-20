@@ -77,6 +77,16 @@ type Event struct {
 	Reason    string                 `json:"reason,omitempty"`
 }
 
+// logItem is a single unit of work for the background writer. It carries
+// either an event to persist or a flush signal (a done channel that is closed
+// once every previously-queued item has been written). Routing flush markers
+// through the same channel as events preserves FIFO ordering, so a returned
+// Flush guarantees all earlier Log calls are durable on disk.
+type logItem struct {
+	event *Event
+	flush chan struct{}
+}
+
 // FileAuditLogger manages file-based audit logging
 type FileAuditLogger struct {
 	mu          sync.RWMutex
@@ -85,7 +95,7 @@ type FileAuditLogger struct {
 	maxFileSize int64
 	currentSize int64
 	enabled     atomic.Bool
-	eventChan   chan *Event
+	eventChan   chan logItem
 	wg          sync.WaitGroup
 	stopChan    chan struct{}
 	closeOnce   sync.Once
@@ -133,7 +143,7 @@ func NewFileAuditLogger(cfg FileLoggerConfig) (*FileAuditLogger, error) {
 		filePath:    cfg.FilePath,
 		maxFileSize: cfg.MaxFileSize,
 		currentSize: info.Size(),
-		eventChan:   make(chan *Event, cfg.BufferSize),
+		eventChan:   make(chan logItem, cfg.BufferSize),
 		stopChan:    make(chan struct{}),
 	}
 	fal.enabled.Store(true)
@@ -161,11 +171,28 @@ func (fal *FileAuditLogger) Log(event *Event) error {
 
 	// Send to background writer
 	select {
-	case fal.eventChan <- event:
+	case fal.eventChan <- logItem{event: event}:
 		return nil
 	default:
 		// Buffer full, write synchronously
 		return fal.writeEvent(event)
+	}
+}
+
+// Flush blocks until every event queued via Log prior to this call has been
+// written to disk. It makes async logging testable and gives callers a way to
+// guarantee durability on demand. Flush is safe to call concurrently.
+func (fal *FileAuditLogger) Flush() {
+	done := make(chan struct{})
+	// Send a sentinel through the same channel so the background writer
+	// processes it strictly after all previously-queued events (FIFO).
+	select {
+	case fal.eventChan <- logItem{flush: done}:
+		<-done
+	default:
+		// Channel full: the writer will catch up; fall back to a blocking send.
+		fal.eventChan <- logItem{flush: done}
+		<-done
 	}
 }
 
@@ -272,20 +299,27 @@ func (fal *FileAuditLogger) LogSystemEvent(eventType EventType, details map[stri
 func (fal *FileAuditLogger) backgroundWriter() {
 	defer fal.wg.Done()
 
+	process := func(item logItem) {
+		if item.flush != nil {
+			close(item.flush)
+			return
+		}
+		if err := fal.writeEvent(item.event); err != nil {
+			// Log to stderr as fallback
+			fmt.Fprintf(os.Stderr, "Failed to write audit log: %v\n", err)
+		}
+	}
+
 	for {
 		select {
-		case event := <-fal.eventChan:
-			if err := fal.writeEvent(event); err != nil {
-				// Log to stderr as fallback
-				fmt.Fprintf(os.Stderr, "Failed to write audit log: %v\n", err)
-			}
+		case item := <-fal.eventChan:
+			process(item)
 		case <-fal.stopChan:
-			// Drain remaining events
+			// Drain remaining events (including flush signals so Flush callers
+			// don't block forever during shutdown).
 			for len(fal.eventChan) > 0 {
-				event := <-fal.eventChan
-				if err := fal.writeEvent(event); err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to write audit log: %v\n", err)
-				}
+				item := <-fal.eventChan
+				process(item)
 			}
 			return
 		}
