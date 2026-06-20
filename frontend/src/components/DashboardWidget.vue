@@ -79,9 +79,8 @@ const statusDotClass = {
 .widget-bg {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(circle at top right, rgba(125, 211, 252, 0.14), transparent 38%),
-    radial-gradient(circle at bottom left, rgba(192, 132, 252, 0.12), transparent 42%);
+  background: var(--hero-gradient);
+  opacity: 0.7;
 }
 
 /* Status badge */

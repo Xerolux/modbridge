@@ -167,7 +167,7 @@ watch(logs, (newVal) => {
   border-color: var(--border-soft);
 }
 .logs-ctrl-btn--active {
-  border-color: rgba(125, 211, 252, 0.3);
+  border-color: var(--accent-tint);
   color: var(--accent);
 }
 

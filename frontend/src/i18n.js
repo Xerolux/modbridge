@@ -21,6 +21,21 @@ const de = {
     theme: 'Theme'
   },
 
+  // Theme controls
+  theme: {
+    appearance: 'Darstellung anpassen',
+    mode: 'Modus',
+    light: 'Hell',
+    dark: 'Dunkel',
+    bw: 'Schwarz/Weiß',
+    accent: 'Akzentfarbe',
+    density: 'Dichte',
+    comfortable: 'Komfortabel',
+    compact: 'Kompakt',
+    reducedMotion: 'Animationen reduzieren',
+    reducedMotionHint: 'Schneller, Akku-schonend, weniger Bewegung'
+  },
+
   // Dashboard
   dashboard: {
     title: 'Dashboard',
@@ -286,6 +301,21 @@ const en = {
     lightMode: 'Light mode',
     darkMode: 'Dark mode',
     theme: 'Theme'
+  },
+
+  // Theme controls
+  theme: {
+    appearance: 'Customize appearance',
+    mode: 'Mode',
+    light: 'Light',
+    dark: 'Dark',
+    bw: 'Black & White',
+    accent: 'Accent color',
+    density: 'Density',
+    comfortable: 'Comfortable',
+    compact: 'Compact',
+    reducedMotion: 'Reduce motion',
+    reducedMotionHint: 'Faster, battery-friendly, less movement'
   },
 
   // Dashboard

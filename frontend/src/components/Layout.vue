@@ -2,16 +2,15 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { RouterLink, useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from "../stores/auth";
-import { useAppStore } from "../stores/appStore";
 import { useI18n } from 'vue-i18n';
 import LanguageSelector from './LanguageSelector.vue';
+import ThemeSettings from './ThemeSettings.vue';
 
 const { t } = useI18n();
 
 const router = useRouter();
 const route = useRoute();
 const auth = useAuthStore();
-const appStore = useAppStore();
 
 const mobileMenuOpen = ref(false);
 
@@ -86,14 +85,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
 
         <!-- Right controls -->
         <div class="flex items-center gap-1.5 ml-auto pl-1">
-          <button
-            type="button"
-            class="nav-icon-btn"
-            @click="appStore.toggleDarkMode()"
-            :title="appStore.darkMode ? t('nav.lightMode') : t('nav.darkMode')"
-          >
-            <i :class="appStore.darkMode ? 'pi pi-sun' : 'pi pi-moon'" class="text-sm"></i>
-          </button>
+          <ThemeSettings />
 
           <LanguageSelector class="hidden sm:flex" />
 
@@ -187,11 +179,9 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
             <span class="text-xs text-[var(--text-muted)] ml-auto shrink-0">({{ auth.user.role }})</span>
           </div>
 
-          <div class="flex items-center justify-between px-3 py-1">
+          <div class="flex items-center justify-between px-1 py-1">
             <span class="text-sm text-[var(--text-secondary)]">{{ t('nav.theme') }}</span>
-            <button type="button" class="nav-icon-btn" @click="appStore.toggleDarkMode()">
-              <i :class="appStore.darkMode ? 'pi pi-sun' : 'pi pi-moon'" class="text-sm"></i>
-            </button>
+            <ThemeSettings />
           </div>
 
           <LanguageSelector />
@@ -255,7 +245,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
 }
 .nav-link:hover { background: var(--bg-soft); color: var(--text-primary); }
 .nav-link--active {
-  background: rgba(125, 211, 252, 0.12);
+  background: var(--accent-tint);
   color: var(--accent);
   font-weight: 600;
 }
@@ -295,7 +285,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
 }
 .mobile-nav-link:hover { background: var(--bg-soft); color: var(--text-primary); }
 .mobile-nav-link--active {
-  background: rgba(125, 211, 252, 0.1);
+  background: var(--accent-tint);
   color: var(--accent);
   font-weight: 600;
 }

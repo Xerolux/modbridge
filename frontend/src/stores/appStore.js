@@ -1,6 +1,19 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import axios from '../axios.js';
+
+export const THEMES = ['light', 'dark', 'bw'];
+export const ACCENTS = ['sky', 'violet', 'emerald', 'amber', 'rose', 'mono'];
+
+const readStoredTheme = () => {
+  const stored = localStorage.getItem('modbridge_theme');
+  if (stored === 'dark' || stored === 'light' || stored === 'bw') return stored;
+  // Migrate legacy boolean key
+  const legacy = localStorage.getItem('theme');
+  if (legacy === 'dark') return 'dark';
+  if (legacy === 'light') return 'light';
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+};
 
 export const useAppStore = defineStore('app', () => {
   const proxies = ref([]);
@@ -12,12 +25,54 @@ export const useAppStore = defineStore('app', () => {
 
   const isLoading = ref(false);
   const error = ref(null);
-  const darkMode = ref(localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches));
 
+  // ── Theme system ────────────────────────────────────────────────
+  // theme: 'light' | 'dark' | 'bw'  (bw = monochrome high-contrast)
+  // accent: sky | violet | emerald | amber | rose | mono
+  // density: 'comfortable' | 'compact'
+  // reducedMotion: boolean — disables ambient animations for speed/battery
+  const theme = ref(readStoredTheme());
+  const accent = ref(localStorage.getItem('modbridge_accent') || 'sky');
+  const density = ref(localStorage.getItem('modbridge_density') || 'comfortable');
+  const reducedMotion = ref(
+    localStorage.getItem('modbridge_reduced_motion') === 'true' ||
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+
+  // Backward-compatible boolean — true when in dark or bw mode (PrimeVue dark selector)
+  const darkMode = computed(() => theme.value === 'dark' || theme.value === 'bw');
+
+  const setTheme = (value) => {
+    if (!THEMES.includes(value)) return;
+    theme.value = value;
+    localStorage.setItem('modbridge_theme', value);
+    localStorage.removeItem('theme');
+  };
+
+  const setAccent = (value) => {
+    if (!ACCENTS.includes(value)) return;
+    accent.value = value;
+    localStorage.setItem('modbridge_accent', value);
+  };
+
+  const setDensity = (value) => {
+    if (value !== 'comfortable' && value !== 'compact') return;
+    density.value = value;
+    localStorage.setItem('modbridge_density', value);
+  };
+
+  const toggleReducedMotion = (value) => {
+    reducedMotion.value = value !== undefined ? value : !reducedMotion.value;
+    localStorage.setItem('modbridge_reduced_motion', String(reducedMotion.value));
+  };
+
+  // Legacy toggle kept for compatibility — cycles light/dark
   const toggleDarkMode = (value) => {
-    // If value is provided, use it; otherwise toggle
-    darkMode.value = value !== undefined ? value : !darkMode.value;
-    localStorage.setItem('theme', darkMode.value ? 'dark' : 'light');
+    if (value !== undefined) {
+      setTheme(value ? 'dark' : 'light');
+    } else {
+      setTheme(theme.value === 'dark' ? 'light' : 'dark');
+    }
   };
 
   const fetchProxies = async () => {
@@ -154,8 +209,16 @@ export const useAppStore = defineStore('app', () => {
      status,
      isLoading,
      error,
+     theme,
+     accent,
+     density,
+     reducedMotion,
      darkMode,
      toggleDarkMode,
+     setTheme,
+     setAccent,
+     setDensity,
+     toggleReducedMotion,
      fetchProxies,
      addProxy,
      updateProxy,

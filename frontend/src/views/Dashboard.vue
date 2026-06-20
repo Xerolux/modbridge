@@ -626,7 +626,7 @@ const goToLogs = () => {
   position: absolute;
   inset: -6px;
   border-radius: 999px;
-  border: 1px solid rgba(125, 211, 252, 0.25);
+  border: 1px solid var(--accent-tint);
 }
 
 .grid-stack-dashboard {
@@ -637,7 +637,7 @@ const goToLogs = () => {
 }
 
 .grid-stack-dashboard--editing {
-  border-color: rgba(125, 211, 252, 0.28);
+  border-color: var(--accent);
 }
 
 .layout-edit-banner {

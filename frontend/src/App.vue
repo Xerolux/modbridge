@@ -1,16 +1,39 @@
 <script setup>
-import { onMounted, onUnmounted, watch } from 'vue';
+import { onMounted, onUnmounted, watch, computed } from 'vue';
 import { useAppStore } from './stores/appStore';
 
 const store = useAppStore();
 
-const applyTheme = (isDark) => {
-  document.documentElement.classList.toggle('dark', isDark);
-  document.documentElement.classList.toggle('light', !isDark);
+const appShellClass = computed(() => [
+  store.theme, // 'light' | 'dark' | 'bw'
+  'app-shell'
+]);
+
+const showAmbient = computed(() => store.theme !== 'bw' && !store.reducedMotion);
+
+// Apply the entire theme to <html> in one pass — class toggles, accent palette,
+// density and motion preferences. Runs once on mount and whenever any value changes.
+const applyTheme = () => {
+  const html = document.documentElement;
+  const t = store.theme;
+
+  // PrimeVue uses the `.dark` selector for its dark preset — reuse it for both
+  // the dark and the monochrome (bw) themes so component styling stays consistent.
+  html.classList.toggle('dark', t === 'dark' || t === 'bw');
+  html.classList.toggle('light', t === 'light');
+  html.classList.toggle('bw', t === 'bw');
+
+  html.setAttribute('data-accent', store.accent);
+  html.setAttribute('data-density', store.density);
+  html.classList.toggle('reduced-motion', store.reducedMotion);
 };
 
 // immediate: true handles initial application — no separate onMounted call needed
-watch(() => store.darkMode, applyTheme, { immediate: true });
+watch(
+  () => [store.theme, store.accent, store.density, store.reducedMotion],
+  applyTheme,
+  { immediate: true, deep: true }
+);
 
 onMounted(() => {
   // Pause ambient orb animations when the tab is hidden to save CPU/battery
@@ -26,11 +49,13 @@ onMounted(() => {
 </script>
 
 <template>
-  <div :class="store.darkMode ? 'dark' : 'light'" class="app-shell">
-    <div class="ambient-layer ambient-grid"></div>
-    <div class="ambient-layer ambient-orb ambient-orb-a"></div>
-    <div class="ambient-layer ambient-orb ambient-orb-b"></div>
-    <div class="ambient-layer ambient-orb ambient-orb-c"></div>
+  <div :class="appShellClass">
+    <template v-if="showAmbient">
+      <div class="ambient-layer ambient-grid"></div>
+      <div class="ambient-layer ambient-orb ambient-orb-a"></div>
+      <div class="ambient-layer ambient-orb ambient-orb-b"></div>
+      <div class="ambient-layer ambient-orb ambient-orb-c"></div>
+    </template>
 
     <div class="content-wrapper">
       <router-view></router-view>
@@ -42,31 +67,83 @@ onMounted(() => {
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap');
 
  :root {
-  --bg-canvas: #09111f;
-  --bg-surface: rgba(14, 22, 39, 0.72);
-  --bg-surface-strong: rgba(11, 18, 32, 0.9);
-  --bg-soft: rgba(148, 163, 184, 0.12);
-  --bg-input: rgba(255, 255, 255, 0.05);
-  --bg-panel-item: rgba(255, 255, 255, 0.04);
-  --bg-dark-overlay: rgba(15, 23, 42, 0.55);
-  --text-primary: #f3f7fb;
-  --text-secondary: #c4d2e3;
-  --text-muted: #8ba0b8;
+   --bg-canvas: #09111f;
+   --bg-surface: rgba(14, 22, 39, 0.72);
+   --bg-surface-strong: rgba(11, 18, 32, 0.9);
+   --bg-soft: rgba(148, 163, 184, 0.12);
+   --bg-input: rgba(255, 255, 255, 0.05);
+   --bg-panel-item: rgba(255, 255, 255, 0.04);
+   --bg-dark-overlay: rgba(15, 23, 42, 0.55);
+   --text-primary: #f3f7fb;
+   --text-secondary: #c4d2e3;
+   --text-muted: #8ba0b8;
+   --accent: #7dd3fc;
+   --accent-strong: #38bdf8;
+   --accent-secondary: #c084fc;
+   --success: #4ade80;
+   --warning: #fbbf24;
+   --danger: #fb7185;
+   --border-soft: rgba(255, 255, 255, 0.12);
+   --border-strong: rgba(255, 255, 255, 0.2);
+   --border-subtle: rgba(255, 255, 255, 0.08);
+   --shadow-soft: 0 20px 60px rgba(2, 6, 23, 0.35);
+   --shadow-strong: 0 35px 80px rgba(2, 6, 23, 0.5);
+   --glass-blur: blur(24px);
+   --hero-gradient: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(192, 132, 252, 0.18));
+   --panel-gradient: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+   --grid-line: rgba(255, 255, 255, 0.035);
+   /* Density knobs — overridden by [data-density="compact"] */
+   --space-card: 1.25rem;
+   --radius-panel: 24px;
+   --radius-hero: 28px;
+   --control-h: 44px;
+}
+
+/* ── Accent palettes ───────────────────────────────────────────────
+   Each accent sets --accent / --accent-strong / --accent-secondary plus
+   matching tinted gradients. Driven by data-accent on <html>. */
+:root[data-accent="sky"] {
   --accent: #7dd3fc;
   --accent-strong: #38bdf8;
   --accent-secondary: #c084fc;
-  --success: #4ade80;
-  --warning: #fbbf24;
-  --danger: #fb7185;
-  --border-soft: rgba(255, 255, 255, 0.12);
-  --border-strong: rgba(255, 255, 255, 0.2);
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --shadow-soft: 0 20px 60px rgba(2, 6, 23, 0.35);
-  --shadow-strong: 0 35px 80px rgba(2, 6, 23, 0.5);
-  --glass-blur: blur(24px);
   --hero-gradient: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(192, 132, 252, 0.18));
-  --panel-gradient: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
-  --grid-line: rgba(255, 255, 255, 0.035);
+  --accent-tint: rgba(56, 189, 248, 0.12);
+}
+:root[data-accent="violet"] {
+  --accent: #c4b5fd;
+  --accent-strong: #a78bfa;
+  --accent-secondary: #f0abfc;
+  --hero-gradient: linear-gradient(135deg, rgba(167, 139, 250, 0.22), rgba(240, 171, 252, 0.16));
+  --accent-tint: rgba(167, 139, 250, 0.12);
+}
+:root[data-accent="emerald"] {
+  --accent: #6ee7b7;
+  --accent-strong: #34d399;
+  --accent-secondary: #5eead4;
+  --hero-gradient: linear-gradient(135deg, rgba(52, 211, 153, 0.2), rgba(94, 234, 212, 0.16));
+  --accent-tint: rgba(52, 211, 153, 0.12);
+}
+:root[data-accent="amber"] {
+  --accent: #fcd34d;
+  --accent-strong: #fbbf24;
+  --accent-secondary: #fb923c;
+  --hero-gradient: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(251, 146, 60, 0.16));
+  --accent-tint: rgba(251, 191, 36, 0.12);
+}
+:root[data-accent="rose"] {
+  --accent: #fda4af;
+  --accent-strong: #fb7185;
+  --accent-secondary: #f0abfc;
+  --hero-gradient: linear-gradient(135deg, rgba(251, 113, 133, 0.2), rgba(240, 171, 252, 0.16));
+  --accent-tint: rgba(251, 113, 133, 0.12);
+}
+/* Monochrome accent — pairs naturally with the bw theme but works everywhere */
+:root[data-accent="mono"] {
+  --accent: #cbd5e1;
+  --accent-strong: #e2e8f0;
+  --accent-secondary: #94a3b8;
+  --hero-gradient: linear-gradient(135deg, rgba(203, 213, 225, 0.16), rgba(148, 163, 184, 0.12));
+  --accent-tint: rgba(203, 213, 225, 0.1);
 }
 
 .light {
@@ -89,6 +166,101 @@ onMounted(() => {
   --panel-gradient: linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.3));
   --grid-line: rgba(15, 23, 42, 0.06);
 }
+/* Light theme keeps its accent-specific hero gradient tint */
+.light[data-accent="violet"]   { --hero-gradient: linear-gradient(135deg, rgba(167, 139, 250, 0.16), rgba(240, 171, 252, 0.12)); }
+.light[data-accent="emerald"]  { --hero-gradient: linear-gradient(135deg, rgba(52, 211, 153, 0.16), rgba(94, 234, 212, 0.12)); }
+.light[data-accent="amber"]    { --hero-gradient: linear-gradient(135deg, rgba(251, 191, 36, 0.16), rgba(251, 146, 60, 0.12)); }
+.light[data-accent="rose"]     { --hero-gradient: linear-gradient(135deg, rgba(251, 113, 133, 0.16), rgba(240, 171, 252, 0.12)); }
+.light[data-accent="mono"]     { --hero-gradient: linear-gradient(135deg, rgba(100, 116, 139, 0.12), rgba(148, 163, 184, 0.1)); }
+
+/* ── Black & White theme ───────────────────────────────────────────
+   High-contrast monochrome looking-glass surface. Color status signals
+   (running/error) keep a faint semantic tint so state stays readable. */
+.bw {
+  --bg-canvas: #0a0a0a;
+  --bg-surface: rgba(22, 22, 22, 0.78);
+  --bg-surface-strong: rgba(14, 14, 14, 0.92);
+  --bg-soft: rgba(255, 255, 255, 0.08);
+  --bg-input: rgba(255, 255, 255, 0.05);
+  --bg-panel-item: rgba(255, 255, 255, 0.04);
+  --bg-dark-overlay: rgba(0, 0, 0, 0.5);
+  --text-primary: #fafafa;
+  --text-secondary: #d4d4d4;
+  --text-muted: #8f8f8f;
+  --accent: #ffffff;
+  --accent-strong: #e5e5e5;
+  --accent-secondary: #a3a3a3;
+  --success: #e5e5e5;
+  --warning: #a3a3a3;
+  --danger: #f5f5f5;
+  --border-soft: rgba(255, 255, 255, 0.14);
+  --border-strong: rgba(255, 255, 255, 0.32);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --shadow-soft: 0 20px 60px rgba(0, 0, 0, 0.6);
+  --shadow-strong: 0 35px 80px rgba(0, 0, 0, 0.75);
+  --glass-blur: blur(20px);
+  --hero-gradient: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+  --panel-gradient: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01));
+  --grid-line: rgba(255, 255, 255, 0.04);
+  --accent-tint: rgba(255, 255, 255, 0.08);
+}
+
+/* In B&W, keep status dots legible via shape/brightness rather than hue.
+   Running = bright, Stopped = mid, Error = bright ringed, Unknown = dim. */
+.bw .status-dot--running { background: #fafafa; box-shadow: 0 0 0.6rem rgba(255, 255, 255, 0.6); }
+.bw .status-dot--stopped { background: #737373; box-shadow: none; }
+.bw .status-dot--error   { background: #fafafa; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.8), 0 0 0 3px #fafafa; }
+.bw .status-dot--unknown { background: #525252; }
+
+/* ── Density: compact ──────────────────────────────────────────────
+   Tighter spacing, smaller radii and controls — fits more on mobile and
+   on dense dashboards without sacrificing the glass aesthetic. */
+:root[data-density="compact"] {
+  --space-card: 0.9rem;
+  --radius-panel: 18px;
+  --radius-hero: 22px;
+  --control-h: 38px;
+}
+:root[data-density="compact"] .p-card,
+:root[data-density="compact"] .p-dialog,
+:root[data-density="compact"] .p-datatable,
+:root[data-density="compact"] .p-tabpanels,
+:root[data-density="compact"] .p-tablist,
+:root[data-density="compact"] .p-menubar,
+:root[data-density="compact"] .p-sidebar {
+  border-radius: var(--radius-panel) !important;
+}
+:root[data-density="compact"] .p-button {
+  min-height: var(--control-h) !important;
+}
+:root[data-density="compact"] .p-inputtext,
+:root[data-density="compact"] .p-dropdown,
+:root[data-density="compact"] .p-inputnumber-input,
+:root[data-density="compact"] .p-password-input,
+:root[data-density="compact"] .p-textarea,
+:root[data-density="compact"] input[type="text"],
+:root[data-density="compact"] input[type="number"],
+:root[data-density="compact"] input[type="email"],
+:root[data-density="compact"] input[type="password"],
+:root[data-density="compact"] select,
+:root[data-density="compact"] textarea {
+  min-height: var(--control-h) !important;
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────
+   Honors user preference for less animation — better on low-end mobile
+   and for accessibility. Disables orbs/grid float and button transforms. */
+.reduced-motion .ambient-orb,
+.reduced-motion .ambient-grid {
+  display: none !important;
+}
+.reduced-motion .ambient-orb { animation: none !important; }
+.reduced-motion .p-button,
+.reduced-motion .proxy-card,
+.reduced-motion .grid-stack-item-content {
+  transition: none !important;
+  transform: none !important;
+}
 
 * {
   box-sizing: border-box;
@@ -110,6 +282,14 @@ body {
     var(--bg-canvas);
   color: var(--text-primary);
   overflow-x: hidden;
+}
+
+/* Monochrome background glow for the B&W looking-glass theme */
+html.bw body {
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.06), transparent 34%),
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.04), transparent 30%),
+    var(--bg-canvas);
 }
 
 h1,
@@ -152,6 +332,10 @@ textarea,
   pointer-events: none;
   position: fixed;
   inset: 0;
+  z-index: 0;
+  /* Promote to a GPU layer once instead of repainting on scroll */
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .ambient-grid {
@@ -330,7 +514,7 @@ textarea,
 }
 
 :focus-visible {
-  outline: 2px solid rgba(125, 211, 252, 0.85);
+  outline: 2px solid var(--accent-strong);
   outline-offset: 2px;
 }
 
@@ -378,8 +562,8 @@ textarea,
 .p-password-input:enabled:focus,
 .p-dropdown:not(.p-disabled).p-focus,
 .p-multiselect:not(.p-disabled).p-focus {
-  border-color: var(--border-strong) !important;
-  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.14) !important;
+  border-color: var(--accent-strong) !important;
+  box-shadow: 0 0 0 4px var(--accent-tint) !important;
 }
 
 .p-button {

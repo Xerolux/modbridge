@@ -475,8 +475,8 @@ const onReorder = () => {
 }
 
 .proxy-card--dirty {
-  border-color: rgba(125, 211, 252, 0.32);
-  box-shadow: 0 20px 50px rgba(56, 189, 248, 0.12);
+  border-color: var(--accent-tint);
+  box-shadow: 0 20px 50px var(--accent-tint);
 }
 
 .proxy-card--selected {
@@ -529,8 +529,8 @@ const onReorder = () => {
 }
 
 .field-group input:focus {
-  border-color: rgba(125, 211, 252, 0.4);
-  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.12);
+  border-color: var(--accent-strong);
+  box-shadow: 0 0 0 4px var(--accent-tint);
 }
 
 .field-error {

@@ -2,14 +2,15 @@
 @config "../tailwind.config.js";
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Ensure touch targets for PrimeVue components are adequately sized and prevent iOS zoom */
+/* Ensure touch targets for PrimeVue components are adequately sized and prevent iOS zoom.
+   Control height tracks the density variable so compact mode shrinks safely. */
 .p-inputtext, .p-dropdown, .p-inputnumber-input, .p-password-input, input[type="text"], input[type="number"], input[type="email"], input[type="password"], select, textarea {
-  min-height: 44px;
+  min-height: var(--control-h, 44px);
   font-size: 16px !important; /* Prevents auto-zoom on iOS Safari */
 }
 
 .p-button {
-  min-height: 44px;
+  min-height: var(--control-h, 44px);
 }
 
 .p-toggleswitch {

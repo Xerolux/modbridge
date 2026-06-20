@@ -735,8 +735,8 @@ const testConnectivity = async (proxy) => {
 }
 .ctrl-search::placeholder { color: var(--text-muted); }
 .ctrl-search:focus {
-    border-color: rgba(125, 211, 252, 0.4);
-    box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.1);
+    border-color: var(--accent-strong);
+    box-shadow: 0 0 0 4px var(--accent-tint);
 }
 
 /* ── Proxy card ─────────────────────────────────────────────────── */
@@ -755,8 +755,8 @@ const testConnectivity = async (proxy) => {
     box-shadow: var(--shadow-strong);
 }
 .proxy-card--edit {
-    border-color: rgba(125, 211, 252, 0.2);
-    box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.12);
+    border-color: var(--accent-tint);
+    box-shadow: 0 0 0 2px var(--accent-tint);
 }
 
 /* ── Status badge ───────────────────────────────────────────────── */
