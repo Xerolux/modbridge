@@ -16,8 +16,8 @@ func TestHasPermission(t *testing.T) {
 		{RoleAdmin, PermUserDelete, true},
 		{RoleAdmin, PermSystemRestart, true},
 		{RoleBenutzer, PermProxyView, true},
-		{RoleBenutzer, PermProxyEdit, false},   // viewer-tier cannot edit
-		{RoleBenutzer, PermUserDelete, false},  // no user management
+		{RoleBenutzer, PermProxyEdit, false},  // viewer-tier cannot edit
+		{RoleBenutzer, PermUserDelete, false}, // no user management
 		{RoleAuditor, PermAuditExport, true},
 		{RoleAuditor, PermProxyControl, false}, // auditor is read-only
 		{RoleTechniker, PermProxyDelete, true},
@@ -38,7 +38,7 @@ func TestParseRole(t *testing.T) {
 		hasErr bool
 	}{
 		{"admin", RoleAdmin, false},
-		{"ADMIN", RoleAdmin, false}, // case-insensitive
+		{"ADMIN", RoleAdmin, false},        // case-insensitive
 		{"operator", RoleTechniker, false}, // alias
 		{"viewer", RoleBenutzer, false},    // alias
 		{"auditor", RoleAuditor, false},

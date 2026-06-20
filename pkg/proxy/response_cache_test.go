@@ -59,7 +59,7 @@ func TestResponseCacheLRUEvictionZeroHash(t *testing.T) {
 		EvictionPolicy: EvictLRU,
 	})
 
-	rc.Set(0, []byte("first"))  // hash 0, oldest
+	rc.Set(0, []byte("first"))   // hash 0, oldest
 	rc.Set(99, []byte("second")) // forces eviction of hash 0
 
 	if _, ok := rc.Get(0); ok {
