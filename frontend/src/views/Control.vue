@@ -642,7 +642,7 @@ const openProxyLogs = async (id) => {
 const controlProxy = async (id, action) => {
     try {
         await axios.post('/api/proxies/control', { id, action });
-        toast.add({ severity: 'success', summary: t('common.success'), detail: t('control.controlCommandSent', { action }), life: 3000 });
+        toast.add({ severity: 'success', summary: t('common.success'), detail: t('control.controlCommandSent', { action: t('control.' + action) }), life: 3000 });
         pendingTimers.push(setTimeout(fetchProxies, 500));
     } catch (e) {
         toast.add({ severity: 'error', summary: t('common.error'), detail: e.response?.data || e.message, life: 5000 });
@@ -650,6 +650,7 @@ const controlProxy = async (id, action) => {
 };
 
 const controlAllProxies = async (action) => {
+    const actionKey = action === 'start_all' ? 'startAll' : 'stopAll';
     const message = action === 'start_all' ? t('control.startAllConfirm') : t('control.stopAllConfirm');
     confirm.require({
         message,
@@ -658,7 +659,7 @@ const controlAllProxies = async (action) => {
         accept: async () => {
             try {
                 await axios.post('/api/proxies/control', { action });
-                toast.add({ severity: 'success', summary: t('common.success'), detail: t('control.allControlCommandSent', { action }), life: 3000 });
+                toast.add({ severity: 'success', summary: t('common.success'), detail: t('control.allControlCommandSent', { action: t('control.' + actionKey) }), life: 3000 });
                 pendingTimers.push(setTimeout(fetchProxies, 500));
             } catch (e) {
                 toast.add({ severity: 'error', summary: t('common.error'), detail: e.response?.data || e.message, life: 5000 });
