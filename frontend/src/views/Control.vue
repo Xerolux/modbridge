@@ -7,7 +7,7 @@
                 <div class="space-y-3">
                     <div class="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.28em] text-[var(--text-muted)]">
                         <i class="pi pi-sliders-h"></i>
-                        Control Center
+                        {{ $t('control.centerLabel') }}
                         <span v-if="sseConnected !== null" class="flex items-center gap-1.5 ml-1">
                             <span class="status-dot" :class="sseConnected ? 'status-dot--running' : 'status-dot--error'"></span>
                             <span>{{ sseConnected ? t('common.connected') : t('common.disconnected') }}</span>
@@ -63,7 +63,7 @@
                     v-if="auth.hasPermission('proxy:create')"
                     icon="pi pi-plus"
                     severity="info"
-                    :label="$t('common.add') + ' Proxy'"
+                    :label="$t('control.addProxy')"
                     @click="openAddProxyDialog"
                     class="text-sm shrink-0"
                 />
@@ -178,7 +178,7 @@
                                             v-if="auth.hasPermission('proxy:control') && proxy.status !== 'Running'"
                                             icon="pi pi-play"
                                             severity="success"
-                                            label="Start"
+                                            :label="$t('control.start')"
                                             @click="controlProxy(proxy.id, 'start')"
                                             class="flex-1 min-h-[40px] rounded-2xl text-sm"
                                             size="small"
@@ -187,7 +187,7 @@
                                             v-if="auth.hasPermission('proxy:control') && proxy.status === 'Running'"
                                             icon="pi pi-stop"
                                             severity="danger"
-                                            label="Stop"
+                                            :label="$t('control.stop')"
                                             @click="controlProxy(proxy.id, 'stop')"
                                             class="flex-1 min-h-[40px] rounded-2xl text-sm"
                                             size="small"
@@ -224,7 +224,7 @@
             </Tabs>
         </div>
 
-         <Dialog v-model:visible="showProxyDialog" :header="isEditMode ? $t('common.edit') + ' Proxy' : $t('common.add') + ' Proxy'" modal class="w-full max-w-lg">
+         <Dialog v-model:visible="showProxyDialog" :header="isEditMode ? $t('control.editProxy') : $t('control.addProxy')" modal class="w-full max-w-lg">
              <div class="flex flex-col gap-4">
                  <div>
                      <label class="block text-sm font-medium mb-1">{{ $t('control.form.name') }}</label>
@@ -283,9 +283,9 @@
              </template>
          </Dialog>
 
-         <Dialog v-model:visible="showLogsDialog" :header="`Logs - ${currentProxy?.name}`" modal class="w-full max-w-4xl">
+         <Dialog v-model:visible="showLogsDialog" :header="$t('control.logsTitle', { name: currentProxy?.name })" modal class="w-full max-w-4xl">
               <div class="rounded-2xl p-4 font-mono text-sm h-[500px] overflow-y-auto bg-gray-100 dark:bg-black/40 border border-gray-200 dark:border-white/5">
-                  <div v-if="proxyLogs.length === 0" class="text-gray-400 dark:text-gray-500">No logs available</div>
+                  <div v-if="proxyLogs.length === 0" class="text-gray-400 dark:text-gray-500">{{ $t('control.noLogs') }}</div>
                   <div v-else class="space-y-1">
                       <div v-for="(log, index) in proxyLogs" :key="index" class="border-b border-gray-200 dark:border-white/5 pb-1">
                            <span class="text-gray-500 dark:text-gray-400">[{{ formatTime(log.timestamp) }}]</span>
@@ -354,7 +354,7 @@ let unwatchData = null;
 
 const defaultProxyForm = () => ({
     id: '',
-    name: 'New Proxy',
+    name: t('control.newProxyName'),
     listen_addr: ':5020',
     target_addr: '127.0.0.1:502',
     description: '',
@@ -379,7 +379,7 @@ const proxyLogs = ref([]);
 const groups = computed(() => {
     const groupMap = {};
     proxies.value.forEach(proxy => {
-        let proxyGroups = ['Ungrouped'];
+        let proxyGroups = [t('control.ungrouped')];
         if (proxy.tags && proxy.tags.length > 0) {
             proxyGroups = proxy.tags;
         }
@@ -397,7 +397,7 @@ const groups = computed(() => {
     }));
 
     if (result.length === 0) {
-         return [{ name: 'All', proxies: proxies.value }];
+         return [{ name: t('control.allGroup'), proxies: proxies.value }];
     }
 
     return result;
@@ -443,7 +443,7 @@ const fetchProxies = async () => {
         const res = await axios.get('/api/proxies');
         proxies.value = applyProxyOrder(res.data);
     } catch (e) {
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch proxies', life: 5000 });
+        toast.add({ severity: 'error', summary: t('common.error'), detail: t('control.fetchProxiesFailed'), life: 5000 });
     }
 };
 
@@ -518,15 +518,15 @@ const saveProxy = async () => {
     try {
         if (isEditMode.value) {
             await axios.put('/api/proxies', proxyForm.value);
-            toast.add({ severity: 'success', summary: 'Success', detail: 'Proxy updated', life: 3000 });
+            toast.add({ severity: 'success', summary: t('common.success'), detail: t('control.proxyUpdated'), life: 3000 });
         } else {
             await axios.post('/api/proxies', proxyForm.value);
-            toast.add({ severity: 'success', summary: 'Success', detail: 'Proxy created', life: 3000 });
+            toast.add({ severity: 'success', summary: t('common.success'), detail: t('control.proxyCreated'), life: 3000 });
         }
         showProxyDialog.value = false;
         await fetchProxies();
     } catch (e) {
-        toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data || e.message, life: 5000 });
+        toast.add({ severity: 'error', summary: t('common.error'), detail: e.response?.data || e.message, life: 5000 });
     } finally {
         savingProxy.value = false;
     }
@@ -540,10 +540,10 @@ const confirmDeleteProxy = (id) => {
         accept: async () => {
             try {
                 await axios.delete(`/api/proxies?id=${id}`);
-                toast.add({ severity: 'success', summary: 'Success', detail: 'Proxy deleted', life: 3000 });
+                toast.add({ severity: 'success', summary: t('common.success'), detail: t('control.proxyDeleted'), life: 3000 });
                 await fetchProxies();
             } catch (e) {
-                toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data || e.message, life: 5000 });
+                toast.add({ severity: 'error', summary: t('common.error'), detail: e.response?.data || e.message, life: 5000 });
             }
         }
     });
@@ -556,13 +556,13 @@ const toggleMenu = (event, proxy) => {
 
     if (auth.hasPermission('proxy:control')) {
         const controlGroup = {
-            label: 'Control',
+            label: t('control.controlGroup'),
             items: []
         };
 
         if (proxy.status !== 'Stopped' && proxy.status !== 'Error') {
             controlGroup.items.push({
-                label: 'Restart',
+                label: t('control.restart'),
                 icon: 'pi pi-refresh',
                 command: () => controlProxy(proxy.id, 'restart')
             });
@@ -570,13 +570,13 @@ const toggleMenu = (event, proxy) => {
 
         if (!proxy.paused && proxy.status === 'Running') {
             controlGroup.items.push({
-                label: 'Pause',
+                label: t('control.pause'),
                 icon: 'pi pi-pause',
                 command: () => controlProxy(proxy.id, 'pause')
             });
         } else if (proxy.paused) {
             controlGroup.items.push({
-                label: 'Resume',
+                label: t('control.resume'),
                 icon: 'pi pi-play',
                 command: () => controlProxy(proxy.id, 'resume')
             });
@@ -588,25 +588,25 @@ const toggleMenu = (event, proxy) => {
     }
 
     const settingsGroup = {
-        label: 'Manage',
+        label: t('control.manageGroup'),
         items: []
     };
 
     settingsGroup.items.push({
-        label: 'Test Connection',
+        label: t('control.testConnection'),
         icon: 'pi pi-search',
         command: () => testConnectivity(proxy)
     });
 
     settingsGroup.items.push({
-        label: 'View Logs',
+        label: t('control.viewLogs'),
         icon: 'pi pi-eye',
         command: () => openProxyLogs(proxy.id)
     });
 
     if (auth.hasPermission('proxy:edit')) {
         settingsGroup.items.push({
-            label: 'Edit',
+            label: t('control.edit'),
             icon: 'pi pi-pencil',
             command: () => openEditProxyDialog(proxy)
         });
@@ -614,7 +614,7 @@ const toggleMenu = (event, proxy) => {
 
     if (auth.hasPermission('proxy:delete')) {
         settingsGroup.items.push({
-            label: 'Delete',
+            label: t('common.delete'),
             icon: 'pi pi-trash',
             class: 'text-red-400',
             command: () => confirmDeleteProxy(proxy.id)
@@ -642,10 +642,10 @@ const openProxyLogs = async (id) => {
 const controlProxy = async (id, action) => {
     try {
         await axios.post('/api/proxies/control', { id, action });
-        toast.add({ severity: 'success', summary: 'Success', detail: `Proxy ${action} command sent`, life: 3000 });
+        toast.add({ severity: 'success', summary: t('common.success'), detail: t('control.controlCommandSent', { action }), life: 3000 });
         pendingTimers.push(setTimeout(fetchProxies, 500));
     } catch (e) {
-        toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data || e.message, life: 5000 });
+        toast.add({ severity: 'error', summary: t('common.error'), detail: e.response?.data || e.message, life: 5000 });
     }
 };
 
@@ -658,10 +658,10 @@ const controlAllProxies = async (action) => {
         accept: async () => {
             try {
                 await axios.post('/api/proxies/control', { action });
-                toast.add({ severity: 'success', summary: 'Success', detail: `All proxies ${actionLabel} command sent`, life: 3000 });
+                toast.add({ severity: 'success', summary: t('common.success'), detail: t('control.allControlCommandSent', { action }), life: 3000 });
                 pendingTimers.push(setTimeout(fetchProxies, 500));
             } catch (e) {
-                toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data || e.message, life: 5000 });
+                toast.add({ severity: 'error', summary: t('common.error'), detail: e.response?.data || e.message, life: 5000 });
             }
         }
     });
@@ -677,21 +677,21 @@ const testConnectivity = async (proxy) => {
             if (proxyConnStatus.reachable) {
                 toast.add({
                     severity: 'success',
-                    summary: 'Connection OK',
-                    detail: `${proxy.name} can reach ${proxyConnStatus.target}`,
+                    summary: t('control.connectionOk'),
+                    detail: t('control.connectionOkDetail', { name: proxy.name, target: proxyConnStatus.target }),
                     life: 4000
                 });
             } else {
                 toast.add({
                     severity: 'error',
-                    summary: 'Connection Failed',
-                    detail: `Cannot reach ${proxyConnStatus.target}: ${proxyConnStatus.error}`,
+                    summary: t('control.connectionFailed'),
+                    detail: t('control.connectionFailedDetail', { target: proxyConnStatus.target, error: proxyConnStatus.error }),
                     life: 5000
                 });
             }
         }
     } catch (e) {
-        toast.add({ severity: 'error', summary: 'Diagnostic Error', detail: e.message, life: 3000 });
+        toast.add({ severity: 'error', summary: t('control.diagnosticError'), detail: e.message, life: 3000 });
      } finally {
          testingProxy.value = null;
      }
