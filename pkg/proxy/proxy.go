@@ -428,7 +428,10 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}, glo
 			// Send error response to client
 			// Modbus exception: Gateway Target Device Failed to Respond
 			exceptionResp := modbus.CreateExceptionResponse(reqFrame, 0x0B)
-			clientConn.Write(exceptionResp)
+			if _, writeErr := clientConn.Write(exceptionResp); writeErr != nil {
+				p.log.Error(p.ID, fmt.Sprintf("Write exception response error: %v", writeErr))
+				return
+			}
 			continue
 		}
 

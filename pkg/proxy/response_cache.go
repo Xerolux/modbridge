@@ -139,15 +139,17 @@ func (rc *ResponseCache) evict() {
 func (rc *ResponseCache) evictLRU() {
 	var oldestHash uint64
 	var oldestTime time.Time
+	found := false
 
 	for hash, entry := range rc.cache {
-		if oldestTime.IsZero() || entry.LastAccess.Before(oldestTime) {
+		if !found || entry.LastAccess.Before(oldestTime) {
+			found = true
 			oldestTime = entry.LastAccess
 			oldestHash = hash
 		}
 	}
 
-	if oldestHash != 0 {
+	if found {
 		delete(rc.cache, oldestHash)
 		rc.stats.Evictions++
 	}
@@ -156,15 +158,17 @@ func (rc *ResponseCache) evictLRU() {
 func (rc *ResponseCache) evictLFU() {
 	var leastHash uint64
 	var leastHits int64
+	found := false
 
 	for hash, entry := range rc.cache {
-		if leastHits == 0 || entry.HitCount < leastHits {
+		if !found || entry.HitCount < leastHits {
+			found = true
 			leastHits = entry.HitCount
 			leastHash = hash
 		}
 	}
 
-	if leastHash != 0 {
+	if found {
 		delete(rc.cache, leastHash)
 		rc.stats.Evictions++
 	}

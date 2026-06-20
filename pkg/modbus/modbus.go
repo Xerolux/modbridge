@@ -9,96 +9,45 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"sync"
 )
 
 // MBAPHeaderLength is the length of the Modbus Application Protocol header prefix (Transaction ID, Protocol ID, Length).
 const MBAPHeaderLength = 6
 
-var (
-	headerPool = sync.Pool{
-		New: func() interface{} {
-			return make([]byte, MBAPHeaderLength)
-		},
-	}
-	payloadPool = sync.Pool{
-		New: func() interface{} {
-			b := make([]byte, 0, 256)
-			return &b
-		},
-	}
-	framePool = sync.Pool{
-		New: func() interface{} {
-			b := make([]byte, 0, 260)
-			return &b
-		},
-	}
-)
+// MaxFrameLength is the largest Modbus TCP ADU we accept (6-byte MBAP header +
+// max 254-byte PDU = 260). The MBAP length field covers UnitID + PDU, so a
+// valid length is at most 254. Anything larger indicates a malformed or
+// malicious frame and also guards against allocating oversized buffers.
+const MaxFrameLength = 260
 
-// ReadFrame reads a full Modbus TCP frame from the reader.
+// maxPDULength is the largest payload (UnitID + PDU) accepted after the header.
+const maxPDULength = MaxFrameLength - MBAPHeaderLength
+
+// ReadFrame reads a single Modbus TCP frame (MBAP header + PDU) from r and
+// returns a freshly allocated buffer containing the complete frame.
+//
+// The returned slice is owned by the caller; there is no pool to return it to.
+// A previous implementation used three sync.Pools whose bookkeeping was broken
+// (buffers were leaked on large frames and ReleaseFrame was never called), so
+// the pooling added complexity and overhead without recycling anything. This
+// single-allocation version is simpler, leak-free and avoids a per-request
+// DoS vector since the length field is strictly validated.
 func ReadFrame(r io.Reader) ([]byte, error) {
-	// Get header buffer from pool
-	header := headerPool.Get().([]byte)
-	defer headerPool.Put(header)
-
-	// Read the first 6 bytes to get the length
-	if _, err := io.ReadFull(r, header); err != nil {
+	var header [MBAPHeaderLength]byte
+	if _, err := io.ReadFull(r, header[:]); err != nil {
 		return nil, err
 	}
 
-	// Parse the length field (bytes 4 and 5)
 	length := binary.BigEndian.Uint16(header[4:6])
-
-	// The length field represents the number of bytes following.
-	// We need to read 'length' bytes.
-	// Sanity check for length (Modbus PDU max is usually 253 + 1 Unit ID = 254, but let's allow a bit more just in case, standard says 260 bytes max total frame)
-	if length == 0 || length > 300 {
+	if length == 0 || int(length) > maxPDULength {
 		return nil, fmt.Errorf("invalid modbus length: %d", length)
 	}
 
-	var payload []byte
-	pp := payloadPool.Get().(*[]byte)
-	if cap(*pp) >= int(length) {
-		payload = (*pp)[:length]
-	} else {
-		payload = make([]byte, length)
-	}
-
-	if _, err := io.ReadFull(r, payload); err != nil {
-		if cap(payload) <= 256 {
-			*pp = payload[:0]
-			payloadPool.Put(pp)
-		}
+	// One allocation for the whole frame: header + payload.
+	frame := make([]byte, MBAPHeaderLength+int(length))
+	copy(frame, header[:])
+	if _, err := io.ReadFull(r, frame[MBAPHeaderLength:]); err != nil {
 		return nil, err
 	}
-
-	fp := framePool.Get().(*[]byte)
-	totalLen := MBAPHeaderLength + int(length)
-	if cap(*fp) < totalLen {
-		*fp = make([]byte, 0, totalLen)
-	}
-	frame := (*fp)[:0]
-	frame = append(frame, header...)
-	frame = append(frame, payload...)
-
-	if cap(payload) <= 256 {
-		*pp = payload[:0]
-		payloadPool.Put(pp)
-	}
-
 	return frame, nil
-}
-
-// ReleaseFrame returns a frame buffer to the pool.
-func ReleaseFrame(frame []byte) {
-	if cap(frame) >= MBAPHeaderLength {
-		fp := framePool.Get().(*[]byte)
-		*fp = frame[:0]
-		framePool.Put(fp)
-	}
-}
-
-func init() {
-	_ = payloadPool.Get
-	_ = framePool.Get
 }
