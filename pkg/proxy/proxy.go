@@ -75,6 +75,7 @@ type ProxyInstance struct {
 	connPool  *pool.Pool
 	connSem   chan struct{} // Semaphore for limiting concurrent connections
 	connSemMu sync.Mutex    // Protects connSem initialization
+	startMu   sync.Mutex    // Protects Start/Stop lifecycle
 
 	log           *logger.Logger
 	deviceTracker *devices.Tracker
@@ -166,6 +167,9 @@ func NewProxyInstance(id, name, listen, target string, maxReadSize, connectionTi
 
 // Start starts the proxy.
 func (p *ProxyInstance) Start() error {
+	p.startMu.Lock()
+	defer p.startMu.Unlock()
+
 	if p.Stats.GetStatus() == "Running" {
 		return nil
 	}
@@ -274,6 +278,9 @@ func (p *ProxyInstance) Start() error {
 
 // Stop stops the proxy.
 func (p *ProxyInstance) Stop() {
+	p.startMu.Lock()
+	defer p.startMu.Unlock()
+
 	if p.Stats.GetStatus() != "Running" {
 		return
 	}
@@ -309,6 +316,7 @@ func (p *ProxyInstance) Stop() {
 func (p *ProxyInstance) acceptLoop() {
 	defer p.wg.Done()
 
+acceptLoop:
 	for {
 		conn, err := p.listener.Accept()
 		if err != nil {
@@ -326,18 +334,22 @@ func (p *ProxyInstance) acceptLoop() {
 		configureTCPConn(conn)
 
 		// Check GLOBAL connection limit first (system-wide across all proxies).
-		// Use Add+check to avoid a CAS retry-loop that drops connections on contention.
+		// Use CAS loop to avoid temporary overshoot of the limit.
 		maxConns := atomic.LoadInt64(&globalMaxConnections)
 		globalLimitApplied := false
 		if maxConns > 0 {
-			current := atomic.AddInt64(&globalActiveConnections, 1)
-			if current > maxConns {
-				atomic.AddInt64(&globalActiveConnections, -1) // undo
-				conn.Close()
-				p.log.Warn(p.ID, fmt.Sprintf("Global connection limit reached (%d), dropping connection", maxConns))
-				continue
+			for {
+				current := atomic.LoadInt64(&globalActiveConnections)
+				if current >= maxConns {
+					conn.Close()
+					p.log.Warn(p.ID, fmt.Sprintf("Global connection limit reached (%d), dropping connection", maxConns))
+					continue acceptLoop
+				}
+				if atomic.CompareAndSwapInt64(&globalActiveConnections, current, current+1) {
+					globalLimitApplied = true
+					break
+				}
 			}
-			globalLimitApplied = true
 		}
 
 		// Check connection limit (if configured)
@@ -541,7 +553,10 @@ func (p *ProxyInstance) handleSplitRead(reqFrame []byte) ([]byte, error) {
 	}
 
 	// Construct final response
-	respFrame := modbus.CreateReadResponse(txID, unitID, fc, aggregatedData)
+	respFrame, err := modbus.CreateReadResponse(txID, unitID, fc, aggregatedData)
+	if err != nil {
+		return nil, fmt.Errorf("create read response: %w", err)
+	}
 	return respFrame, nil
 }
 

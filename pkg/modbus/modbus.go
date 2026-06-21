@@ -39,7 +39,7 @@ func ReadFrame(r io.Reader) ([]byte, error) {
 	}
 
 	length := binary.BigEndian.Uint16(header[4:6])
-	if length == 0 || int(length) > maxPDULength {
+	if length < 2 || int(length) > maxPDULength {
 		return nil, fmt.Errorf("invalid modbus length: %d", length)
 	}
 

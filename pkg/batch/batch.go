@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 )
@@ -144,15 +145,23 @@ func defaultExecuteHandler(ctx context.Context, requests []*Request) []*Response
 func (b *Batcher) Submit(req *Request) <-chan *Response {
 	responseChan := make(chan *Response, 1)
 
-	// Add metadata to track response
-	if req.Metadata == nil {
-		req.Metadata = responseChan
-	} else {
-		// Store response channel in metadata map if possible
+	// Store response channel without mutating caller's metadata
+	reqCopy := *req
+	if req.Metadata != nil {
 		if m, ok := req.Metadata.(map[string]any); ok {
-			m["responseChan"] = responseChan
+			metaCopy := make(map[string]any, len(m)+1)
+			for k, v := range m {
+				metaCopy[k] = v
+			}
+			metaCopy["responseChan"] = responseChan
+			reqCopy.Metadata = metaCopy
+		} else {
+			reqCopy.Metadata = responseChan
 		}
+	} else {
+		reqCopy.Metadata = responseChan
 	}
+	req = &reqCopy
 
 	select {
 	case b.requestChan <- req:
@@ -426,14 +435,10 @@ func (o *Optimizer) splitGroup(requests []*Request) [][]*Request {
 		return nil
 	}
 
-	// Sort requests by address (simple bubble sort for small lists)
-	for i := 0; i < len(requests)-1; i++ {
-		for j := 0; j < len(requests)-i-1; j++ {
-			if requests[j].Address > requests[j+1].Address {
-				requests[j], requests[j+1] = requests[j+1], requests[j]
-			}
-		}
-	}
+	// Sort requests by address
+	sort.Slice(requests, func(i, j int) bool {
+		return requests[i].Address < requests[j].Address
+	})
 
 	var batches [][]*Request
 	currentBatch := []*Request{requests[0]}
@@ -498,13 +503,9 @@ func CombineRequests(requests []*Request) (*Request, []int, error) {
 	// Sort by address
 	sorted := make([]*Request, len(requests))
 	copy(sorted, requests)
-	for i := 0; i < len(sorted)-1; i++ {
-		for j := 0; j < len(sorted)-i-1; j++ {
-			if sorted[j].Address > sorted[j+1].Address {
-				sorted[j], sorted[j+1] = sorted[j+1], sorted[j]
-			}
-		}
-	}
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Address < sorted[j].Address
+	})
 
 	// Find range
 	minAddr := sorted[0].Address
@@ -561,7 +562,7 @@ func SplitResponse(combined *Response, indices []int) []*Response {
 			startIdx := indices[i]
 			endIdx := startIdx + int(origReq.Quantity)
 
-			if combined.Values != nil && startIdx+len(combined.Values) >= 0 && endIdx <= len(combined.Values) {
+			if combined.Values != nil && startIdx >= 0 && endIdx <= len(combined.Values) {
 				resp.Values = combined.Values[startIdx:endIdx]
 			} else {
 				resp.Error = fmt.Errorf("response index out of range")

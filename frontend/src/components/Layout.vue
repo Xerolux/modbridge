@@ -94,7 +94,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
             class="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel-item)] text-sm select-none"
           >
             <i class="pi pi-user text-xs text-[var(--text-muted)]"></i>
-            <span class="text-[var(--text-secondary)] max-w-[9rem] truncate">{{ auth.user.username }}</span>
+            <span class="text-[var(--text-secondary)] max-w-[12rem] truncate">{{ auth.user.username }}</span>
             <span class="text-xs text-[var(--text-muted)] hidden xl:inline">({{ auth.user.role }})</span>
           </div>
 
@@ -234,9 +234,9 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 11px;
+  padding: 6px 8px;
   border-radius: 12px;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   cursor: pointer;
   color: var(--text-muted);
   text-decoration: none;

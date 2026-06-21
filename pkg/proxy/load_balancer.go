@@ -238,35 +238,43 @@ func (lb *LoadBalancer) ReleaseEndpoint(endpoint *TargetEndpoint) {
 
 // RecordFailure records a failure for an endpoint
 func (lb *LoadBalancer) RecordFailure(address string) {
-	lb.mu.RLock()
-	defer lb.mu.RUnlock()
-
-	for _, ep := range lb.endpoints {
-		if ep.Address == address {
-			ep.mu.Lock()
-			ep.FailCount++
-			ep.mu.Unlock()
-
-			lb.healthChecker.RecordFailure(address)
-			break
+	var found bool
+	func() {
+		lb.mu.RLock()
+		defer lb.mu.RUnlock()
+		for _, ep := range lb.endpoints {
+			if ep.Address == address {
+				ep.mu.Lock()
+				ep.FailCount++
+				ep.mu.Unlock()
+				found = true
+				break
+			}
 		}
+	}()
+	if found {
+		lb.healthChecker.RecordFailure(address)
 	}
 }
 
 // RecordSuccess records a successful request for an endpoint
 func (lb *LoadBalancer) RecordSuccess(address string) {
-	lb.mu.RLock()
-	defer lb.mu.RUnlock()
-
-	for _, ep := range lb.endpoints {
-		if ep.Address == address {
-			ep.mu.Lock()
-			ep.FailCount = 0 // Reset on success
-			ep.mu.Unlock()
-
-			lb.healthChecker.RecordSuccess(address)
-			break
+	var found bool
+	func() {
+		lb.mu.RLock()
+		defer lb.mu.RUnlock()
+		for _, ep := range lb.endpoints {
+			if ep.Address == address {
+				ep.mu.Lock()
+				ep.FailCount = 0
+				ep.mu.Unlock()
+				found = true
+				break
+			}
 		}
+	}()
+	if found {
+		lb.healthChecker.RecordSuccess(address)
 	}
 }
 
@@ -364,13 +372,12 @@ func NewEndpointHealthChecker(lb *LoadBalancer, config LoadBalancerConfig) *Endp
 // RecordFailure records a failure for an endpoint
 func (hc *EndpointHealthChecker) RecordFailure(address string) {
 	hc.mu.Lock()
-	defer hc.mu.Unlock()
-
 	hc.failCounts[address]++
 	hc.successCounts[address] = 0
+	shouldMark := hc.failCounts[address] >= hc.config.UnhealthyThreshold
+	hc.mu.Unlock()
 
-	// Check if endpoint should be marked unhealthy
-	if hc.failCounts[address] >= hc.config.UnhealthyThreshold {
+	if shouldMark {
 		hc.markUnhealthy(address)
 	}
 }
@@ -378,12 +385,11 @@ func (hc *EndpointHealthChecker) RecordFailure(address string) {
 // RecordSuccess records a success for an endpoint
 func (hc *EndpointHealthChecker) RecordSuccess(address string) {
 	hc.mu.Lock()
-	defer hc.mu.Unlock()
-
 	hc.successCounts[address]++
+	shouldMark := hc.successCounts[address] >= hc.config.HealthyThreshold
+	hc.mu.Unlock()
 
-	// Check if endpoint should be marked healthy
-	if hc.successCounts[address] >= hc.config.HealthyThreshold {
+	if shouldMark {
 		hc.markHealthy(address)
 	}
 }
@@ -391,16 +397,19 @@ func (hc *EndpointHealthChecker) RecordSuccess(address string) {
 // CheckAll performs health checks on all endpoints
 func (hc *EndpointHealthChecker) CheckAll() {
 	hc.lb.mu.RLock()
-	defer hc.lb.mu.RUnlock()
+	addrs := make([]string, len(hc.lb.endpoints))
+	for i, ep := range hc.lb.endpoints {
+		addrs[i] = ep.Address
+	}
+	hc.lb.mu.RUnlock()
 
-	for _, ep := range hc.lb.endpoints {
-		// Try to connect to endpoint
-		conn, err := net.DialTimeout("tcp", ep.Address, 5*time.Second)
+	for _, addr := range addrs {
+		conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
 		if err != nil {
-			hc.RecordFailure(ep.Address)
+			hc.RecordFailure(addr)
 		} else {
 			conn.Close()
-			hc.RecordSuccess(ep.Address)
+			hc.RecordSuccess(addr)
 		}
 	}
 }

@@ -22,6 +22,8 @@ type HealthChecker struct {
 	log         func(string, string)
 	onUnhealthy func()
 	onRecovery  func()
+	running     bool
+	callbackMu  sync.Mutex // prevents overlapping callbacks
 }
 
 type HealthStatus struct {
@@ -56,11 +58,33 @@ func NewHealthChecker(target string, interval, timeout time.Duration, logFn func
 }
 
 func (hc *HealthChecker) Start() {
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+
+	if hc.running {
+		return
+	}
+	hc.running = true
+
+	select {
+	case <-hc.ctx.Done():
+		hc.ctx, hc.cancel = context.WithCancel(context.Background())
+	default:
+	}
+
 	hc.wg.Add(1)
 	go hc.loop()
 }
 
 func (hc *HealthChecker) Stop() {
+	hc.mu.Lock()
+	if !hc.running {
+		hc.mu.Unlock()
+		return
+	}
+	hc.running = false
+	hc.mu.Unlock()
+
 	hc.cancel()
 	hc.wg.Wait()
 }
@@ -104,7 +128,12 @@ func (hc *HealthChecker) check() {
 			}
 		}
 		if wasHealthy && hc.onUnhealthy != nil {
-			go hc.onUnhealthy()
+			hc.callbackMu.Lock()
+			fn := hc.onUnhealthy
+			hc.callbackMu.Unlock()
+			if fn != nil {
+				go fn()
+			}
 		}
 		return
 	}
@@ -119,8 +148,11 @@ func (hc *HealthChecker) check() {
 		if hc.log != nil {
 			hc.log("HC", "target is reachable again")
 		}
-		if hc.onRecovery != nil {
-			go hc.onRecovery()
+		hc.callbackMu.Lock()
+		fn := hc.onRecovery
+		hc.callbackMu.Unlock()
+		if fn != nil {
+			go fn()
 		}
 	}
 }

@@ -122,7 +122,7 @@ func handleMockTarget(conn net.Conn) {
 			data[i] = 0xAA
 		}
 
-		resp := modbus.CreateReadResponse(txID, unitID, fc, data)
+		resp, _ := modbus.CreateReadResponse(txID, unitID, fc, data)
 		conn.Write(resp)
 	}
 }

@@ -96,9 +96,9 @@ func (gm *GlobalConnectionManager) GetOrCreatePool(targetAddr string, dialer fun
 		return pool, nil
 	}
 
-	// Check global limit
-	if atomic.LoadInt32(&gm.currentTotal) >= int32(gm.globalLimit) {
-		return nil, fmt.Errorf("global connection limit reached: %d", gm.globalLimit)
+	// Check global limit via CAS loop
+	if err := gm.incrementConnections(); err != nil {
+		return nil, fmt.Errorf("global connection limit reached: %w", err)
 	}
 
 	// Create new pool with enhanced settings
@@ -182,13 +182,18 @@ func (gm *GlobalConnectionManager) cleanupLoop() {
 			return
 		case <-ticker.C:
 			gm.mu.RLock()
-			pools := make(map[string]*Pool)
+			pools := make(map[string]*Pool, len(gm.pools))
 			for k, v := range gm.pools {
 				pools[k] = v
 			}
 			gm.mu.RUnlock()
 
-			_ = pools
+			for _, pool := range pools {
+				stats := pool.Stats()
+				if stats.IdleConns > gm.config.MaxIdlePerPool {
+					gm.healthChecker.RecordIssue("global", "too_many_idle", stats.IdleConns)
+				}
+			}
 		}
 	}
 }

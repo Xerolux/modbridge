@@ -39,13 +39,19 @@ const de = {
   // Dashboard
   dashboard: {
     title: 'Dashboard',
+    liveLabel: 'Live Dashboard',
+    subtitle: 'Widgets per Drag-and-Drop anordnen',
     addWidget: 'Widget hinzufügen',
     resetLayout: 'Layout zurücksetzen',
     loading: 'Lade Dashboard...',
     error: 'Fehler beim Laden',
     retry: 'Erneut versuchen',
     selectProxy: 'Proxy wählen',
-    widgetRemove: 'Widget entfernen'
+    widgetRemove: 'Widget entfernen',
+    layout: 'Layout',
+    layoutLocked: 'Gesperrt',
+    layoutDrag: 'Ziehen',
+    workspace: 'Arbeitsbereich'
   },
 
   // Login
@@ -123,6 +129,7 @@ const de = {
   control: {
     title: 'Steuerung',
     subtitle: 'Modbus TCP Proxies verwalten und überwachen',
+    badge: 'Control Center',
     startAll: 'Alle starten',
     stopAll: 'Alle stoppen',
     start: 'Starten',
@@ -237,6 +244,16 @@ const de = {
     changePassword: 'Passwort ändern'
   },
 
+  // Widget
+  widget: {
+    proxyLabel: 'Modbus Proxy',
+    client: 'Client',
+    clients: 'Clients',
+    drag: 'Verschieben',
+    widgets: 'Widgets',
+    proxies: 'Proxies'
+  },
+
   // Common
   common: {
     save: 'Speichern',
@@ -266,6 +283,8 @@ const de = {
     live: 'Live',
     connected: 'Verbunden',
     disconnected: 'Getrennt',
+    connecting: 'Verbinden...',
+    running: 'Aktiv',
     justNow: 'Gerade eben',
     secondsAgo: 'vor {n}s',
     minuteAgo: 'vor 1 Min.',
@@ -321,13 +340,19 @@ const en = {
   // Dashboard
   dashboard: {
     title: 'Dashboard',
+    liveLabel: 'Live Dashboard',
+    subtitle: 'Organize widgets with drag-and-drop',
     addWidget: 'Add Widget',
     resetLayout: 'Reset Layout',
     loading: 'Loading Dashboard...',
     error: 'Error loading',
     retry: 'Retry',
     selectProxy: 'Select Proxy',
-    widgetRemove: 'Remove Widget'
+    widgetRemove: 'Remove Widget',
+    layout: 'Layout',
+    layoutLocked: 'Locked',
+    layoutDrag: 'Drag',
+    workspace: 'Workspace'
   },
 
   // Login
@@ -405,6 +430,7 @@ const en = {
   control: {
     title: 'Control',
     subtitle: 'Manage and monitor Modbus TCP proxies',
+    badge: 'Control Center',
     startAll: 'Start All',
     stopAll: 'Stop All',
     start: 'Start',
@@ -519,6 +545,16 @@ const en = {
     changePassword: 'Change Password'
   },
 
+  // Widget
+  widget: {
+    proxyLabel: 'Modbus Proxy',
+    client: 'Client',
+    clients: 'Clients',
+    drag: 'Move',
+    widgets: 'Widgets',
+    proxies: 'Proxies'
+  },
+
   // Common
   common: {
     save: 'Save',
@@ -546,6 +582,8 @@ const en = {
     live: 'Live',
     connected: 'Connected',
     disconnected: 'Disconnected',
+    connecting: 'Connecting...',
+    running: 'Running',
     justNow: 'Just now',
     secondsAgo: '{n}s ago',
     minuteAgo: '1 min ago',

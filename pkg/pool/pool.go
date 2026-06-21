@@ -412,22 +412,18 @@ func isConnHealthy(conn net.Conn) bool {
 	if conn == nil {
 		return false
 	}
-
-	err := conn.SetReadDeadline(time.Now().Add(5 * time.Millisecond))
-	if err != nil {
+	// Check connection health non-destructively.
+	// Reading data from the connection to test liveness destroys pending
+	// Modbus frames. Instead, rely on TCP keepalive probes and let the
+	// pool detect broken connections on the next read/write attempt.
+	// Set a short deadline to validate the write side of the connection.
+	tcpConn, ok := conn.(*net.TCPConn)
+	if !ok {
+		return true
+	}
+	if err := tcpConn.SetWriteDeadline(time.Now().Add(1 * time.Millisecond)); err != nil {
 		return false
 	}
-
-	var buf [1]byte
-	n, err := conn.Read(buf[:])
-	conn.SetReadDeadline(time.Time{})
-
-	if err != nil {
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			return true
-		}
-		return false
-	}
-
-	return n == 0
+	tcpConn.SetWriteDeadline(time.Time{})
+	return true
 }

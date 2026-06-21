@@ -121,8 +121,10 @@ func (pq *PriorityQueue) Enqueue(req *Request) error {
 			// Drop oldest low priority request
 			dropped := pq.queues[PriorityLow][0]
 			pq.queues[PriorityLow] = pq.queues[PriorityLow][1:]
-			dropped.ErrorChan <- ErrRequestDropped
-			close(dropped.ErrorChan)
+			if dropped.ErrorChan != nil {
+				dropped.ErrorChan <- ErrRequestDropped
+				close(dropped.ErrorChan)
+			}
 		} else {
 			pq.totalRejected++
 			return ErrQueueFull
@@ -211,8 +213,10 @@ func (pq *PriorityQueue) checkTimeouts() {
 		for _, req := range pq.queues[priority] {
 			if now.After(req.Deadline) {
 				pq.totalTimeout++
-				req.ErrorChan <- ErrRequestTimeout
-				close(req.ErrorChan)
+				if req.ErrorChan != nil {
+					req.ErrorChan <- ErrRequestTimeout
+					close(req.ErrorChan)
+				}
 			} else {
 				newQueue = append(newQueue, req)
 			}
@@ -261,8 +265,10 @@ func (pq *PriorityQueue) Stop() {
 	// Close all pending request channels
 	for _, queue := range pq.queues {
 		for _, req := range queue {
-			req.ErrorChan <- ErrQueueClosed
-			close(req.ErrorChan)
+			if req.ErrorChan != nil {
+				req.ErrorChan <- ErrQueueClosed
+				close(req.ErrorChan)
+			}
 		}
 	}
 	pq.mu.Unlock()

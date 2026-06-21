@@ -79,11 +79,10 @@ func ParseReadResponse(frame []byte) ([]byte, error) {
 }
 
 // CreateReadResponse constructs a Modbus TCP read response frame.
-func CreateReadResponse(txID uint16, unitID uint8, fc uint8, data []byte) []byte {
+func CreateReadResponse(txID uint16, unitID uint8, fc uint8, data []byte) ([]byte, error) {
 	byteCount := len(data)
-	// Validate byteCount to prevent overflow
 	if byteCount > 255 {
-		byteCount = 255
+		return nil, fmt.Errorf("data too large for read response: %d bytes exceeds 255 byte limit", byteCount)
 	}
 	length := 3 + byteCount // UnitID(1) + FC(1) + ByteCount(1) + Data(N)
 	frame := make([]byte, 6+length)
@@ -96,7 +95,7 @@ func CreateReadResponse(txID uint16, unitID uint8, fc uint8, data []byte) []byte
 	frame[7] = fc
 	frame[8] = uint8(byteCount) // Safe now due to validation above
 	copy(frame[9:], data[:byteCount])
-	return frame
+	return frame, nil
 }
 
 // ExceptionResponse constructs a Modbus TCP exception response.

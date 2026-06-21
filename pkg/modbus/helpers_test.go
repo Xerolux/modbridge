@@ -61,7 +61,10 @@ func TestReadResponseHelpers(t *testing.T) {
 	data := []byte{0x00, 0x01, 0x00, 0x02} // 2 registers
 
 	// Test CreateReadResponse
-	frame := CreateReadResponse(txID, unitID, fc, data)
+	frame, err := CreateReadResponse(txID, unitID, fc, data)
+	if err != nil {
+		t.Fatalf("CreateReadResponse error: %v", err)
+	}
 
 	// Verify length (Header 6 + UnitID 1 + FC 1 + ByteCount 1 + Data 4 = 13)
 	expectedLen := 6 + 1 + 1 + 1 + 4

@@ -5,7 +5,7 @@
         <div class="space-y-3">
           <div class="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.28em] text-[var(--text-muted)]">
             <i class="pi pi-th-large"></i>
-            Live Dashboard
+            {{ t('dashboard.liveLabel') }}
             <span v-if="sseConnected !== null" class="flex items-center gap-1.5 ml-1">
               <span class="status-dot" :class="sseConnected ? 'status-dot--running' : 'status-dot--error'"></span>
               <span>{{ sseConnected ? t('common.connected') : t('common.disconnected') }}</span>
@@ -14,27 +14,27 @@
           <div>
             <h1 class="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white">Dashboard</h1>
             <p class="mt-2 max-w-2xl text-sm sm:text-base text-surface-600 dark:text-surface-300">
-              Organize widgets with drag-and-drop
+              {{ t('dashboard.subtitle') }}
             </p>
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div class="dashboard-stat">
-            <span class="dashboard-stat-label">Widgets</span>
+            <span class="dashboard-stat-label">{{ t('widget.widgets') }}</span>
             <strong class="dashboard-stat-value">{{ widgets.length }}</strong>
           </div>
           <div class="dashboard-stat">
-            <span class="dashboard-stat-label">Proxies</span>
+            <span class="dashboard-stat-label">{{ t('widget.proxies') }}</span>
             <strong class="dashboard-stat-value">{{ proxies.length }}</strong>
           </div>
           <div class="dashboard-stat">
-            <span class="dashboard-stat-label">Running</span>
+            <span class="dashboard-stat-label">{{ t('common.running') }}</span>
             <strong class="dashboard-stat-value">{{ runningProxyCount }}</strong>
           </div>
           <div class="dashboard-stat">
-            <span class="dashboard-stat-label">Layout</span>
-            <strong class="dashboard-stat-value">{{ isMobileLayout ? 'Locked' : 'Drag' }}</strong>
+            <span class="dashboard-stat-label">{{ t('dashboard.layout') }}</span>
+            <strong class="dashboard-stat-value">{{ isMobileLayout ? t('dashboard.layoutLocked') : t('dashboard.layoutDrag') }}</strong>
           </div>
         </div>
       </div>
@@ -42,7 +42,7 @@
 
     <div class="dashboard-header flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
       <div class="space-y-1">
-        <h2 class="text-xl font-bold text-surface-900 dark:text-white">Workspace</h2>
+        <h2 class="text-xl font-bold text-surface-900 dark:text-white">{{ t('dashboard.workspace') }}</h2>
       </div>
 
       <div class="flex flex-wrap gap-2 sm:gap-3 w-full lg:w-auto">
@@ -200,7 +200,7 @@ const error = ref(null);
 const errorMessage = ref('');
 const layoutEditing = ref(false);
 const isMobileLayout = ref(window.innerWidth <= BREAKPOINTS.MOBILE);
-const sseConnected = ref(false);
+const sseConnected = ref(null);
 let sseDisconnect = null;
 let unwatchData = null;
 let gridInitialized = false;

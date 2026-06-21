@@ -59,8 +59,8 @@ export function useEventSource(url, options = {}) {
           return;
         }
 
-        // Give up on authentication errors; they will not recover by reconnecting
-        if (err?.target?.readyState === EventSource.CLOSED && err?.target?.status === 401) {
+        // Give up on authentication/authorization errors; they will not recover by reconnecting
+        if (err?.target?.readyState === EventSource.CLOSED && (err?.target?.status === 401 || err?.target?.status === 403)) {
           disconnect();
           return;
         }

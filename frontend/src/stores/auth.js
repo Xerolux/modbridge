@@ -4,7 +4,7 @@ import axios from '../axios.js'
 import { onUnauthorized } from '../utils/authEvents'
 
 export const useAuthStore = defineStore('auth', () => {
-  const AUTH_CHECK_CACHE_MS = 30000
+  const AUTH_CHECK_CACHE_MS = 5000
   const isAuthenticated = ref(false)
   const user = ref({
     userId: '',

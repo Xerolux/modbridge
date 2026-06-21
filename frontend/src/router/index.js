@@ -17,6 +17,11 @@ const prefetchMainRoutes = () => {
   Layout()
   Control()
   Config()
+  Logs()
+  Devices()
+  SystemInfo()
+  Users()
+  Audit()
 }
 
  const routes = [

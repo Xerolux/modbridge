@@ -1,4 +1,8 @@
 <script setup>
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
+
 const props = defineProps({
   title: String,
   value: [String, Number],
@@ -36,7 +40,7 @@ const statusDotClass = {
       <!-- Header -->
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0 flex-1">
-          <div class="text-[0.68rem] font-semibold uppercase tracking-[0.26em] text-[var(--text-muted)] mb-1.5">Modbus Proxy</div>
+          <div class="text-[0.68rem] font-semibold uppercase tracking-[0.26em] text-[var(--text-muted)] mb-1.5">{{ t('widget.proxyLabel') }}</div>
           <div class="text-base font-bold text-[var(--text-primary)] truncate leading-tight" :title="title">{{ title }}</div>
         </div>
         <div :class="statusClass[status] || statusClass.Unknown" class="shrink-0">
@@ -56,11 +60,11 @@ const statusDotClass = {
         <div class="flex items-center justify-between gap-2 flex-wrap">
           <div v-if="activeConnections !== null" class="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
             <span :class="statusDotClass[status] || statusDotClass.Unknown"></span>
-            <span>{{ activeConnections }} {{ activeConnections === 1 ? 'Client' : 'Clients' }}</span>
+            <span>{{ activeConnections }} {{ activeConnections === 1 ? t('widget.client') : t('widget.clients') }}</span>
           </div>
           <div class="widget-drag-hint ml-auto">
             <i class="pi pi-arrows-alt text-xs"></i>
-            <span>Verschieben</span>
+            <span>{{ t('widget.drag') }}</span>
           </div>
         </div>
       </div>

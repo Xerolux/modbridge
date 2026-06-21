@@ -81,25 +81,29 @@ func NewResponseCache(config ResponseCacheConfig) *ResponseCache {
 }
 
 func (rc *ResponseCache) Get(hash uint64) ([]byte, bool) {
-	rc.mu.Lock()
-	defer rc.mu.Unlock()
-
+	rc.mu.RLock()
 	entry, exists := rc.cache[hash]
 	if !exists {
+		rc.mu.RUnlock()
+		rc.mu.Lock()
 		rc.stats.Misses++
+		rc.mu.Unlock()
 		return nil, false
 	}
 
 	if time.Now().After(entry.ExpiresAt) {
+		rc.mu.RUnlock()
+		rc.mu.Lock()
 		delete(rc.cache, hash)
 		rc.stats.Misses++
+		rc.mu.Unlock()
 		return nil, false
 	}
 
 	entry.LastAccess = time.Now()
 	entry.HitCount++
-
 	rc.stats.Hits++
+	rc.mu.RUnlock()
 	return entry.Response, true
 }
 
@@ -107,7 +111,8 @@ func (rc *ResponseCache) Set(hash uint64, response []byte) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 
-	if len(rc.cache) >= rc.maxSize {
+	_, exists := rc.cache[hash]
+	if !exists && len(rc.cache) >= rc.maxSize {
 		rc.evict()
 	}
 
