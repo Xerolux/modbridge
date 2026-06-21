@@ -5,36 +5,36 @@
         <div class="space-y-3">
           <div class="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.28em] text-[var(--text-muted)]">
             <i class="pi pi-th-large"></i>
-            Live Dashboard
+            {{ t('dashboard.liveLabel') }}
             <span v-if="sseConnected !== null" class="flex items-center gap-1.5 ml-1">
               <span class="status-dot" :class="sseConnected ? 'status-dot--running' : 'status-dot--error'"></span>
               <span>{{ sseConnected ? t('common.connected') : t('common.disconnected') }}</span>
             </span>
           </div>
           <div>
-            <h1 class="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white">Dashboard</h1>
+            <h1 class="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white">{{ t('dashboard.title') }}</h1>
             <p class="mt-2 max-w-2xl text-sm sm:text-base text-surface-600 dark:text-surface-300">
-              Organize widgets with drag-and-drop
+              {{ t('dashboard.subtitle') }}
             </p>
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div class="dashboard-stat">
-            <span class="dashboard-stat-label">Widgets</span>
+            <span class="dashboard-stat-label">{{ t('dashboard.widgetsLabel') }}</span>
             <strong class="dashboard-stat-value">{{ widgets.length }}</strong>
           </div>
           <div class="dashboard-stat">
-            <span class="dashboard-stat-label">Proxies</span>
+            <span class="dashboard-stat-label">{{ t('dashboard.proxiesLabel') }}</span>
             <strong class="dashboard-stat-value">{{ proxies.length }}</strong>
           </div>
           <div class="dashboard-stat">
-            <span class="dashboard-stat-label">Running</span>
+            <span class="dashboard-stat-label">{{ t('dashboard.runningLabel') }}</span>
             <strong class="dashboard-stat-value">{{ runningProxyCount }}</strong>
           </div>
           <div class="dashboard-stat">
-            <span class="dashboard-stat-label">Layout</span>
-            <strong class="dashboard-stat-value">{{ isMobileLayout ? 'Locked' : 'Drag' }}</strong>
+            <span class="dashboard-stat-label">{{ t('dashboard.layoutLabel') }}</span>
+            <strong class="dashboard-stat-value">{{ isMobileLayout ? t('dashboard.layoutLocked') : t('dashboard.layoutDrag') }}</strong>
           </div>
         </div>
       </div>
@@ -42,13 +42,13 @@
 
     <div class="dashboard-header flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
       <div class="space-y-1">
-        <h2 class="text-xl font-bold text-surface-900 dark:text-white">Workspace</h2>
+        <h2 class="text-xl font-bold text-surface-900 dark:text-white">{{ t('dashboard.workspace') }}</h2>
       </div>
 
       <div class="flex flex-wrap gap-2 sm:gap-3 w-full lg:w-auto">
         <Button
           v-if="errorProxyCount > 0"
-          label="Show Errors"
+          :label="t('dashboard.showErrors')"
           icon="pi pi-exclamation-triangle"
           severity="danger"
           outlined
@@ -60,10 +60,10 @@
           @click="showConfigPanel = true"
           class="flex-1 sm:flex-none"
           severity="secondary"
-          v-tooltip.bottom="'Proxy-Konfiguration'"
+          v-tooltip.bottom="t('dashboard.proxyConfigTooltip')"
         />
-        <Button label="Widget hinzufügen" icon="pi pi-plus" @click="openAddWidget" class="flex-1 sm:flex-none" />
-        <Button label="Reset" icon="pi pi-refresh" @click="resetLayout" severity="secondary" class="flex-1 sm:flex-none" />
+        <Button :label="t('dashboard.addWidget')" icon="pi pi-plus" @click="openAddWidget" class="flex-1 sm:flex-none" />
+        <Button :label="t('dashboard.resetLayout')" icon="pi pi-refresh" @click="resetLayout" severity="secondary" class="flex-1 sm:flex-none" />
       </div>
     </div>
 
@@ -72,7 +72,7 @@
         <div class="loading-spinner">
           <i class="pi pi-spin pi-spinner text-5xl"></i>
         </div>
-        <p class="mt-5 text-[var(--text-secondary)]">Lade Dashboard-Daten und stelle das Grid zusammen...</p>
+        <p class="mt-5 text-[var(--text-secondary)]">{{ t('dashboard.loadingHint') }}</p>
       </div>
     </div>
 
@@ -81,9 +81,9 @@
         <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/15 text-red-300">
           <i class="pi pi-exclamation-triangle text-3xl"></i>
         </div>
-        <h3 class="text-xl font-bold text-[var(--text-primary)]">Dashboard konnte nicht geladen werden</h3>
+        <h3 class="text-xl font-bold text-[var(--text-primary)]">{{ t('dashboard.loadErrorTitle') }}</h3>
         <p class="mt-2 max-w-lg text-sm text-[var(--text-muted)]">{{ errorMessage }}</p>
-        <Button @click="fetchData(true)" label="Erneut versuchen" class="mt-6" />
+        <Button @click="fetchData(true)" :label="t('dashboard.retry')" class="mt-6" />
       </div>
     </div>
 
@@ -92,7 +92,7 @@
         <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div class="flex items-center gap-2 text-sm text-[var(--text-muted)]">
             <span class="status-dot" :class="isMobileLayout ? 'status-dot--unknown' : 'status-dot--running'"></span>
-            <span>{{ isMobileLayout ? 'Mobile-Layout aktiv' : 'Drag-and-drop aktiv' }}</span>
+            <span>{{ isMobileLayout ? t('dashboard.mobileLayoutActive') : t('dashboard.dragDropActive') }}</span>
           </div>
           <div class="text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">
             {{ layoutHint }}
@@ -106,7 +106,7 @@
           <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-200 dark:bg-surface-700">
             <i class="pi pi-th-large text-2xl text-surface-400 dark:text-surface-500"></i>
           </div>
-          <h3 class="mb-2 text-lg font-medium text-surface-700 dark:text-surface-200">Keine Widgets</h3>
+          <h3 class="mb-2 text-lg font-medium text-surface-700 dark:text-surface-200">{{ t('dashboard.noWidgets') }}</h3>
         </div>
 
         <div
@@ -115,7 +115,7 @@
         >
           <div v-if="layoutEditing" class="layout-edit-banner">
             <i class="pi pi-arrows-alt"></i>
-            Layout wird neu angeordnet
+            {{ t('dashboard.layoutEditBanner') }}
           </div>
 
           <Teleport v-for="widget in widgets" :key="widget.id" :to="'#mount_' + widget.id">
@@ -142,21 +142,21 @@
       </div>
     </section>
 
-    <Dialog v-model:visible="showAddWidget" header="Widget hinzufügen" :modal="true" class="w-11/12 sm:w-full max-w-[440px]">
+    <Dialog v-model:visible="showAddWidget" :header="t('dashboard.addWidget')" :modal="true" class="w-11/12 sm:w-full max-w-[440px]">
       <div class="flex flex-col gap-4">
         <p class="text-sm text-[var(--text-muted)]">
-          Verfuegbare Proxies koennen als Widgets auf das Board gelegt und danach frei positioniert werden.
+          {{ t('dashboard.addWidgetHint') }}
         </p>
         <Dropdown
           v-model="selectedProxy"
           :options="availableProxyOptions"
           optionLabel="name"
           optionValue="id"
-          placeholder="Waehle einen Proxy"
+          :placeholder="t('dashboard.selectProxy')"
           filter
           class="w-full"
         />
-        <Button label="Hinzufügen" @click="confirmAddWidget" :disabled="!selectedProxy" class="w-full" />
+        <Button :label="t('common.add')" @click="confirmAddWidget" :disabled="!selectedProxy" class="w-full" />
       </div>
     </Dialog>
 
@@ -220,9 +220,9 @@ const availableProxyOptions = computed(() => {
     .map(proxy => ({ name: proxy.name, id: proxy.id }));
 });
 const layoutHint = computed(() => {
-  if (isMobileLayout.value) return 'Touch first';
-  if (layoutEditing.value) return 'Drop zone open';
-  return 'Drag widgets';
+  if (isMobileLayout.value) return t('dashboard.layoutHintTouch');
+  if (layoutEditing.value) return t('dashboard.layoutHintDropZone');
+  return t('dashboard.layoutHintDrag');
 });
 
 const buildDefaultLayout = (proxyList) => proxyList.map((proxy, index) => ({
