@@ -200,7 +200,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
 
     <!-- ── Page content ───────────────────────────────────────────── -->
     <main class="flex-grow w-full max-w-7xl mx-auto p-3 sm:p-4 pt-0">
-      <router-view :key="route.fullPath" />
+      <router-view />
     </main>
   </div>
 </template>
