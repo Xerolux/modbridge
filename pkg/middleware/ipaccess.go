@@ -21,6 +21,20 @@ type IPAccessConfig struct {
 	BanDuration time.Duration
 }
 
+// clientIPContextKey is a dedicated context key type used to store the
+// authenticated client IP address in request contexts. Defining a private
+// type avoids collisions with other packages that may set context values
+// using plain string keys.
+type clientIPContextKey struct{}
+
+// ClientIPFromContext retrieves the client IP stored by the IP access
+// middleware. It returns the stored IP and a boolean indicating whether a
+// value was present.
+func ClientIPFromContext(ctx context.Context) (string, bool) {
+	ip, ok := ctx.Value(clientIPContextKey{}).(string)
+	return ip, ok
+}
+
 // IPAccessControl provides IP-based access control.
 type IPAccessControl struct {
 	config IPAccessConfig
@@ -203,7 +217,7 @@ func (ctl *IPAccessControl) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), "client_ip", ip)
+		ctx := context.WithValue(r.Context(), clientIPContextKey{}, ip)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

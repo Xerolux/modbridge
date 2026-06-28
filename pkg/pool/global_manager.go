@@ -23,7 +23,6 @@ type GlobalConnectionManager struct {
 	currentTotal    int32            // Current total connections
 	config          GlobalManagerConfig
 	healthChecker   *HealthChecker
-	muHealth        sync.RWMutex
 	lastHealthCheck time.Time
 	ctx             context.Context
 	cancel          context.CancelFunc
@@ -132,11 +131,6 @@ func (gm *GlobalConnectionManager) incrementConnections() error {
 			return nil
 		}
 	}
-}
-
-// decrementConnections safely decrements global counter
-func (gm *GlobalConnectionManager) decrementConnections() {
-	atomic.AddInt32(&gm.currentTotal, -1)
 }
 
 // GetStats returns global connection statistics

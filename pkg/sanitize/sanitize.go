@@ -479,11 +479,7 @@ func (s *Sanitizer) ValidateHTML(input string) bool {
 
 	// Check for event handlers
 	re = regexp.MustCompile(`(?i)\s+on\w+\s*=`)
-	if re.MatchString(input) {
-		return false
-	}
-
-	return true
+	return !re.MatchString(input)
 }
 
 // hasDangerousProtocols checks if input contains dangerous protocols

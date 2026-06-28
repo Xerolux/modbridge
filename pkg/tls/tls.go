@@ -152,9 +152,6 @@ func (m *Manager) GetTLSConfig() (*tls.Config, error) {
 	// Enable session tickets
 	cfg.SessionTicketsDisabled = !m.config.SessionTickets
 
-	// Set preferred server cipher suites
-	cfg.PreferServerCipherSuites = true
-
 	return cfg, nil
 }
 
@@ -411,7 +408,7 @@ func (ci *CertInfo) IsValid() bool {
 
 // DaysUntilExpiry returns the number of days until the certificate expires
 func (ci *CertInfo) DaysUntilExpiry() int {
-	return int(ci.NotAfter.Sub(time.Now()).Hours() / 24)
+	return int(time.Until(ci.NotAfter).Hours() / 24)
 }
 
 // splitAndTrim splits a string and trims whitespace
@@ -463,13 +460,6 @@ func trimSpace(s string) string {
 	}
 
 	return s[start:end]
-}
-
-// parseIP parses an IP address string
-func parseIP(s string) []byte {
-	// Simple implementation - in production use net.ParseIP
-	// This is a placeholder to avoid import issues
-	return []byte(s)
 }
 
 // MutualTLSConfig provides mutual TLS configuration

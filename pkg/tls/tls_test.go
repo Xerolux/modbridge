@@ -139,7 +139,7 @@ func TestNewManager(t *testing.T) {
 	}
 
 	if mgr == nil {
-		t.Error("Manager is nil")
+		t.Fatal("Manager is nil")
 	}
 
 	if mgr.cert == nil {
@@ -179,7 +179,7 @@ func TestManager_GetTLSConfig(t *testing.T) {
 	}
 
 	if tlsCfg == nil {
-		t.Error("TLS config is nil")
+		t.Fatal("TLS config is nil")
 	}
 
 	// Check certificates are loaded
@@ -200,11 +200,6 @@ func TestManager_GetTLSConfig(t *testing.T) {
 	// Check session tickets
 	if tlsCfg.SessionTicketsDisabled {
 		t.Error("Session tickets should be enabled")
-	}
-
-	// Check prefer server cipher suites
-	if !tlsCfg.PreferServerCipherSuites {
-		t.Error("Should prefer server cipher suites")
 	}
 }
 
@@ -236,7 +231,7 @@ func TestManager_GetCertificateInfo(t *testing.T) {
 	}
 
 	if info == nil {
-		t.Error("Certificate info is nil")
+		t.Fatal("Certificate info is nil")
 	}
 
 	// Check subject

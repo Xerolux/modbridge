@@ -495,9 +495,7 @@ func (v *Validator) IsValidHostname(hostname string) bool {
 // IsValidPort checks if a string is a valid port specification
 func (v *Validator) IsValidPort(portStr string) bool {
 	// Allow :port format or just port number
-	if strings.HasPrefix(portStr, ":") {
-		portStr = portStr[1:]
-	}
+	portStr = strings.TrimPrefix(portStr, ":")
 
 	port, err := strconv.Atoi(portStr)
 	if err != nil {

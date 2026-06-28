@@ -391,7 +391,7 @@ func (t *TransformConfig) Validate() error {
 		}
 
 	case TransformMap:
-		if t.Map == nil || len(t.Map) == 0 {
+		if len(t.Map) == 0 {
 			return errors.New("map cannot be empty for TransformMap")
 		}
 

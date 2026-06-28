@@ -288,7 +288,7 @@ func (c *Converter) GetNextTransactionID() uint16 {
 
 	id := c.transactionID
 	c.transactionID++
-	if c.transactionID == 0 || c.transactionID > 0xFFFF {
+	if c.transactionID == 0 { // uint16 wraps from 0xFFFF -> 0
 		c.transactionID = 1
 	}
 

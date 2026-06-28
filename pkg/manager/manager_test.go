@@ -21,7 +21,7 @@ func TestNewManager(t *testing.T) {
 	m := NewManager(nil, log, nil)
 
 	if m == nil {
-		t.Error("NewManager returned nil")
+		t.Fatal("NewManager returned nil")
 	}
 
 	if m.proxies == nil {

@@ -457,7 +457,7 @@ func TestDeviceTransformConfig(t *testing.T) {
 	// Test finding transform for register in range
 	transform := config.TransformForRegister(5)
 	if transform == nil {
-		t.Error("Expected transform for register 5")
+		t.Fatal("Expected transform for register 5")
 	}
 	if transform.Scale != 0.1 {
 		t.Errorf("Expected scale 0.1, got %f", transform.Scale)
@@ -466,7 +466,7 @@ func TestDeviceTransformConfig(t *testing.T) {
 	// Test finding transform for single register
 	transform = config.TransformForRegister(100)
 	if transform == nil {
-		t.Error("Expected transform for register 100")
+		t.Fatal("Expected transform for register 100")
 	}
 	if transform.Scale != 0.01 {
 		t.Errorf("Expected scale 0.01, got %f", transform.Scale)

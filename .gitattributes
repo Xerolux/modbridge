@@ -1,0 +1,7 @@
+# Normalize line endings to LF for Go source and module files.
+# gofmt and the Go tooling expect LF; without this, Windows checkouts
+# (core.autocrlf=true) produce CRLF files that gofmt flags as malformed.
+
+*.go    text eol=lf
+go.mod  text eol=lf
+go.sum  text eol=lf

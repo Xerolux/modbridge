@@ -41,7 +41,7 @@ func NewPortManager() *PortManager {
 
 // CheckPort checks if a port is in use
 func (pm *PortManager) CheckPort(port int) *PortInfo {
-	cmd := exec.Command("netstat", "-an")
+	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
 		cmd = exec.Command("netstat", "-an")
 	} else {
@@ -58,7 +58,7 @@ func (pm *PortManager) CheckPort(port int) *PortInfo {
 			fields := strings.Fields(line)
 			pid := 0
 			if len(fields) >= 7 {
-				if pidStr := strings.TrimPrefix(fields[6], ""); pidStr != "" {
+				if pidStr := fields[6]; pidStr != "" {
 					if p, err := strconv.Atoi(pidStr); err == nil {
 						pid = p
 					}
@@ -184,21 +184,4 @@ func parseUnixProcessOutput(pid int, output string) *ProcessInfo {
 		User:    "unknown",
 		Command: "",
 	}
-}
-
-// parseNetstatOutput parses netstat output to find port usage
-func parseNetstatOutput(output string, port int) *ProcessInfo {
-	portStr := fmt.Sprintf(":%d", port)
-	for _, line := range strings.Split(output, "\n") {
-		if strings.Contains(line, portStr) && strings.Contains(line, "LISTEN") {
-			fields := strings.Fields(line)
-			if len(fields) >= 7 {
-				pidStr := strings.TrimPrefix(fields[6], "")
-				if pid, err := strconv.Atoi(pidStr); err == nil {
-					return getProcessInfo(pid)
-				}
-			}
-		}
-	}
-	return nil
 }

@@ -192,6 +192,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/audit/logs/export", authMW(s.handleAuditLogsExport))
 	mux.HandleFunc("/api/config/export", authMW(s.handleConfigExport))
 	mux.HandleFunc("/api/config/import", csrfMW(s.handleConfigImport))
+	mux.HandleFunc("/api/config/rollback", csrfMW(s.handleConfigRollback))
 	mux.HandleFunc("/api/config/webport", csrfMW(s.handleWebPort))
 	mux.HandleFunc("/api/config/password", csrfMW(s.handleChangePassword))
 	mux.HandleFunc("/api/config/system", csrfMW(s.handleSystemConfig))
