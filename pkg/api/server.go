@@ -28,6 +28,60 @@ import (
 	"modbridge/pkg/users"
 )
 
+// maxJSONBodySize is the maximum allowed size for JSON request bodies.
+const maxJSONBodySize = 1 << 20 // 1 MiB
+
+// decodeJSON reads a request body up to maxJSONBodySize and unmarshals it.
+// It returns http.ErrBodyReadAfterClose when the body exceeds the limit so
+// callers can respond with 413 Request Entity Too Large.
+func decodeJSON(w http.ResponseWriter, r *http.Request, v interface{}) error {
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxJSONBodySize+1))
+	if err != nil {
+		return err
+	}
+	if len(body) > maxJSONBodySize {
+		return http.ErrBodyReadAfterClose
+	}
+	return json.Unmarshal(body, v)
+}
+
+// writeJSONDecodeError writes a 413 or 400 response for a decodeJSON error.
+func writeJSONDecodeError(w http.ResponseWriter, err error) {
+	if err == http.ErrBodyReadAfterClose {
+		http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+	http.Error(w, err.Error(), http.StatusBadRequest)
+}
+
+// requirePermission validates the session and checks the required permission.
+// It writes the appropriate HTTP error and returns nil if the check fails.
+func (s *Server) requirePermission(w http.ResponseWriter, r *http.Request, permission rbac.Permission) *auth.Session {
+	if s.auth == nil {
+		http.Error(w, "Auth backend unavailable", http.StatusServiceUnavailable)
+		return nil
+	}
+
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return nil
+	}
+
+	session := s.auth.GetSession(cookie.Value)
+	if session == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return nil
+	}
+
+	if !rbac.HasPermission(rbac.Role(session.Role), permission) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return nil
+	}
+
+	return session
+}
+
 // checkPortAvailable checks if a port is available for binding
 func checkPortAvailable(port string) error {
 	// Try to create a listener on the port
@@ -55,6 +109,16 @@ type Server struct {
 	metrics          *metrics.Metrics
 	userMgr          *users.Manager
 	auditor          *audit.Auditor
+
+	restartSignal chan struct{}
+}
+
+// RestartSignal returns a channel that is closed when the server should
+// gracefully restart. main.go listens on this channel and triggers a
+// controlled shutdown (proxies → HTTP server → os.Exit) instead of the
+// handler calling os.Exit directly.
+func (s *Server) RestartSignal() <-chan struct{} {
+	return s.restartSignal
 }
 
 // NewServer creates a new API server.
@@ -101,6 +165,7 @@ func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator,
 		metrics:          metrics.NewMetrics(),
 		userMgr:          userMgr,
 		auditor:          auditorInstance,
+		restartSignal:    make(chan struct{}),
 	}
 }
 
@@ -176,14 +241,16 @@ func (s *Server) Routes(mux *http.ServeMux) {
 		mux.Handle("/debug/pprof/trace", debugMW(pprof.Trace))
 	}
 
-	// Protected routes
-	mux.HandleFunc("/api/me", authMW(s.handleMe))
-	mux.HandleFunc("/api/users", authMW(s.handleUsers))
-	mux.HandleFunc("/api/users/", authMW(s.handleUserByID))
-	mux.HandleFunc("/api/proxies", authMW(s.handleProxies))
+	// Protected routes. State-changing routes use csrfMW so the double-submit
+	// cookie is verified. /api/me uses csrfMW as well so the CSRF cookie is
+	// refreshed on every auth check performed by the frontend.
+	mux.HandleFunc("/api/me", csrfMW(s.handleMe))
+	mux.HandleFunc("/api/users", csrfMW(s.handleUsers))
+	mux.HandleFunc("/api/users/", csrfMW(s.handleUserByID))
+	mux.HandleFunc("/api/proxies", csrfMW(s.handleProxies))
 	mux.HandleFunc("/api/proxies/stream", authMW(s.handleProxiesStream))
 	mux.HandleFunc("/api/proxies/control", csrfMW(s.handleProxyControl))
-	mux.HandleFunc("/api/devices", authMW(s.handleDevices))
+	mux.HandleFunc("/api/devices", csrfMW(s.handleDevices))
 	mux.HandleFunc("/api/devices/history", authMW(s.handleDeviceHistory))
 	mux.HandleFunc("/api/logs", authMW(s.handleLogs))
 	mux.HandleFunc("/api/logs/download", authMW(s.handleLogDownload))
@@ -202,6 +269,19 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/system/ports/release", csrfMW(s.handlePortRelease))
 	mux.HandleFunc("/api/system/ports/check", authMW(s.handleCheckProxyPorts))
 	mux.HandleFunc("/api/system/diagnostics/connectivity", authMW(s.handleProxyConnectivityCheck))
+}
+
+// Stop gracefully shuts down background goroutines owned by the server.
+func (s *Server) Stop() {
+	if s.csrf != nil {
+		s.csrf.Stop()
+	}
+	if s.rateLimiter != nil {
+		s.rateLimiter.Stop()
+	}
+	if s.loginRateLimiter != nil {
+		s.loginRateLimiter.Stop()
+	}
 }
 
 // handleHealth is a health check endpoint.
@@ -307,6 +387,8 @@ func escapePrometheusLabelValue(v string) string {
 	v = strings.ReplaceAll(v, "\\", "\\\\")
 	v = strings.ReplaceAll(v, "\"", "\\\"")
 	v = strings.ReplaceAll(v, "\n", "\\n")
+	v = strings.ReplaceAll(v, "\t", "\\t")
+	v = strings.ReplaceAll(v, "\x00", "\\0")
 	return v
 }
 
@@ -394,8 +476,8 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Password string `json:"password"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeJSONDecodeError(w, err)
 		return
 	}
 
@@ -432,7 +514,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			Username string `json:"username"`
 			Password string `json:"password"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := decodeJSON(w, r, &req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -455,8 +537,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Password string `json:"password"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeJSONDecodeError(w, err)
 		return
 	}
 
@@ -564,8 +646,8 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		CurrentPassword string `json:"current_password"`
 		NewPassword     string `json:"new_password"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeJSONDecodeError(w, err)
 		return
 	}
 
@@ -586,6 +668,10 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
+		// Invalidate all sessions for this user so stolen cookies cannot
+		// continue to be used after a password change.
+		s.auth.InvalidateUserSessions(session.UserID)
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]interface{}{"success": true}); err != nil {
@@ -618,6 +704,10 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// In single-user mode there is only the admin account. Invalidate every
+	// session so an attacker with a stolen cookie is forced to re-authenticate.
+	s.auth.InvalidateAllSessions()
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
@@ -667,7 +757,7 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var req users.CreateUserRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := decodeJSON(w, r, &req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -726,7 +816,7 @@ func (s *Server) handleUserByID(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPut {
 		var req users.UpdateUserRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := decodeJSON(w, r, &req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -734,6 +824,12 @@ func (s *Server) handleUserByID(w http.ResponseWriter, r *http.Request) {
 		if err := s.userMgr.UpdateUser(id, &req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
+		}
+
+		// If the account was disabled, the role changed, or the password
+		// changed, force the user to re-authenticate on all devices.
+		if (req.Enabled != nil && !*req.Enabled) || req.Role != nil || req.Password != nil {
+			s.auth.InvalidateUserSessions(id)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -751,6 +847,10 @@ func (s *Server) handleUserByID(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
+		// Ensure the deleted user cannot continue to use any active session.
+		s.auth.InvalidateUserSessions(id)
+
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -857,6 +957,23 @@ func (s *Server) handleProxiesStream(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 	s.log.Info("API", fmt.Sprintf("handleProxies called: %s %s", r.Method, r.URL.Path))
 
+	permissionByMethod := map[string]rbac.Permission{
+		http.MethodGet:    rbac.PermProxyView,
+		http.MethodPost:   rbac.PermProxyCreate,
+		http.MethodPut:    rbac.PermProxyEdit,
+		http.MethodDelete: rbac.PermProxyDelete,
+	}
+
+	permission, exists := permissionByMethod[r.Method]
+	if !exists {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.requirePermission(w, r, permission) == nil {
+		return
+	}
+
 	if s.mgr == nil {
 		http.Error(w, "Proxy manager unavailable", http.StatusServiceUnavailable)
 		return
@@ -872,7 +989,11 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPost {
 		var req config.ProxyConfig
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := decodeJSON(w, r, &req); err != nil {
+			if err == http.ErrBodyReadAfterClose {
+				http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+				return
+			}
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -904,98 +1025,14 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPut {
-		// Read raw JSON to handle flexible tags field
-		var rawMap map[string]interface{}
-		const maxProxyPayloadBytes = 1 << 20 // 1 MiB
-		bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, maxProxyPayloadBytes+1))
-		if err != nil {
-			s.log.Error("API", fmt.Sprintf("Failed to read body: %v", err))
-			http.Error(w, "Failed to read body", http.StatusBadRequest)
-			return
-		}
-		if len(bodyBytes) > maxProxyPayloadBytes {
-			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
-			return
-		}
-
-		s.log.Info("API", fmt.Sprintf("PUT /api/proxies payload_size=%d", len(bodyBytes)))
-
-		if err := json.Unmarshal(bodyBytes, &rawMap); err != nil {
-			s.log.Error("API", fmt.Sprintf("Failed to unmarshal to map: %v", err))
+		var req config.ProxyConfig
+		if err := decodeJSON(w, r, &req); err != nil {
+			if err == http.ErrBodyReadAfterClose {
+				http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+				return
+			}
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
-		}
-
-		// Build ProxyConfig manually from rawMap to handle tags flexibly
-		req := config.ProxyConfig{}
-
-		// Parse required fields
-		if v, ok := rawMap["id"].(string); ok {
-			req.ID = v
-		}
-		if v, ok := rawMap["name"].(string); ok {
-			req.Name = v
-		}
-		if v, ok := rawMap["listen_addr"].(string); ok {
-			req.ListenAddr = v
-		}
-		if v, ok := rawMap["target_addr"].(string); ok {
-			req.TargetAddr = v
-		}
-		if v, ok := rawMap["enabled"].(bool); ok {
-			req.Enabled = v
-		}
-		if v, ok := rawMap["paused"].(bool); ok {
-			req.Paused = v
-		}
-		if v, ok := rawMap["description"].(string); ok {
-			req.Description = v
-		}
-
-		// Parse numeric fields
-		if v, ok := rawMap["connection_timeout"].(float64); ok {
-			req.ConnectionTimeout = int(v)
-		}
-		if v, ok := rawMap["read_timeout"].(float64); ok {
-			req.ReadTimeout = int(v)
-		}
-		if v, ok := rawMap["max_retries"].(float64); ok {
-			req.MaxRetries = int(v)
-		}
-		if v, ok := rawMap["max_read_size"].(float64); ok {
-			req.MaxReadSize = int(v)
-		}
-
-		// Handle tags field flexibly (string or array)
-		if tagsVal, ok := rawMap["tags"]; ok {
-			switch v := tagsVal.(type) {
-			case string:
-				if v == "" {
-					req.Tags = config.FlexibleTags{}
-				} else {
-					tags := strings.Split(v, ",")
-					result := make([]string, 0, len(tags))
-					for _, tag := range tags {
-						trimmed := strings.TrimSpace(tag)
-						if trimmed != "" {
-							result = append(result, trimmed)
-						}
-					}
-					req.Tags = config.FlexibleTags(result)
-				}
-			case []interface{}:
-				result := make([]string, 0, len(v))
-				for _, item := range v {
-					if str, ok := item.(string); ok {
-						result = append(result, str)
-					}
-				}
-				req.Tags = config.FlexibleTags(result)
-			default:
-				req.Tags = config.FlexibleTags{}
-			}
-		} else {
-			req.Tags = config.FlexibleTags{}
 		}
 
 		if err := s.validator.ValidateProxyConfig(req); err != nil {
@@ -1021,8 +1058,6 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-
-	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }
 
 func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
@@ -1031,12 +1066,16 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.requirePermission(w, r, rbac.PermProxyControl) == nil {
+		return
+	}
+
 	var req struct {
 		ID     string `json:"id"`
 		Action string `json:"action"` // start, stop, restart, pause, resume, start_all, stop_all
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeJSONDecodeError(w, err)
 		return
 	}
 
@@ -1143,7 +1182,7 @@ func (s *Server) handleSystemRestart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.log.Info("System restart requested via API", "")
+	s.log.Info("API", "System restart requested via API")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte(`{"status":"restarting"}`)); err != nil {
@@ -1151,16 +1190,13 @@ func (s *Server) handleSystemRestart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Stop all proxies gracefully and exit for restart
+	// Signal main() to perform a graceful shutdown. The shutdown sequence in
+	// main.go will stop all proxies, call Server.Stop() and run
+	// server.Shutdown() before exiting, ensuring in-flight requests and
+	// Modbus connections are handled gracefully.
 	go func() {
-		time.Sleep(500 * time.Millisecond)
-		if s.mgr != nil {
-			s.mgr.StopAll()
-		}
-		time.Sleep(500 * time.Millisecond)
-		s.log.Info("System restarting now", "")
-		// Exit with code 0 so the process manager (systemd, docker, etc.) can restart it
-		os.Exit(0)
+		time.Sleep(100 * time.Millisecond)
+		close(s.restartSignal)
 	}()
 }
 
@@ -1176,7 +1212,7 @@ func (s *Server) handleWebPort(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			WebPort string `json:"web_port"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := decodeJSON(w, r, &req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}

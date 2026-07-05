@@ -179,10 +179,13 @@ func main() {
 		}
 	}()
 
-	// Graceful shutdown
+	// Graceful shutdown — wait for either OS signal or API restart request.
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	select {
+	case <-quit:
+	case <-apiServer.RestartSignal():
+	}
 
 	l.Info("SYSTEM", "Shutting down server...")
 	log.Println("Shutting down server...")
@@ -192,6 +195,9 @@ func main() {
 
 	// Stop all proxies
 	mgr.StopAll()
+
+	// Stop API background goroutines
+	apiServer.Stop()
 
 	// Shutdown HTTP server
 	if err := server.Shutdown(ctx); err != nil {

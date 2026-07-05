@@ -33,7 +33,8 @@ type CircuitBreaker struct {
 	timeout          time.Duration
 	successThreshold int
 
-	openCount int64
+	openCount        int64
+	halfOpenInFlight bool // true while a single half-open probe is running
 
 	totalRequests    int64
 	totalFailures    int64
@@ -96,7 +97,6 @@ func (cb *CircuitBreaker) AllowRequest() bool {
 
 	if cb.state == StateOpen && time.Since(cb.lastStateChange) > effectiveTimeout {
 		cb.transitionToHalfOpen()
-		return true
 	}
 
 	switch cb.state {
@@ -106,6 +106,12 @@ func (cb *CircuitBreaker) AllowRequest() bool {
 		cb.rejectedRequests++
 		return false
 	case StateHalfOpen:
+		// Only allow a single probe request at a time in half-open state.
+		if cb.halfOpenInFlight {
+			cb.rejectedRequests++
+			return false
+		}
+		cb.halfOpenInFlight = true
 		return true
 	}
 
@@ -133,6 +139,7 @@ func (cb *CircuitBreaker) RecordSuccess() {
 	case StateClosed:
 		cb.failureCount = 0
 	case StateHalfOpen:
+		cb.halfOpenInFlight = false
 		cb.successCount++
 		if cb.successCount >= cb.successThreshold {
 			cb.transitionToClosed()
@@ -155,6 +162,7 @@ func (cb *CircuitBreaker) RecordFailure() {
 			cb.transitionToOpen()
 		}
 	case StateHalfOpen:
+		cb.halfOpenInFlight = false
 		cb.transitionToOpen()
 	}
 }
@@ -204,6 +212,7 @@ func (cb *CircuitBreaker) Reset() {
 	cb.failureCount = 0
 	cb.successCount = 0
 	cb.openCount = 0
+	cb.halfOpenInFlight = false
 	cb.lastStateChange = time.Now()
 	cb.lastResetTime = time.Now()
 }
@@ -227,6 +236,7 @@ func (cb *CircuitBreaker) transitionToOpen() {
 func (cb *CircuitBreaker) transitionToHalfOpen() {
 	cb.state = StateHalfOpen
 	cb.successCount = 0
+	cb.halfOpenInFlight = false
 	cb.lastStateChange = time.Now()
 }
 

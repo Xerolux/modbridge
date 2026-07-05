@@ -627,9 +627,9 @@ func (a *Auditor) LogAction(action, resourceType, resourceID, userID, username, 
 	select {
 	case a.buf <- entry:
 		a.mu.Unlock()
-	default:
+	case <-time.After(5 * time.Second):
 		a.mu.Unlock()
-		log.Printf("WARNING: Audit log buffer full, dropping entry")
+		log.Printf("WARNING: Audit log buffer full, dropping entry after 5s timeout")
 	}
 }
 

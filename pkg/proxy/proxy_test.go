@@ -9,6 +9,7 @@ import (
 	"modbridge/pkg/logger"
 	"modbridge/pkg/modbus"
 	"net"
+	"sync/atomic"
 	"testing"
 )
 
@@ -142,4 +143,63 @@ func TestTryAcquireConnSlot(t *testing.T) {
 	if !tryAcquireConnSlot(sem) {
 		t.Fatalf("expected acquire to succeed after release")
 	}
+}
+
+func TestConnectionLimiterAcquireRelease(t *testing.T) {
+	cl := &ConnectionLimiter{max: 2}
+
+	if !cl.acquire() {
+		t.Fatal("expected acquire 1 to succeed")
+	}
+	if !cl.acquire() {
+		t.Fatal("expected acquire 2 to succeed")
+	}
+	if cl.acquire() {
+		t.Fatal("expected acquire 3 to fail (limit 2)")
+	}
+
+	cl.release()
+	if !cl.acquire() {
+		t.Fatal("expected acquire after release to succeed")
+	}
+
+	cl.release()
+	cl.release()
+}
+
+func TestConnectionLimiterUnlimited(t *testing.T) {
+	cl := &ConnectionLimiter{max: 0} // unlimited
+
+	for i := 0; i < 100; i++ {
+		if !cl.acquire() {
+			t.Fatalf("expected acquire %d to succeed with unlimited limiter", i)
+		}
+	}
+
+	for i := 0; i < 100; i++ {
+		cl.release()
+	}
+}
+
+func TestConnectionLimiterSetMaxWhileRunning(t *testing.T) {
+	cl := &ConnectionLimiter{max: 1}
+	if !cl.acquire() {
+		t.Fatal("expected acquire 1 to succeed")
+	}
+
+	// Increase limit dynamically
+	atomic.StoreInt64(&cl.max, 3)
+	if !cl.acquire() {
+		t.Fatal("expected acquire 2 to succeed after max increase")
+	}
+	if !cl.acquire() {
+		t.Fatal("expected acquire 3 to succeed after max increase")
+	}
+	if cl.acquire() {
+		t.Fatal("expected acquire 4 to fail (limit 3)")
+	}
+
+	cl.release()
+	cl.release()
+	cl.release()
 }

@@ -10,11 +10,27 @@ import (
 	"encoding/json"
 	"fmt"
 	"modbridge/pkg/database"
+	"modbridge/pkg/rbac"
 	"net/http"
 )
 
 // handleDevices returns all tracked devices.
 func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
+	permissionByMethod := map[string]rbac.Permission{
+		http.MethodGet: rbac.PermDeviceView,
+		http.MethodPut: rbac.PermDeviceEdit,
+	}
+
+	permission, exists := permissionByMethod[r.Method]
+	if !exists {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.requirePermission(w, r, permission) == nil {
+		return
+	}
+
 	if r.Method == http.MethodGet {
 		devices := s.mgr.GetDevices()
 		w.Header().Set("Content-Type", "application/json")
@@ -27,8 +43,8 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 			IP   string `json:"ip"`
 			Name string `json:"name"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+		if err := decodeJSON(w, r, &req); err != nil {
+			writeJSONDecodeError(w, err)
 			return
 		}
 
@@ -40,8 +56,6 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-
-	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }
 
 // handleDeviceHistory returns connection history for devices.

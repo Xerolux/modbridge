@@ -21,22 +21,46 @@ import (
 	"time"
 )
 
-// Global connection tracking to prevent system-wide socket exhaustion
-var (
-	// globalActiveConnections tracks total connections across ALL proxies
-	globalActiveConnections int64
-	// globalMaxConnections is the system-wide limit (0 = unlimited)
-	globalMaxConnections int64 = 10000 // Default: 10K connections across all proxies
-)
-
-// setGlobalMaxConnections updates the global connection limit
-func SetGlobalMaxConnections(max int64) {
-	atomic.StoreInt64(&globalMaxConnections, max)
+// ConnectionLimiter tracks system-wide connections and is injectable for tests.
+type ConnectionLimiter struct {
+	active int64
+	max    int64
 }
 
-// getGlobalMaxConnections returns the current global connection limit
+// globalLimiter is the default package-level limiter.
+var globalLimiter = &ConnectionLimiter{max: 10000}
+
+// SetGlobalMaxConnections updates the global connection limit.
+func SetGlobalMaxConnections(max int64) {
+	atomic.StoreInt64(&globalLimiter.max, max)
+}
+
+// GetGlobalMaxConnections returns the current global connection limit.
 func GetGlobalMaxConnections() int64 {
-	return atomic.LoadInt64(&globalMaxConnections)
+	return atomic.LoadInt64(&globalLimiter.max)
+}
+
+// acquire attempts to increment the active count; returns false when at capacity.
+func (cl *ConnectionLimiter) acquire() bool {
+	max := atomic.LoadInt64(&cl.max)
+	if max <= 0 {
+		atomic.AddInt64(&cl.active, 1)
+		return true
+	}
+	for {
+		current := atomic.LoadInt64(&cl.active)
+		if current >= max {
+			return false
+		}
+		if atomic.CompareAndSwapInt64(&cl.active, current, current+1) {
+			return true
+		}
+	}
+}
+
+// release decrements the active count.
+func (cl *ConnectionLimiter) release() {
+	atomic.AddInt64(&cl.active, -1)
 }
 
 // getNextRequestID generates a unique request ID
@@ -45,9 +69,6 @@ func (p *ProxyInstance) getNextRequestID() int64 {
 }
 
 func tryAcquireConnSlot(sem chan struct{}) bool {
-	if sem == nil {
-		return true
-	}
 	select {
 	case sem <- struct{}{}:
 		return true
@@ -71,11 +92,10 @@ type ProxyInstance struct {
 	MaxConns          int    // Maximum concurrent connections (0 = unlimited)
 	Protocol          string // "tcp" (default) or "rtu-tcp"
 
-	listener  net.Listener
-	connPool  *pool.Pool
-	connSem   chan struct{} // Semaphore for limiting concurrent connections
-	connSemMu sync.Mutex    // Protects connSem initialization
-	startMu   sync.Mutex    // Protects Start/Stop lifecycle
+	listener net.Listener
+	connPool *pool.Pool
+	connSem  chan struct{} // Semaphore for limiting concurrent connections
+	startMu  sync.Mutex    // Protects Start/Stop lifecycle
 
 	log           *logger.Logger
 	deviceTracker *devices.Tracker
@@ -149,7 +169,7 @@ func NewProxyInstance(id, name, listen, target string, maxReadSize, connectionTi
 		maxRetries = 3
 	}
 
-	return &ProxyInstance{
+	p := &ProxyInstance{
 		ID:                id,
 		Name:              name,
 		ListenAddr:        listen,
@@ -163,6 +183,10 @@ func NewProxyInstance(id, name, listen, target string, maxReadSize, connectionTi
 		log:               l,
 		deviceTracker:     tracker,
 	}
+	// Initialize the connection semaphore once so that a restart does not
+	// leave old connections holding a reference to a stale channel.
+	p.connSem = make(chan struct{}, p.MaxConns)
+	return p
 }
 
 // Start starts the proxy.
@@ -215,13 +239,6 @@ func (p *ProxyInstance) Start() error {
 		return err
 	}
 
-	// Initialize connection semaphore if MaxConns > 0
-	p.connSemMu.Lock()
-	if p.MaxConns > 0 {
-		p.connSem = make(chan struct{}, p.MaxConns)
-	}
-	p.connSemMu.Unlock()
-
 	// Initialize enhanced features
 	p.circuitBreaker = NewCircuitBreaker(DefaultCircuitBreakerConfig())
 	p.enhancedStats = NewEnhancedStats(1000) // Track last 1000 requests
@@ -257,10 +274,9 @@ func (p *ProxyInstance) Start() error {
 		}
 	})
 
-	p.recoveryManager = NewRecoveryManager(DefaultRecoveryConfig(), func(target string) error {
-		p.log.Info(p.ID, fmt.Sprintf("Recovery check: dialing %s", target))
-		return nil
-	})
+	// RecoveryManager already performs a real TCP dial in attemptRecovery.
+	// No additional onRecovery callback is needed here.
+	p.recoveryManager = NewRecoveryManager(DefaultRecoveryConfig(), nil)
 
 	// Initialize adaptive timeouts
 	p.adaptiveTimeout = NewAdaptiveTimeout(p.ReadTimeout, p.ConnectionTimeout)
@@ -316,6 +332,13 @@ func (p *ProxyInstance) Stop() {
 func (p *ProxyInstance) acceptLoop() {
 	defer p.wg.Done()
 
+	const (
+		initialBackoff = 100 * time.Millisecond
+		maxBackoff     = 5 * time.Second
+	)
+	backoff := initialBackoff
+	consecutiveErrors := 0
+
 acceptLoop:
 	for {
 		conn, err := p.listener.Accept()
@@ -325,51 +348,42 @@ acceptLoop:
 				return // Normal shutdown
 			default:
 				p.log.Error(p.ID, fmt.Sprintf("Accept error: %v", err))
-				// Backoff slightly to avoid spinning
-				time.Sleep(100 * time.Millisecond)
+				consecutiveErrors++
+				// Exponential backoff to avoid spinning on persistent errors.
+				if consecutiveErrors > 10 {
+					backoff *= 2
+					if backoff > maxBackoff {
+						backoff = maxBackoff
+					}
+				}
+				time.Sleep(backoff)
 				continue
 			}
 		}
 
+		// Reset backoff on successful accept.
+		backoff = initialBackoff
+		consecutiveErrors = 0
+
 		configureTCPConn(conn)
 
 		// Check GLOBAL connection limit first (system-wide across all proxies).
-		// Use CAS loop to avoid temporary overshoot of the limit.
-		maxConns := atomic.LoadInt64(&globalMaxConnections)
-		globalLimitApplied := false
-		if maxConns > 0 {
-			for {
-				current := atomic.LoadInt64(&globalActiveConnections)
-				if current >= maxConns {
-					conn.Close()
-					p.log.Warn(p.ID, fmt.Sprintf("Global connection limit reached (%d), dropping connection", maxConns))
-					continue acceptLoop
-				}
-				if atomic.CompareAndSwapInt64(&globalActiveConnections, current, current+1) {
-					globalLimitApplied = true
-					break
-				}
-			}
+		if !globalLimiter.acquire() {
+			conn.Close()
+			p.log.Warn(p.ID, "Global connection limit reached, dropping connection")
+			continue acceptLoop
 		}
 
-		// Check connection limit (if configured)
-		p.connSemMu.Lock()
-		sem := p.connSem
-		p.connSemMu.Unlock()
-
-		if !tryAcquireConnSlot(sem) {
-			// Connection limit reached, drop this connection immediately.
-			// Keeping accept loop non-blocking improves resiliency during load spikes.
+		// Check per-proxy connection limit.
+		if !tryAcquireConnSlot(p.connSem) {
 			conn.Close()
-			if globalLimitApplied {
-				atomic.AddInt64(&globalActiveConnections, -1) // Release global counter
-			}
+			globalLimiter.release()
 			p.log.Info(p.ID, "Connection limit reached, dropping connection")
 			continue
 		}
 
 		p.wg.Add(1)
-		go p.handleClient(conn, sem, globalLimitApplied)
+		go p.handleClient(conn, p.connSem)
 	}
 }
 
@@ -384,23 +398,19 @@ func configureTCPConn(conn net.Conn) {
 	_ = tcpConn.SetNoDelay(true)
 }
 
-func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}, globalLimitApplied bool) {
+func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 	defer p.wg.Done()
 	defer clientConn.Close()
+
+	// Release global connection counter
+	defer globalLimiter.release()
 
 	// Track active connections for this proxy
 	p.Stats.ActiveConns.Add(1)
 	defer p.Stats.ActiveConns.Add(-1)
 
-	// Release global connection counter only if we incremented it
-	if globalLimitApplied {
-		defer atomic.AddInt64(&globalActiveConnections, -1)
-	}
-
 	// Release semaphore slot when done
-	if sem != nil {
-		defer func() { <-sem }()
-	}
+	defer func() { <-sem }()
 
 	// Track the device connection
 	if p.deviceTracker != nil {

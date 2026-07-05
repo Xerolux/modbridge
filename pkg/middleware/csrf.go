@@ -25,6 +25,8 @@ type CSRFMiddleware struct {
 	csrfTokens map[string]csrfEntry
 	secret     []byte
 	maxAge     time.Duration
+	stop       chan struct{}
+	wg         sync.WaitGroup
 }
 
 // NewCSRFMiddleware creates a new CSRF middleware
@@ -33,9 +35,17 @@ func NewCSRFMiddleware(secret string) *CSRFMiddleware {
 		csrfTokens: make(map[string]csrfEntry),
 		secret:     []byte(secret),
 		maxAge:     24 * time.Hour,
+		stop:       make(chan struct{}),
 	}
+	m.wg.Add(1)
 	go m.cleanup()
 	return m
+}
+
+// Stop gracefully shuts down the background cleanup goroutine.
+func (m *CSRFMiddleware) Stop() {
+	close(m.stop)
+	m.wg.Wait()
 }
 
 // GenerateToken generates a new CSRF token, or returns the still-valid token
@@ -147,17 +157,24 @@ func (m *CSRFMiddleware) shouldSkipCSRF(r *http.Request) bool {
 
 // cleanup periodically removes expired CSRF tokens
 func (m *CSRFMiddleware) cleanup() {
+	defer m.wg.Done()
+
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		m.mu.Lock()
-		for sessionID, entry := range m.csrfTokens {
-			if time.Since(entry.createdAt) > m.maxAge {
-				delete(m.csrfTokens, sessionID)
+	for {
+		select {
+		case <-m.stop:
+			return
+		case <-ticker.C:
+			m.mu.Lock()
+			for sessionID, entry := range m.csrfTokens {
+				if time.Since(entry.createdAt) > m.maxAge {
+					delete(m.csrfTokens, sessionID)
+				}
 			}
+			m.mu.Unlock()
 		}
-		m.mu.Unlock()
 	}
 }
 

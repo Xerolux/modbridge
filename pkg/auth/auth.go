@@ -175,6 +175,27 @@ func (a *Authenticator) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// InvalidateUserSessions removes all active sessions for the given user ID.
+// Call this after password changes, role changes, or account deactivation.
+func (a *Authenticator) InvalidateUserSessions(userID string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	for token, session := range a.sessions {
+		if session.UserID == userID {
+			delete(a.sessions, token)
+		}
+	}
+}
+
+// InvalidateAllSessions removes every active session.
+func (a *Authenticator) InvalidateAllSessions() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	a.sessions = make(map[string]Session)
+}
+
 func (a *Authenticator) CleanupExpiredSessions(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()

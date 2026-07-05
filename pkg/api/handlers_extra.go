@@ -106,7 +106,7 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var newCfg config.Config
-	if err := json.NewDecoder(r.Body).Decode(&newCfg); err != nil {
+	if err := decodeJSON(w, r, &newCfg); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -150,7 +150,7 @@ func (s *Server) handleSystemConfig(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPut {
 		var req config.Config
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := decodeJSON(w, r, &req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -266,8 +266,8 @@ func (s *Server) handlePortDiagnostics(w http.ResponseWriter, r *http.Request) {
 		Ports []int `json:"ports"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeJSONDecodeError(w, err)
 		return
 	}
 
@@ -296,8 +296,8 @@ func (s *Server) handlePortRelease(w http.ResponseWriter, r *http.Request) {
 		PID  int `json:"pid"`
 	}
 
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeJSONDecodeError(w, err)
 		return
 	}
 

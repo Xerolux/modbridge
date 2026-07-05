@@ -1,6 +1,6 @@
 {
   "web_port": ":8080",
-  "admin_pass_hash": "",
+  "admin_pass_hash": "$2a$14$KO/5xYI3OX9tTZMzGyTCgu7MlIawD//IDSMCt9DJ/ugN0X2.oaK12",
   "force_password_change": false,
   "multi_user": false,
   "proxies": [],
@@ -13,7 +13,8 @@
   "tls_key_file": "",
   "session_timeout": 24,
   "cors_allowed_origins": [
-    "https://example.com"
+    "http://localhost:3000",
+    "http://localhost:8080"
   ],
   "cors_allowed_methods": [
     "GET",

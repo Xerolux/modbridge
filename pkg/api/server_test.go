@@ -79,17 +79,31 @@ func TestHandleStatus(t *testing.T) {
 	}
 }
 
-func TestHandleProxiesGet(t *testing.T) {
+// proxyTestServer returns a server and an admin session cookie for use in
+// handler tests that now require RBAC checks.
+func proxyTestServer(t *testing.T) (*Server, *manager.Manager, string) {
+	t.Helper()
 	log, err := logger.NewLogger("test.log", 100)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
-	defer log.Close()
+	t.Cleanup(func() { log.Close() })
 	cfgMgr := config.NewManager("test.json")
 	mgr := manager.NewManager(cfgMgr, log, nil)
-	server := NewServer(cfgMgr, mgr, nil, log, nil)
+	authenticator := auth.NewAuthenticator()
+	server := NewServer(cfgMgr, mgr, authenticator, log, nil)
+	token, err := authenticator.CreateSession("1", "admin", "admin")
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+	return server, mgr, token
+}
+
+func TestHandleProxiesGet(t *testing.T) {
+	server, _, token := proxyTestServer(t)
 
 	req := httptest.NewRequest("GET", "/api/proxies", nil)
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
 	w := httptest.NewRecorder()
 
 	server.handleProxies(w, req)
@@ -107,16 +121,10 @@ func TestHandleProxiesGet(t *testing.T) {
 }
 
 func TestHandleProxiesPostInvalid(t *testing.T) {
-	log, err := logger.NewLogger("test.log", 100)
-	if err != nil {
-		t.Fatalf("Failed to create logger: %v", err)
-	}
-	defer log.Close()
-	cfgMgr := config.NewManager("test.json")
-	mgr := manager.NewManager(cfgMgr, log, nil)
-	server := NewServer(cfgMgr, mgr, nil, log, nil)
+	server, _, token := proxyTestServer(t)
 
 	req := httptest.NewRequest("POST", "/api/proxies", nil)
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
 	w := httptest.NewRecorder()
 
 	server.handleProxies(w, req)
@@ -127,14 +135,7 @@ func TestHandleProxiesPostInvalid(t *testing.T) {
 }
 
 func TestHandleProxiesPostValid(t *testing.T) {
-	log, err := logger.NewLogger("test.log", 100)
-	if err != nil {
-		t.Fatalf("Failed to create logger: %v", err)
-	}
-	defer log.Close()
-	cfgMgr := config.NewManager("test.json")
-	mgr := manager.NewManager(cfgMgr, log, nil)
-	server := NewServer(cfgMgr, mgr, nil, log, nil)
+	server, mgr, token := proxyTestServer(t)
 
 	cfg := config.ProxyConfig{
 		ID:                "test-id",
@@ -149,6 +150,7 @@ func TestHandleProxiesPostValid(t *testing.T) {
 
 	body, _ := json.Marshal(cfg)
 	req := httptest.NewRequest("POST", "/api/proxies", bytes.NewReader(body))
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
 	w := httptest.NewRecorder()
 
 	server.handleProxies(w, req)
@@ -164,16 +166,10 @@ func TestHandleProxiesPostValid(t *testing.T) {
 }
 
 func TestHandleProxiesMethodNotAllowed(t *testing.T) {
-	log, err := logger.NewLogger("test.log", 100)
-	if err != nil {
-		t.Fatalf("Failed to create logger: %v", err)
-	}
-	defer log.Close()
-	cfgMgr := config.NewManager("test.json")
-	mgr := manager.NewManager(cfgMgr, log, nil)
-	server := NewServer(cfgMgr, mgr, nil, log, nil)
+	server, _, token := proxyTestServer(t)
 
 	req := httptest.NewRequest(http.MethodPatch, "/api/proxies", nil)
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
 	w := httptest.NewRecorder()
 
 	server.handleProxies(w, req)
@@ -184,17 +180,11 @@ func TestHandleProxiesMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleProxiesPutRejectsOversizedBody(t *testing.T) {
-	log, err := logger.NewLogger("test.log", 100)
-	if err != nil {
-		t.Fatalf("Failed to create logger: %v", err)
-	}
-	defer log.Close()
-	cfgMgr := config.NewManager("test.json")
-	mgr := manager.NewManager(cfgMgr, log, nil)
-	server := NewServer(cfgMgr, mgr, nil, log, nil)
+	server, _, token := proxyTestServer(t)
 
 	oversized := bytes.Repeat([]byte("a"), (1<<20)+1)
 	req := httptest.NewRequest(http.MethodPut, "/api/proxies", bytes.NewReader(oversized))
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
 	w := httptest.NewRecorder()
 
 	server.handleProxies(w, req)
@@ -406,5 +396,142 @@ func TestHandleMetricsIncludesProxySnapshotMetrics(t *testing.T) {
 	}
 	if !strings.Contains(body, `proxy_id="proxy-a"`) {
 		t.Fatalf("Expected proxy_id label for proxy-a in output")
+	}
+}
+
+func TestHandleProxiesRBACDeniesNonAdmin(t *testing.T) {
+	log, err := logger.NewLogger("test.log", 100)
+	if err != nil {
+		t.Fatalf("Failed to create logger: %v", err)
+	}
+	defer log.Close()
+
+	cfgMgr := config.NewManager("test.json")
+	mgr := manager.NewManager(cfgMgr, log, nil)
+	authenticator := auth.NewAuthenticator()
+	// Create session for a "benutzer" role — only proxy:view is granted.
+	token, err := authenticator.CreateSession("2", "viewer", "benutzer")
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+	srv := NewServer(cfgMgr, mgr, authenticator, log, nil)
+
+	t.Run("POST /api/proxies blocked for viewer", func(t *testing.T) {
+		body := bytes.NewReader([]byte(`{}`))
+		req := httptest.NewRequest("POST", "/api/proxies", body)
+		req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
+		w := httptest.NewRecorder()
+		srv.handleProxies(w, req)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("Expected 403 Forbidden, got %d", w.Code)
+		}
+	})
+
+	t.Run("DELETE /api/proxies blocked for viewer", func(t *testing.T) {
+		req := httptest.NewRequest("DELETE", "/api/proxies?id=foo", nil)
+		req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
+		w := httptest.NewRecorder()
+		srv.handleProxies(w, req)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("Expected 403 Forbidden, got %d", w.Code)
+		}
+	})
+
+	t.Run("GET /api/proxies allowed for viewer", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/proxies", nil)
+		req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
+		w := httptest.NewRecorder()
+		srv.handleProxies(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK, got %d", w.Code)
+		}
+	})
+}
+
+func TestHandleProxiesBlockedWithoutAuth(t *testing.T) {
+	log, err := logger.NewLogger("test.log", 100)
+	if err != nil {
+		t.Fatalf("Failed to create logger: %v", err)
+	}
+	defer log.Close()
+
+	cfgMgr := config.NewManager("test.json")
+	mgr := manager.NewManager(cfgMgr, log, nil)
+	srv := NewServer(cfgMgr, mgr, auth.NewAuthenticator(), log, nil)
+
+	// No cookie — requirePermission returns 401
+	req := httptest.NewRequest("GET", "/api/proxies", nil)
+	w := httptest.NewRecorder()
+	srv.handleProxies(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected 401 Unauthorized, got %d", w.Code)
+	}
+}
+
+func TestHandleProxiesPostOversizedBody(t *testing.T) {
+	server, _, token := proxyTestServer(t)
+
+	oversized := bytes.Repeat([]byte("a"), maxJSONBodySize+1)
+	req := httptest.NewRequest("POST", "/api/proxies", bytes.NewReader(oversized))
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
+	w := httptest.NewRecorder()
+
+	server.handleProxies(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("Expected status %d, got %d", http.StatusRequestEntityTooLarge, w.Code)
+	}
+}
+
+func TestChangePasswordInvalidatesSessions(t *testing.T) {
+	log, err := logger.NewLogger("test.log", 100)
+	if err != nil {
+		t.Fatalf("Failed to create logger: %v", err)
+	}
+	defer log.Close()
+
+	cfgMgr := config.NewManager("test.json")
+	// Create a bcrypt hash for the current password: "CurrentP@ss1"
+	hash, err := auth.HashPassword("CurrentP@ss1")
+	if err != nil {
+		t.Fatalf("Failed to hash password: %v", err)
+	}
+	_ = cfgMgr.Update(func(c *config.Config) error {
+		c.AdminPassHash = hash
+		// Disable multi-user so we hit the legacy single-user path
+		c.MultiUser = false
+		return nil
+	})
+
+	mgr := manager.NewManager(cfgMgr, log, nil)
+	authenticator := auth.NewAuthenticator()
+	srv := NewServer(cfgMgr, mgr, authenticator, log, nil)
+
+	// Create a session before password change
+	token, err := authenticator.CreateSession("1", "admin", "admin")
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	// Session is valid now
+	if !authenticator.ValidateSession(token) {
+		t.Fatal("Expected session to be valid before password change")
+	}
+
+	// Change password
+	body := `{"current_password":"CurrentP@ss1","new_password":"NewStr0ng!2024"}`
+	req := httptest.NewRequest("POST", "/api/config/password", bytes.NewReader([]byte(body)))
+	cookie := &http.Cookie{Name: "session_token", Value: token}
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	srv.handleChangePassword(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Password change failed: %d %s", w.Code, w.Body.String())
+	}
+
+	// Old session must be invalidated
+	if authenticator.ValidateSession(token) {
+		t.Fatal("Expected old session to be invalid after password change")
 	}
 }

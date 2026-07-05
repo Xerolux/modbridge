@@ -6,6 +6,7 @@
 package middleware
 
 import (
+	"net"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -185,16 +186,48 @@ func TestRateLimiter(t *testing.T) {
 func TestRateLimiterGetClientIP(t *testing.T) {
 	rl := NewRateLimiter(10, 20)
 
-	t.Run("x-forwarded-for", func(t *testing.T) {
+	t.Run("x-forwarded-for ignored without trusted proxy", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "192.0.2.1:12345"
 		req.Header.Set("X-Forwarded-For", "203.0.113.10, 198.51.100.1")
-		if got := rl.getClientIP(req); got != "203.0.113.10" {
-			t.Fatalf("expected first forwarded IP, got %q", got)
+		if got := rl.getClientIP(req); got != "192.0.2.1" {
+			t.Fatalf("expected RemoteAddr, got %q", got)
 		}
 	})
 
-	t.Run("x-real-ip", func(t *testing.T) {
+	t.Run("x-real-ip ignored without trusted proxy", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "192.0.2.1:12345"
+		req.Header.Set("X-Real-IP", "198.51.100.20")
+		if got := rl.getClientIP(req); got != "192.0.2.1" {
+			t.Fatalf("expected RemoteAddr, got %q", got)
+		}
+	})
+
+	t.Run("proxy headers used with trusted proxy", func(t *testing.T) {
+		rl := &RateLimiter{
+			clients:        make(map[string]*clientLimiter),
+			rate:           10,
+			burst:          20,
+			trustedProxies: []*net.IPNet{{IP: net.ParseIP("10.0.0.1"), Mask: net.CIDRMask(32, 32)}},
+		}
+		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "10.0.0.1:12345"
+		req.Header.Set("X-Forwarded-For", "203.0.113.10, 198.51.100.1")
+		if got := rl.getClientIP(req); got != "198.51.100.1" {
+			t.Fatalf("expected right-most forwarded IP, got %q", got)
+		}
+	})
+
+	t.Run("x-real-ip used with trusted proxy", func(t *testing.T) {
+		rl := &RateLimiter{
+			clients:        make(map[string]*clientLimiter),
+			rate:           10,
+			burst:          20,
+			trustedProxies: []*net.IPNet{{IP: net.ParseIP("10.0.0.1"), Mask: net.CIDRMask(32, 32)}},
+		}
+		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "10.0.0.1:12345"
 		req.Header.Set("X-Real-IP", "198.51.100.20")
 		if got := rl.getClientIP(req); got != "198.51.100.20" {
 			t.Fatalf("expected X-Real-IP, got %q", got)
