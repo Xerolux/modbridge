@@ -159,12 +159,23 @@ jobs:
       - name: Bump version
         id: bump
         run: |
+          git fetch --tags --force
           CURRENT=$(tr -d '[:space:]' < version.txt)
           IFS='.' read -r MAJOR MINOR PATCH BUILD <<< "$CURRENT"
+          if [[ ! "$CURRENT" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "Invalid version in version.txt: ${CURRENT}"
+            exit 1
+          fi
+          BUILD=${BUILD:-0}
           BUILD=$((BUILD + 1))
           NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}.${BUILD}"
-          echo "$NEW_VERSION" > version.txt
           TAG="v${NEW_VERSION}"
+          while git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; do
+            BUILD=$((BUILD + 1))
+            NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}.${BUILD}"
+            TAG="v${NEW_VERSION}"
+          done
+          echo "$NEW_VERSION" > version.txt
           echo "version=${NEW_VERSION}" >> $GITHUB_OUTPUT
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "Bumping ${CURRENT} -> ${NEW_VERSION} (${TAG})"
@@ -174,7 +185,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add version.txt
-          git commit -m "chore: bump version to ${{ steps.bump.outputs.version }}"
+          git commit -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
           git tag -a "${{ steps.bump.outputs.tag }}" -m "Release ${{ steps.bump.outputs.tag }}"
           git push origin main --follow-tags
 

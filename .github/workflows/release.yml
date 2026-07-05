@@ -48,6 +48,7 @@ jobs:
     outputs:
       tag: ${{ steps.compute.outputs.tag }}
       prerelease: ${{ steps.compute.outputs.prerelease }}
+      valid: ${{ steps.compute.outputs.valid }}
     steps:
       - uses: actions/checkout@v7
 
@@ -60,7 +61,7 @@ jobs:
           TYPE="${{ inputs.release_type }}"
 
           git fetch --tags --force
-          LATEST_TAG=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1)
+          LATEST_TAG=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$' | sort -V | tail -n 1 || true)
 
           if [ "$MODE" = "manual" ]; then
             if [ -z "$VERSION" ]; then
@@ -73,22 +74,32 @@ jobs:
             if [ -z "$BASE_VERSION" ]; then
               BASE_VERSION=$(tr -d '[:space:]' < version.txt)
             fi
-            if [[ ! "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            if [[ ! "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
               echo "Cannot determine valid base version."
               exit 1
             fi
-            IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
+            IFS='.' read -r MAJOR MINOR PATCH BUILD <<< "$BASE_VERSION"
             case "$BUMP" in
-              major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
-              minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
-              patch) PATCH=$((PATCH + 1)) ;;
+              major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0; BUILD="" ;;
+              minor) MINOR=$((MINOR + 1)); PATCH=0; BUILD="" ;;
+              patch)
+                if [ -n "${BUILD:-}" ]; then
+                  BUILD=$((BUILD + 1))
+                else
+                  PATCH=$((PATCH + 1))
+                fi
+                ;;
               *) echo "Unknown bump: $BUMP"; exit 1 ;;
             esac
-            VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+            if [ -n "${BUILD:-}" ]; then
+              VERSION="v${MAJOR}.${MINOR}.${PATCH}.${BUILD}"
+            else
+              VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+            fi
           fi
 
-          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid format: '$VERSION'. Use v1.2.3"
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "Invalid format: '$VERSION'. Use v1.2.3 or v1.2.3.4"
             exit 1
           fi
 
@@ -101,12 +112,29 @@ jobs:
           fi
 
           if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
-            echo "Tag ${TAG} already exists."
-            exit 1
+            if [[ "$VERSION" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              MAJOR="${BASH_REMATCH[1]}"
+              MINOR="${BASH_REMATCH[2]}"
+              PATCH="${BASH_REMATCH[3]}"
+              BUILD="${BASH_REMATCH[4]}"
+              while git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; do
+                BUILD=$((BUILD + 1))
+                VERSION="v${MAJOR}.${MINOR}.${PATCH}.${BUILD}"
+                if [ "$TYPE" = "release" ]; then
+                  TAG="$VERSION"
+                else
+                  TAG="${VERSION}-${TYPE}"
+                fi
+              done
+            else
+              echo "Tag ${TAG} already exists."
+              exit 1
+            fi
           fi
 
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "prerelease=${PRERELEASE}" >> $GITHUB_OUTPUT
+          echo "valid=true" >> $GITHUB_OUTPUT
           echo "Tag: ${TAG} | Prerelease: ${PRERELEASE}"
 
       - name: Create tag via GitHub API
@@ -126,18 +154,31 @@ jobs:
     outputs:
       tag: ${{ steps.resolve.outputs.tag }}
       prerelease: ${{ steps.resolve.outputs.prerelease }}
+      valid: ${{ steps.resolve.outputs.valid }}
     steps:
       - id: resolve
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(-(alpha|beta))?$ ]]; then
+            echo "Ignoring non-release tag: ${TAG}"
+            echo "tag=${TAG}" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "valid=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "prerelease=false" >> $GITHUB_OUTPUT
+          if [[ "$TAG" =~ -(alpha|beta)$ ]]; then
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          fi
+          echo "valid=true" >> $GITHUB_OUTPUT
 
   test:
     name: Tests
     runs-on: ubuntu-latest
     needs: [prepare, resolve-tag]
-    if: always() && (needs.prepare.result == 'success' || needs.resolve-tag.result == 'success')
+    if: always() && (needs.prepare.outputs.valid == 'true' || needs.resolve-tag.outputs.valid == 'true')
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
@@ -153,7 +194,7 @@ jobs:
     name: Build Frontend
     runs-on: ubuntu-latest
     needs: [prepare, resolve-tag]
-    if: always() && (needs.prepare.result == 'success' || needs.resolve-tag.result == 'success')
+    if: always() && (needs.prepare.outputs.valid == 'true' || needs.resolve-tag.outputs.valid == 'true')
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
