@@ -613,7 +613,9 @@ func (a *Auditor) LogAction(action, resourceType, resourceID, userID, username, 
 			}
 		}
 
-		a.fileLogger.Log(fileEvent)
+		if err := a.fileLogger.Log(fileEvent); err != nil {
+			log.Printf("failed to write file audit log: %v", err)
+		}
 	}
 
 	// Guard the channel send so it cannot race with Close() closing a.buf

@@ -51,7 +51,9 @@ func TestRegistryGet(t *testing.T) {
 	testFn := func(v uint64) (float64, error) {
 		return float64(v) * 2, nil
 	}
-	reg.Register("double", testFn)
+	if err := reg.Register("double", testFn); err != nil {
+		t.Fatalf("Failed to register function: %v", err)
+	}
 
 	// Test existing function
 	fn, ok := reg.Get("double")
@@ -223,10 +225,12 @@ func TestTransformRegister_Custom(t *testing.T) {
 	trans := NewTransformer()
 
 	// Register custom function
-	trans.Register("celsius_to_fahrenheit", func(v uint64) (float64, error) {
+	if err := trans.Register("celsius_to_fahrenheit", func(v uint64) (float64, error) {
 		celsius := float64(v) * 0.1
 		return celsius*1.8 + 32, nil
-	})
+	}); err != nil {
+		t.Fatalf("Failed to register custom transform: %v", err)
+	}
 
 	config := &TransformConfig{
 		Type:       TransformCustom,

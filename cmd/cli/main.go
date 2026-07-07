@@ -43,10 +43,16 @@ func main() {
 
 	switch os.Args[1] {
 	case "server":
-		serverCmd.Parse(os.Args[2:])
+		if err := serverCmd.Parse(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to parse server command: %v\n", err)
+			os.Exit(1)
+		}
 		runServer(*configFile, *port)
 	case "version":
-		versionCmd.Parse(os.Args[2:])
+		if err := versionCmd.Parse(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to parse version command: %v\n", err)
+			os.Exit(1)
+		}
 		fmt.Printf("ModBridge CLI v%s\n", version)
 	default:
 		printUsage()

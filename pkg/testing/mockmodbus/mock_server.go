@@ -161,7 +161,7 @@ func (m *MockServer) handleConnection(conn net.Conn) {
 	}()
 
 	for {
-		conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 
 		buf, err := modbus.ReadFrame(conn)
 		if err != nil {
@@ -332,7 +332,7 @@ func (m *MockServer) sendError(conn net.Conn, transactionID, protocolID uint16, 
 		exceptionCode,
 	}
 
-	conn.Write(response)
+	_, _ = conn.Write(response)
 }
 
 // GetRequestLog returns the request log

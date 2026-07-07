@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"modbridge/pkg/auth"
 	"modbridge/pkg/database"
 	"modbridge/pkg/rbac"
@@ -129,7 +130,9 @@ func (m *Manager) AuthenticateUser(username, password string) (*database.User, e
 
 	if user.ExpiresAt != nil && time.Now().After(*user.ExpiresAt) {
 		user.Enabled = false
-		m.db.UpdateUser(user)
+		if err := m.db.UpdateUser(user); err != nil {
+			return nil, fmt.Errorf("failed to disable expired user: %w", err)
+		}
 		return nil, errors.New("user account has expired")
 	}
 
@@ -137,7 +140,9 @@ func (m *Manager) AuthenticateUser(username, password string) (*database.User, e
 		return nil, errors.New("invalid credentials")
 	}
 
-	m.db.UpdateUserLastLogin(user.ID)
+	if err := m.db.UpdateUserLastLogin(user.ID); err != nil {
+		return nil, fmt.Errorf("failed to update last login: %w", err)
+	}
 
 	return user, nil
 }

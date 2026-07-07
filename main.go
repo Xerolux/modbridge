@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/base64"
 	_ "expvar"
 	"fmt"
@@ -167,6 +168,25 @@ func main() {
 		ReadTimeout:       60 * time.Second,
 		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20, // 1 MiB
+	}
+
+	// Apply TLS configuration when enabled.
+	tlsEnabled := cfgMgr.Get().TLSEnabled
+	tlsCertFile := cfgMgr.Get().TLSCertFile
+	tlsKeyFile := cfgMgr.Get().TLSKeyFile
+	if tlsEnabled {
+		server.TLSConfig = &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			CipherSuites: []uint16{
+				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+			},
+		}
 	}
 
 	l.Info("SYSTEM", "Starting Modbus Manager on "+addr)
@@ -174,7 +194,13 @@ func main() {
 
 	// Run server in goroutine
 	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		var err error
+		if tlsEnabled {
+			err = server.ListenAndServeTLS(tlsCertFile, tlsKeyFile)
+		} else {
+			err = server.ListenAndServe()
+		}
+		if err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server error: %v", err)
 		}
 	}()
@@ -202,6 +228,9 @@ func main() {
 	// Shutdown HTTP server
 	if err := server.Shutdown(ctx); err != nil {
 		log.Printf("Server forced to shutdown: %v", err)
+		if closeErr := server.Close(); closeErr != nil {
+			log.Printf("Server close error: %v", closeErr)
+		}
 	}
 
 	l.Info("SYSTEM", "Server stopped")

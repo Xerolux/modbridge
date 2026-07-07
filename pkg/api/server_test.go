@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"modbridge/pkg/auth"
 	"modbridge/pkg/config"
@@ -34,7 +35,9 @@ func TestHandleHealth(t *testing.T) {
 	}
 
 	var response map[string]string
-	json.Unmarshal(w.Body.Bytes(), &response)
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
 
 	if response["status"] != "ok" {
 		t.Errorf("Expected status ok, got %s", response["status"])
@@ -92,7 +95,7 @@ func proxyTestServer(t *testing.T) (*Server, *manager.Manager, string) {
 	mgr := manager.NewManager(cfgMgr, log, nil)
 	authenticator := auth.NewAuthenticator()
 	server := NewServer(cfgMgr, mgr, authenticator, log, nil)
-	token, err := authenticator.CreateSession("1", "admin", "admin")
+	token, err := authenticator.CreateSession("1", "admin", "admin", 24*time.Hour)
 	if err != nil {
 		t.Fatalf("Failed to create session: %v", err)
 	}
@@ -113,7 +116,9 @@ func TestHandleProxiesGet(t *testing.T) {
 	}
 
 	var proxies []map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &proxies)
+	if err := json.Unmarshal(w.Body.Bytes(), &proxies); err != nil {
+		t.Fatalf("Failed to unmarshal proxies: %v", err)
+	}
 
 	if len(proxies) != 0 {
 		t.Errorf("Expected 0 proxies, got %d", len(proxies))
@@ -207,7 +212,7 @@ func TestMiddlewareChain(t *testing.T) {
 	handler := secMW.Middleware(corsMW.Middleware(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	}))
 
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -283,7 +288,7 @@ func TestHandleMe(t *testing.T) {
 	authenticator := auth.NewAuthenticator()
 	server := NewServer(cfgMgr, mgr, authenticator, log, nil)
 
-	token, err := authenticator.CreateSession("1", "admin", "admin")
+	token, err := authenticator.CreateSession("1", "admin", "admin", 24*time.Hour)
 	if err != nil {
 		t.Fatalf("Failed to create session: %v", err)
 	}
@@ -410,7 +415,7 @@ func TestHandleProxiesRBACDeniesNonAdmin(t *testing.T) {
 	mgr := manager.NewManager(cfgMgr, log, nil)
 	authenticator := auth.NewAuthenticator()
 	// Create session for a "benutzer" role — only proxy:view is granted.
-	token, err := authenticator.CreateSession("2", "viewer", "benutzer")
+	token, err := authenticator.CreateSession("2", "viewer", "benutzer", 24*time.Hour)
 	if err != nil {
 		t.Fatalf("Failed to create session: %v", err)
 	}
@@ -508,7 +513,7 @@ func TestChangePasswordInvalidatesSessions(t *testing.T) {
 	srv := NewServer(cfgMgr, mgr, authenticator, log, nil)
 
 	// Create a session before password change
-	token, err := authenticator.CreateSession("1", "admin", "admin")
+	token, err := authenticator.CreateSession("1", "admin", "admin", 24*time.Hour)
 	if err != nil {
 		t.Fatalf("Failed to create session: %v", err)
 	}

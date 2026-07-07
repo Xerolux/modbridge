@@ -695,7 +695,9 @@ func TestBatcher_ResponseChannel(t *testing.T) {
 		Quantity: 1,
 	}
 
-	batcher.SubmitAsync(req)
+	if err := batcher.SubmitAsync(req); err != nil {
+		t.Fatalf("Failed to submit async request: %v", err)
+	}
 
 	// Wait for response on Responses channel
 	select {

@@ -7,7 +7,6 @@ package api
 
 import (
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"modbridge/pkg/database"
 	"modbridge/pkg/rbac"
@@ -34,7 +33,7 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		devices := s.mgr.GetDevices()
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(devices)
+		s.writeJSON(w, devices)
 		return
 	}
 
@@ -114,5 +113,5 @@ func (s *Server) handleDeviceHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(history)
+	s.writeJSON(w, history)
 }

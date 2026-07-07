@@ -256,7 +256,9 @@ func (p *ProxyInstance) Start() error {
 	p.healthChecker.SetOnUnhealthy(func() {
 		p.log.Info(p.ID, "Health checker detected target failure, triggering recovery")
 		if p.recoveryManager != nil {
-			p.recoveryManager.AddTask(p.TargetAddr, 10)
+			if _, err := p.recoveryManager.AddTask(p.TargetAddr, 10); err != nil {
+				p.log.Error(p.ID, fmt.Sprintf("failed to schedule recovery task: %v", err))
+			}
 		}
 	})
 

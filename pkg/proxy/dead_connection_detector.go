@@ -212,7 +212,7 @@ func (d *DeadConnectionDetector) isConnectionAlive(conn net.Conn) bool {
 	if err := conn.SetWriteDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
 		return false
 	}
-	conn.SetWriteDeadline(time.Time{})
+	_ = conn.SetWriteDeadline(time.Time{})
 
 	// Check for TCP-specific socket errors without reading data
 	if tcpConn, ok := conn.(*net.TCPConn); ok {

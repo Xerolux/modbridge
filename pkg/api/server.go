@@ -121,6 +121,14 @@ func (s *Server) RestartSignal() <-chan struct{} {
 	return s.restartSignal
 }
 
+// writeJSON encodes v as JSON and logs encoding failures. It avoids
+// unchecked error return values throughout the HTTP handlers.
+func (s *Server) writeJSON(w http.ResponseWriter, v interface{}) {
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		s.log.Warn("API", fmt.Sprintf("failed to encode JSON response: %v", err))
+	}
+}
+
 // NewServer creates a new API server.
 func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator, l *logger.Logger, db *database.DB) *Server {
 	csrfSecret, err := buildCSRFSecret()
@@ -556,7 +564,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 func (s *Server) finalizeLogin(w http.ResponseWriter, r *http.Request, userID, username, role string, forcePasswordChange bool) {
 	cfg := s.cfgMgr.Get()
 
-	token, err := s.auth.CreateSession(userID, username, role)
+	sessionTimeoutHours := cfg.SessionTimeout
+	if sessionTimeoutHours <= 0 {
+		sessionTimeoutHours = 24
+	}
+
+	token, err := s.auth.CreateSession(userID, username, role, time.Duration(sessionTimeoutHours)*time.Hour)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -565,7 +578,7 @@ func (s *Server) finalizeLogin(w http.ResponseWriter, r *http.Request, userID, u
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_token",
 		Value:    token,
-		Expires:  time.Now().Add(24 * time.Hour),
+		Expires:  time.Now().Add(time.Duration(sessionTimeoutHours) * time.Hour),
 		HttpOnly: true,
 		Secure:   cfg.TLSEnabled,
 		SameSite: http.SameSiteStrictMode,
@@ -726,7 +739,7 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		if s.userMgr == nil {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode([]map[string]interface{}{
+			if err := json.NewEncoder(w).Encode([]map[string]interface{}{
 				{
 					"id":        "1",
 					"username":  "admin",
@@ -735,7 +748,9 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 					"role":      "admin",
 					"enabled":   true,
 				},
-			})
+			}); err != nil {
+				s.log.Warn("API", fmt.Sprintf("failed to encode fallback users response: %v", err))
+			}
 			return
 		}
 
@@ -746,7 +761,9 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(users)
+		if err := json.NewEncoder(w).Encode(users); err != nil {
+			s.log.Warn("API", fmt.Sprintf("failed to encode users response: %v", err))
+		}
 		return
 	}
 
@@ -775,7 +792,9 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(user)
+		if err := json.NewEncoder(w).Encode(user); err != nil {
+			s.log.Warn("API", fmt.Sprintf("failed to encode created user response: %v", err))
+		}
 		return
 	}
 
@@ -810,7 +829,9 @@ func (s *Server) handleUserByID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(user)
+		if err := json.NewEncoder(w).Encode(user); err != nil {
+			s.log.Warn("API", fmt.Sprintf("failed to encode user response: %v", err))
+		}
 		return
 	}
 
@@ -833,7 +854,9 @@ func (s *Server) handleUserByID(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
+			s.log.Warn("API", fmt.Sprintf("failed to encode user update response: %v", err))
+		}
 		return
 	}
 
@@ -1204,7 +1227,7 @@ func (s *Server) handleWebPort(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		cfg := s.cfgMgr.Get()
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"web_port": cfg.WebPort})
+		s.writeJSON(w, map[string]string{"web_port": cfg.WebPort})
 		return
 	}
 
@@ -1244,7 +1267,7 @@ func (s *Server) handleWebPort(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Port updated, restart required"})
+		s.writeJSON(w, map[string]string{"status": "ok", "message": "Port updated, restart required"})
 		return
 	}
 

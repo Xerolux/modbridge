@@ -41,7 +41,7 @@ func TestCheckPasswordHash(t *testing.T) {
 
 func TestCreateSession(t *testing.T) {
 	a := NewAuthenticator()
-	token, err := a.CreateSession("user1", "testuser", "admin")
+	token, err := a.CreateSession("user1", "testuser", "admin", 24*time.Hour)
 	if err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestValidateSession(t *testing.T) {
 		t.Error("Invalid token should not validate")
 	}
 
-	token, _ := a.CreateSession("u1", "user", "admin")
+	token, _ := a.CreateSession("u1", "user", "admin", 24*time.Hour)
 	if !a.ValidateSession(token) {
 		t.Error("Valid token should validate")
 	}
@@ -97,7 +97,7 @@ func TestValidateSession(t *testing.T) {
 
 func TestMiddleware(t *testing.T) {
 	a := NewAuthenticator()
-	token, _ := a.CreateSession("u1", "user", "admin")
+	token, _ := a.CreateSession("u1", "user", "admin", 24*time.Hour)
 
 	handler := a.Middleware(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

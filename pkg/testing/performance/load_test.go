@@ -76,7 +76,7 @@ func RunLoadTest(t *testing.T, opts BenchmarkOptions) *LoadTestResult {
 	if err != nil {
 		t.Fatalf("Failed to start mock server: %v", err)
 	}
-	defer mockServer.Stop()
+	defer func() { _ = mockServer.Stop() }()
 
 	// Wait for server to be ready
 	time.Sleep(100 * time.Millisecond)
@@ -104,7 +104,7 @@ func RunLoadTest(t *testing.T, opts BenchmarkOptions) *LoadTestResult {
 	if err != nil {
 		t.Fatalf("Failed to start proxy: %v", err)
 	}
-	defer mgr.StopProxy(proxyCfg.ID)
+	defer func() { _ = mgr.StopProxy(proxyCfg.ID) }()
 
 	// Wait for proxy to start
 	time.Sleep(200 * time.Millisecond)
@@ -163,7 +163,7 @@ func RunLoadTest(t *testing.T, opts BenchmarkOptions) *LoadTestResult {
 				}
 
 				// Read response
-				conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+				_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 				_, err = modbus.ReadFrame(conn)
 				latency := time.Since(reqStart)
 
@@ -234,7 +234,7 @@ func BenchmarkProxyConnection(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to start mock server: %v", err)
 	}
-	defer mockServer.Stop()
+	defer func() { _ = mockServer.Stop() }()
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -260,7 +260,7 @@ func BenchmarkProxyConnection(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to start proxy: %v", err)
 	}
-	defer mgr.StopProxy(proxyCfg.ID)
+	defer func() { _ = mgr.StopProxy(proxyCfg.ID) }()
 
 	time.Sleep(200 * time.Millisecond)
 
@@ -285,7 +285,7 @@ func BenchmarkProxyRequest(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to start mock server: %v", err)
 	}
-	defer mockServer.Stop()
+	defer func() { _ = mockServer.Stop() }()
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -311,7 +311,7 @@ func BenchmarkProxyRequest(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to start proxy: %v", err)
 	}
-	defer mgr.StopProxy(proxyCfg.ID)
+	defer func() { _ = mgr.StopProxy(proxyCfg.ID) }()
 
 	time.Sleep(200 * time.Millisecond)
 
@@ -325,8 +325,8 @@ func BenchmarkProxyRequest(b *testing.B) {
 
 	// Warmup
 	for i := 0; i < 100; i++ {
-		conn.Write(request)
-		modbus.ReadFrame(conn)
+		_, _ = conn.Write(request)
+		_, _ = modbus.ReadFrame(conn)
 	}
 
 	b.ResetTimer()
@@ -354,7 +354,7 @@ func BenchmarkProxyConcurrent(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to start mock server: %v", err)
 	}
-	defer mockServer.Stop()
+	defer func() { _ = mockServer.Stop() }()
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -380,7 +380,7 @@ func BenchmarkProxyConcurrent(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to start proxy: %v", err)
 	}
-	defer mgr.StopProxy(proxyCfg.ID)
+	defer func() { _ = mgr.StopProxy(proxyCfg.ID) }()
 
 	time.Sleep(200 * time.Millisecond)
 
@@ -401,8 +401,8 @@ func BenchmarkProxyConcurrent(b *testing.B) {
 				continue
 			}
 
-			conn.SetReadDeadline(time.Now().Add(1 * time.Second))
-			modbus.ReadFrame(conn)
+			_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+			_, _ = modbus.ReadFrame(conn)
 		}
 	})
 }
@@ -432,9 +432,9 @@ func runWarmup(port int, users int, duration time.Duration) {
 				case <-ctx.Done():
 					return
 				default:
-					conn.Write(request)
-					conn.SetReadDeadline(time.Now().Add(1 * time.Second))
-					modbus.ReadFrame(conn)
+					_, _ = conn.Write(request)
+					_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+					_, _ = modbus.ReadFrame(conn)
 					time.Sleep(10 * time.Millisecond)
 				}
 			}

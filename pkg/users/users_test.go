@@ -114,10 +114,12 @@ func TestLastAdminProtection_Delete(t *testing.T) {
 
 	// Add a second admin, then deletion of one must succeed.
 	secondID, _ := generateID()
-	m.db.CreateUser(&database.User{
+	if err := m.db.CreateUser(&database.User{
 		ID: secondID, Username: "admin2", FullName: "Admin Two",
 		Email: "a2@modbridge.local", PasswordHash: "x", Role: "admin", Enabled: true,
-	})
+	}); err != nil {
+		t.Fatalf("Failed to create second admin: %v", err)
+	}
 	if err := m.DeleteUser(admin.ID); err != nil {
 		t.Fatalf("expected deletion to succeed with a second admin present, got: %v", err)
 	}

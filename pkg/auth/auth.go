@@ -112,7 +112,11 @@ func CheckPasswordHash(password, hash string) bool {
 	return err == nil
 }
 
-func (a *Authenticator) CreateSession(userID, username, role string) (string, error) {
+func (a *Authenticator) CreateSession(userID, username, role string, ttl time.Duration) (string, error) {
+	if ttl <= 0 {
+		ttl = 24 * time.Hour
+	}
+
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
@@ -126,7 +130,7 @@ func (a *Authenticator) CreateSession(userID, username, role string) (string, er
 		UserID:    userID,
 		Username:  username,
 		Role:      role,
-		ExpiresAt: time.Now().Add(24 * time.Hour),
+		ExpiresAt: time.Now().Add(ttl),
 	}
 	return token, nil
 }

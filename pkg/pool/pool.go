@@ -424,6 +424,6 @@ func isConnHealthy(conn net.Conn) bool {
 	if err := tcpConn.SetWriteDeadline(time.Now().Add(1 * time.Millisecond)); err != nil {
 		return false
 	}
-	tcpConn.SetWriteDeadline(time.Time{})
+	_ = tcpConn.SetWriteDeadline(time.Time{})
 	return true
 }

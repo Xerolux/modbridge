@@ -134,7 +134,9 @@ func TestGetProxies(t *testing.T) {
 		Enabled:    true,
 	}
 
-	m.AddProxy(cfg, false)
+	if err := m.AddProxy(cfg, false); err != nil {
+		t.Fatalf("Failed to add proxy: %v", err)
+	}
 
 	proxies := m.GetProxies()
 	if len(proxies) != 1 {
@@ -164,7 +166,9 @@ func TestGetProxyStatus(t *testing.T) {
 		Paused:     false,
 	}
 
-	m.AddProxy(cfg, true)
+	if err := m.AddProxy(cfg, true); err != nil {
+		t.Fatalf("Failed to add proxy: %v", err)
+	}
 
 	status := m.getProxyStatus("test-id")
 	if status == nil {

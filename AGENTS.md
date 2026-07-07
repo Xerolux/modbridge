@@ -9,7 +9,7 @@ This file describes the codebase structure, development workflows, and conventio
 **ModBridge** is a Modbus TCP Proxy Manager with a web UI. It proxies Modbus TCP traffic, exposing a REST API and Vue.js frontend for configuration and monitoring. The application is written in Go (backend) with a Vue.js 3 frontend embedded into the binary.
 
 **Current version:** 1.0.12
-**Go version:** 1.26.1 (see `go.mod`)
+**Go version:** 1.26.4 (see `go.mod`)
 **Node version:** 24 (CI/CD, `frontend/`)
 
 ---

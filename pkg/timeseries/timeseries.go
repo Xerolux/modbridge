@@ -167,16 +167,25 @@ func (m *Manager) ExportCSV(proxyID string, registerAddress int, start, end time
 		writer := csv.NewWriter(file)
 		defer writer.Flush()
 
-		writer.Write([]string{"Timestamp", "Value", "RawValue", "Unit", "Quality"})
+		if err := writer.Write([]string{"Timestamp", "Value", "RawValue", "Unit", "Quality"}); err != nil {
+			return "", fmt.Errorf("failed to write CSV header: %w", err)
+		}
 
 		for _, point := range points {
-			writer.Write([]string{
+			if err := writer.Write([]string{
 				point.Timestamp.Format(time.RFC3339),
 				fmt.Sprintf("%.6f", point.Value),
 				fmt.Sprintf("%d", point.RawValue),
 				point.Unit,
 				point.Quality,
-			})
+			}); err != nil {
+				return "", fmt.Errorf("failed to write CSV row: %w", err)
+			}
+		}
+
+		writer.Flush()
+		if err := writer.Error(); err != nil {
+			return "", fmt.Errorf("failed to flush CSV writer: %w", err)
 		}
 
 		return fileName, nil

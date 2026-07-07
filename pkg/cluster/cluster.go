@@ -160,7 +160,7 @@ func (c *Cluster) heartbeatLoop(ctx context.Context) {
 			c.mu.RUnlock()
 
 			for _, peer := range peers {
-				c.announceToNode(peer.Address) //nolint:errcheck — best effort
+				_ = c.announceToNode(peer.Address) //nolint:errcheck // best effort
 			}
 
 			// Evict stale nodes.

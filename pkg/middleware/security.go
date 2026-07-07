@@ -51,6 +51,12 @@ func (m *SecurityMiddleware) Middleware(next http.HandlerFunc) http.HandlerFunc 
 		// Permissions-Policy (formerly Feature-Policy)
 		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 
+		// Cross-Origin-Opener-Policy helps prevent cross-origin attacks
+		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
+
+		// Disable DNS prefetching to reduce information leakage
+		w.Header().Set("X-DNS-Prefetch-Control", "off")
+
 		// X-Request-ID
 		requestID := r.Header.Get("X-Request-ID")
 		if requestID == "" {

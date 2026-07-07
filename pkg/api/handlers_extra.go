@@ -144,7 +144,7 @@ func (s *Server) handleSystemConfig(w http.ResponseWriter, r *http.Request) {
 		cfg.AdminPassHash = ""
 		cfg.EmailPassword = ""
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(cfg)
+		s.writeJSON(w, cfg)
 		return
 	}
 
@@ -205,7 +205,7 @@ func (s *Server) handleSystemConfig(w http.ResponseWriter, r *http.Request) {
 		s.log.SetLogLevel(logger.LogLevel(req.LogLevel))
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		s.writeJSON(w, map[string]string{"status": "ok"})
 		return
 	}
 
@@ -252,7 +252,7 @@ func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(info)
+	s.writeJSON(w, info)
 }
 
 // handlePortDiagnostics checks port availability and shows process info
@@ -281,7 +281,7 @@ func (s *Server) handlePortDiagnostics(w http.ResponseWriter, r *http.Request) {
 	results := pm.CheckPorts(req.Ports)
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(results)
+	s.writeJSON(w, results)
 }
 
 // handlePortRelease forcefully releases a port
@@ -332,7 +332,7 @@ func (s *Server) handlePortRelease(w http.ResponseWriter, r *http.Request) {
 	s.log.Warn("ADMIN", fmt.Sprintf("Process %d on port %d killed by user", req.PID, req.Port))
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{
+	s.writeJSON(w, map[string]string{
 		"status":  "ok",
 		"message": "Process terminated successfully",
 	})
@@ -383,7 +383,7 @@ func (s *Server) handleCheckProxyPorts(w http.ResponseWriter, r *http.Request) {
 	freeCount := countFreePortsInMap(results)
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	s.writeJSON(w, map[string]interface{}{
 		"ports": results,
 		"summary": map[string]int{
 			"total":  len(ports),
@@ -438,7 +438,7 @@ func (s *Server) handleProxyConnectivityCheck(w http.ResponseWriter, r *http.Req
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(results)
+	s.writeJSON(w, results)
 }
 
 func (s *Server) handleAuditLogs(w http.ResponseWriter, r *http.Request) {
@@ -449,7 +449,9 @@ func (s *Server) handleAuditLogs(w http.ResponseWriter, r *http.Request) {
 
 	if s.auditor == nil {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]interface{}{})
+		if err := json.NewEncoder(w).Encode([]interface{}{}); err != nil {
+			s.log.Warn("API", fmt.Sprintf("failed to encode empty audit log response: %v", err))
+		}
 		return
 	}
 
@@ -513,7 +515,7 @@ func (s *Server) handleAuditLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(response)
+	s.writeJSON(w, response)
 }
 
 func (s *Server) handleAuditLogsExport(w http.ResponseWriter, r *http.Request) {
@@ -524,7 +526,9 @@ func (s *Server) handleAuditLogsExport(w http.ResponseWriter, r *http.Request) {
 
 	if s.auditor == nil {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]interface{}{})
+		if err := json.NewEncoder(w).Encode([]interface{}{}); err != nil {
+			s.log.Warn("API", fmt.Sprintf("failed to encode empty audit export response: %v", err))
+		}
 		return
 	}
 

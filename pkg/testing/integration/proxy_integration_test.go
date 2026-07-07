@@ -28,7 +28,7 @@ func TestProxyIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start mock server: %v", err)
 	}
-	defer mockServer.Stop()
+	defer func() { _ = mockServer.Stop() }()
 
 	// Wait for server to be ready
 	time.Sleep(100 * time.Millisecond)
@@ -58,7 +58,7 @@ func TestProxyIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start proxy: %v", err)
 	}
-	defer mgr.StopProxy(proxyCfg.ID)
+	defer func() { _ = mgr.StopProxy(proxyCfg.ID) }()
 
 	// Wait for proxy to start
 	time.Sleep(200 * time.Millisecond)
@@ -88,7 +88,7 @@ func TestProxyIntegration(t *testing.T) {
 
 	// Read response
 	response := make([]byte, 256)
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	n, err := conn.Read(response)
 	if err != nil {
 		t.Fatalf("Failed to read response: %v", err)
@@ -121,7 +121,7 @@ func TestProxyIntegrationMultipleConnections(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start mock server: %v", err)
 	}
-	defer mockServer.Stop()
+	defer func() { _ = mockServer.Stop() }()
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -147,7 +147,7 @@ func TestProxyIntegrationMultipleConnections(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start proxy: %v", err)
 	}
-	defer mgr.StopProxy(proxyCfg.ID)
+	defer func() { _ = mgr.StopProxy(proxyCfg.ID) }()
 
 	time.Sleep(200 * time.Millisecond)
 
@@ -184,7 +184,7 @@ func TestProxyIntegrationMultipleConnections(t *testing.T) {
 	// Read responses
 	for i, conn := range conns {
 		response := make([]byte, 256)
-		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 		n, err := conn.Read(response)
 		if err != nil {
 			t.Fatalf("Failed to read response from connection %d: %v", i, err)
@@ -238,7 +238,7 @@ func TestProxyIntegrationErrorHandling(t *testing.T) {
 		t.Logf("Expected proxy to either fail on start or handle error, got: %v", err)
 		return
 	}
-	defer mgr.StopProxy(proxyCfg.ID)
+	defer func() { _ = mgr.StopProxy(proxyCfg.ID) }()
 
 	time.Sleep(200 * time.Millisecond)
 
@@ -267,13 +267,13 @@ func TestProxyIntegrationErrorHandling(t *testing.T) {
 
 	// Try to read with short timeout
 	response := make([]byte, 256)
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, err = conn.Read(response)
 
-	// We expect either no response (timeout) or connection close
-	if err != nil {
-		// This is expected - target device doesn't exist
-		// The proxy should handle this gracefully
+	// We expect either no response (timeout) or connection close.
+	// The proxy should handle a missing target gracefully rather than panic or hang.
+	if err == nil {
+		t.Logf("Expected timeout or connection close when target is down, but read succeeded")
 	}
 }
 
@@ -288,7 +288,7 @@ func TestProxyIntegrationLatency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start mock server: %v", err)
 	}
-	defer mockServer.Stop()
+	defer func() { _ = mockServer.Stop() }()
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -314,7 +314,7 @@ func TestProxyIntegrationLatency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start proxy: %v", err)
 	}
-	defer mgr.StopProxy(proxyCfg.ID)
+	defer func() { _ = mgr.StopProxy(proxyCfg.ID) }()
 
 	time.Sleep(200 * time.Millisecond)
 
@@ -342,7 +342,7 @@ func TestProxyIntegrationLatency(t *testing.T) {
 	}
 
 	response := make([]byte, 256)
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	_, err = conn.Read(response)
 	if err != nil {
 		t.Fatalf("Failed to read response: %v", err)
@@ -368,7 +368,7 @@ func TestProxyIntegrationWriteOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start mock server: %v", err)
 	}
-	defer mockServer.Stop()
+	defer func() { _ = mockServer.Stop() }()
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -394,7 +394,7 @@ func TestProxyIntegrationWriteOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start proxy: %v", err)
 	}
-	defer mgr.StopProxy(proxyCfg.ID)
+	defer func() { _ = mgr.StopProxy(proxyCfg.ID) }()
 
 	time.Sleep(200 * time.Millisecond)
 
@@ -421,7 +421,7 @@ func TestProxyIntegrationWriteOperations(t *testing.T) {
 	}
 
 	response := make([]byte, 256)
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	n, err := conn.Read(response)
 	if err != nil {
 		t.Fatalf("Failed to read response: %v", err)
@@ -448,7 +448,7 @@ func TestProxyIntegrationWithRetries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start mock server: %v", err)
 	}
-	defer mockServer.Stop()
+	defer func() { _ = mockServer.Stop() }()
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -475,7 +475,7 @@ func TestProxyIntegrationWithRetries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start proxy: %v", err)
 	}
-	defer mgr.StopProxy(proxyCfg.ID)
+	defer func() { _ = mgr.StopProxy(proxyCfg.ID) }()
 
 	time.Sleep(200 * time.Millisecond)
 
@@ -504,7 +504,7 @@ func TestProxyIntegrationWithRetries(t *testing.T) {
 		}
 
 		response := make([]byte, 256)
-		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 		n, err := conn.Read(response)
 		if err != nil {
 			continue

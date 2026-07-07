@@ -49,7 +49,7 @@ func TestMockServer_ReadHoldingRegisters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start server: %v", err)
 	}
-	defer server.Stop()
+	defer func() { _ = server.Stop() }()
 
 	// Wait for server to start
 	time.Sleep(100 * time.Millisecond)
@@ -81,7 +81,7 @@ func TestMockServer_ReadHoldingRegisters(t *testing.T) {
 
 	// Read response
 	response := make([]byte, 256)
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	n, err := conn.Read(response)
 	if err != nil {
 		t.Fatalf("Failed to read response: %v", err)
@@ -115,7 +115,7 @@ func TestMockServer_WriteSingleRegister(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start server: %v", err)
 	}
-	defer server.Stop()
+	defer func() { _ = server.Stop() }()
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -142,7 +142,7 @@ func TestMockServer_WriteSingleRegister(t *testing.T) {
 	}
 
 	response := make([]byte, 256)
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	n, err := conn.Read(response)
 	if err != nil {
 		t.Fatalf("Failed to read response: %v", err)
@@ -171,7 +171,7 @@ func TestMockServer_ErrorHandling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start server: %v", err)
 	}
-	defer server.Stop()
+	defer func() { _ = server.Stop() }()
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -196,7 +196,7 @@ func TestMockServer_ErrorHandling(t *testing.T) {
 	}
 
 	response := make([]byte, 256)
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	n, err := conn.Read(response)
 	if err != nil {
 		t.Fatalf("Failed to read response: %v", err)
@@ -222,7 +222,7 @@ func TestMockServer_RequestLogging(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start server: %v", err)
 	}
-	defer server.Stop()
+	defer func() { _ = server.Stop() }()
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -272,7 +272,7 @@ func TestMockServer_ConnectionTracking(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start server: %v", err)
 	}
-	defer server.Stop()
+	defer func() { _ = server.Stop() }()
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -312,7 +312,7 @@ func TestMockServer_ResponseDelay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start server: %v", err)
 	}
-	defer server.Stop()
+	defer func() { _ = server.Stop() }()
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -339,7 +339,7 @@ func TestMockServer_ResponseDelay(t *testing.T) {
 	}
 
 	response := make([]byte, 256)
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	_, err = conn.Read(response)
 	if err != nil {
 		t.Fatalf("Failed to read response: %v", err)
@@ -362,7 +362,7 @@ func TestMockServer_ErrorRate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start server: %v", err)
 	}
-	defer server.Stop()
+	defer func() { _ = server.Stop() }()
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -388,7 +388,7 @@ func TestMockServer_ErrorRate(t *testing.T) {
 	}
 
 	response := make([]byte, 256)
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	n, err := conn.Read(response)
 	if err != nil {
 		t.Fatalf("Failed to read response: %v", err)
@@ -413,7 +413,7 @@ func TestMockServer_WaitForConnection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start server: %v", err)
 	}
-	defer server.Stop()
+	defer func() { _ = server.Stop() }()
 
 	// Test timeout
 	err = server.WaitForConnection(100 * time.Millisecond)
@@ -424,7 +424,13 @@ func TestMockServer_WaitForConnection(t *testing.T) {
 	// Connect in background
 	go func() {
 		time.Sleep(50 * time.Millisecond)
-		net.Dial("tcp", server.GetAddress())
+		conn, err := net.Dial("tcp", server.GetAddress())
+		if err != nil {
+			return
+		}
+		// Keep the connection open long enough for WaitForConnection to detect it.
+		time.Sleep(300 * time.Millisecond)
+		_ = conn.Close()
 	}()
 
 	// Should succeed now

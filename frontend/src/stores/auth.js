@@ -89,8 +89,9 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const logout = async () => {
-    document.cookie = 'session_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
-    document.cookie = 'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+    const secureFlag = window.location.protocol === 'https:' ? '; Secure' : ''
+    document.cookie = `session_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax${secureFlag}`
+    document.cookie = `csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax${secureFlag}`
     isAuthenticated.value = false
     user.value = { userId: '', username: '', role: '', permissions: [] }
     lastAuthCheckAt = 0
