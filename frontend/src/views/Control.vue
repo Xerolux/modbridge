@@ -351,6 +351,18 @@ const menuItems = ref([]);
 const activeProxyForMenu = ref(null);
 
 let unwatchData = null;
+let pendingProxyUpdates = new Map();
+let pendingProxyRemovals = new Set();
+let proxyBatchFrame = null;
+
+const normalizeProxy = (proxy) => ({
+    ...proxy,
+    tags: Array.isArray(proxy.tags)
+        ? proxy.tags
+        : String(proxy.tags || '').split(',').map(tag => tag.trim()).filter(Boolean)
+});
+
+const normalizeProxyList = (data) => Array.isArray(data) ? data.map(normalizeProxy) : [];
 
 const defaultProxyForm = () => ({
     id: '',
@@ -441,10 +453,35 @@ const applyProxyOrder = (data) => {
 const fetchProxies = async () => {
     try {
         const res = await axios.get('/api/proxies');
-        proxies.value = applyProxyOrder(res.data);
+        proxies.value = applyProxyOrder(normalizeProxyList(res.data));
     } catch (e) {
         toast.add({ severity: 'error', summary: t('common.error'), detail: t('control.fetchProxiesFailed'), life: 5000 });
     }
+};
+
+const flushProxyUpdates = () => {
+    if (pendingProxyRemovals.size > 0) {
+        proxies.value = proxies.value.filter(p => !pendingProxyRemovals.has(p.id));
+    }
+
+    pendingProxyUpdates.forEach((proxyData) => {
+        if (pendingProxyRemovals.has(proxyData.id)) return;
+        const normalized = normalizeProxy(proxyData);
+        const index = proxies.value.findIndex(p => p.id === normalized.id);
+        if (index !== -1) {
+            proxies.value[index] = normalized;
+        } else {
+            proxies.value.push(normalized);
+        }
+    });
+
+    pendingProxyUpdates.clear();
+    pendingProxyRemovals.clear();
+    proxyBatchFrame = null;
+};
+
+const scheduleProxyFlush = () => {
+    if (!proxyBatchFrame) proxyBatchFrame = requestAnimationFrame(flushProxyUpdates);
 };
 
 onMounted(async () => {
@@ -473,17 +510,16 @@ onMounted(async () => {
             case 'proxy_started':
             case 'proxy_stopped':
                 if (proxyData) {
-                    const index = proxies.value.findIndex(p => p.id === proxyData.id);
-                    if (index !== -1) {
-                        proxies.value[index] = proxyData;
-                    } else {
-                        proxies.value.push(proxyData);
-                    }
+                    pendingProxyUpdates.set(proxyData.id, proxyData);
+                    pendingProxyRemovals.delete(proxyData.id);
+                    scheduleProxyFlush();
                 }
                 break;
             case 'proxy_removed':
                 if (eventData.proxy_id) {
-                    proxies.value = proxies.value.filter(p => p.id !== eventData.proxy_id);
+                    pendingProxyUpdates.delete(eventData.proxy_id);
+                    pendingProxyRemovals.add(eventData.proxy_id);
+                    scheduleProxyFlush();
                 }
                 break;
         }
@@ -495,6 +531,7 @@ onUnmounted(() => {
     pendingTimers.length = 0;
     if (unwatchConnected) unwatchConnected();
     if (unwatchData) unwatchData();
+    if (proxyBatchFrame) cancelAnimationFrame(proxyBatchFrame);
     if (disconnectFn) {
         disconnectFn();
     }

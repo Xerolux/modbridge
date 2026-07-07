@@ -10,6 +10,23 @@ const autoScroll = ref(localStorage.getItem('logsAutoScroll') !== 'false');
 const logsContainer = ref(null);
 const loadingInitial = ref(true);
 let disconnectFn = null;
+let unwatchData = null;
+let unwatchConnected = null;
+let pendingLogs = [];
+let logBatchFrame = null;
+
+const MAX_LOG_ENTRIES = 500;
+
+const trimLogs = (items) => items.length > MAX_LOG_ENTRIES ? items.slice(-MAX_LOG_ENTRIES) : items;
+
+const scheduleLogFlush = () => {
+  if (logBatchFrame) return;
+  logBatchFrame = requestAnimationFrame(() => {
+    logs.value = trimLogs([...logs.value, ...pendingLogs]);
+    pendingLogs = [];
+    logBatchFrame = null;
+  });
+};
 
 const toggleAutoScroll = () => {
   localStorage.setItem('logsAutoScroll', autoScroll.value.toString());
@@ -33,20 +50,26 @@ onMounted(async () => {
   const { data, disconnect, isConnected: connected } = useEventSource('/api/logs/stream');
   disconnectFn = disconnect;
 
-  watch(connected, (val) => { isConnected.value = val; });
+  unwatchConnected = watch(connected, (val) => { isConnected.value = val; });
 
-  watch(data, (eventData) => {
+  unwatchData = watch(data, (eventData) => {
     if (!eventData) return;
     if (Array.isArray(eventData)) {
-      logs.value = eventData;
+      pendingLogs = [];
+      logs.value = trimLogs(eventData);
     } else {
-      logs.value.push(eventData);
-      if (logs.value.length > 500) logs.value = logs.value.slice(-500);
+      pendingLogs.push(eventData);
+      scheduleLogFlush();
     }
   });
 });
 
-onUnmounted(() => { if (disconnectFn) disconnectFn(); });
+onUnmounted(() => {
+  if (unwatchData) unwatchData();
+  if (unwatchConnected) unwatchConnected();
+  if (logBatchFrame) cancelAnimationFrame(logBatchFrame);
+  if (disconnectFn) disconnectFn();
+});
 
 watch(logs, (newVal) => {
   if (autoScroll.value && logsContainer.value && newVal.length > 0) {
