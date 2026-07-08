@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/tls"
-	"encoding/base64"
 	_ "expvar"
 	"fmt"
 	"log"
@@ -30,21 +28,6 @@ var (
 	// BuildTime holds the timestamp when the application was built
 	BuildTime = "unknown"
 )
-
-// generateSecurePassword generates a cryptographically secure random password.
-// It produces exactly `length` URL-safe base64 characters without truncating entropy:
-// (length+3)/4*3 bytes → base64 → at least `length` characters, no wasted randomness.
-func generateSecurePassword(length int) string {
-	// Calculate the minimum bytes needed so base64 output is >= length chars.
-	// base64: 3 bytes → 4 chars, so ceil(length/4)*3 bytes.
-	byteCount := (length + 3) / 4 * 3
-	b := make([]byte, byteCount)
-	if _, err := rand.Read(b); err != nil {
-		panic("failed to generate random password: " + err.Error())
-	}
-	encoded := base64.RawURLEncoding.EncodeToString(b) // no padding
-	return encoded[:length]
-}
 
 // bootstrapUsers ensures a usable admin account exists in multi-user mode.
 //   - Fresh install (no users, no prior AdminPassHash): creates admin/admin with
