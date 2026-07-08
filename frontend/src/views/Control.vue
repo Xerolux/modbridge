@@ -333,6 +333,7 @@ const loading = ref(true);
 const editMode = ref(false);
 const searchQuery = ref('');
 const sseConnected = ref(null);
+const liveStale = ref(false);
 
 const runningCount = computed(() => proxies.value.filter(p => p.status === 'Running').length);
 const stoppedCount = computed(() => proxies.value.filter(p => p.status === 'Stopped').length);
@@ -341,6 +342,8 @@ const toast = useToast();
 const confirm = useConfirm();
 let disconnectFn = null;
 const pendingTimers = [];
+let watchdogTimer = null;
+let unwatchConnectedLive = null;
 
 const testingProxy = ref(null);
 const connectionStatus = ref({});
@@ -488,8 +491,23 @@ onMounted(async () => {
     await fetchProxies();
     loading.value = false;
 
-    const { data, disconnect, isConnected } = useEventSource('/api/proxies/stream');
+    const { data, disconnect, isConnected, lastMessageAt } = useEventSource('/api/proxies/stream');
     disconnectFn = disconnect;
+
+    // Polling fallback: if SSE drops or stops delivering data for >30s, poll
+    // /api/proxies periodically so the control view never freezes on stale data.
+    const LIVE_STALE_MS = 30000;
+    const checkLiveness = () => {
+        const now = Date.now();
+        const stale = !isConnected.value || lastMessageAt.value === 0 || (now - lastMessageAt.value) > LIVE_STALE_MS;
+        liveStale.value = stale;
+        if (stale) {
+            fetchProxies();
+        }
+    };
+    watchdogTimer = setInterval(checkLiveness, 15000);
+    // Also react immediately when connectivity toggles.
+    unwatchConnectedLive = watch(isConnected, () => checkLiveness());
 
     unwatchConnected = watch(isConnected, (connected) => {
         sseConnected.value = connected;
@@ -529,6 +547,8 @@ onMounted(async () => {
 onUnmounted(() => {
     pendingTimers.forEach(clearTimeout);
     pendingTimers.length = 0;
+    if (watchdogTimer) clearInterval(watchdogTimer);
+    if (unwatchConnectedLive) unwatchConnectedLive();
     if (unwatchConnected) unwatchConnected();
     if (unwatchData) unwatchData();
     if (proxyBatchFrame) cancelAnimationFrame(proxyBatchFrame);

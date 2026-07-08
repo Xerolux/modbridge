@@ -77,14 +77,18 @@ export const useAppStore = defineStore('app', () => {
 
   const fetchProxies = async () => {
     try {
+      isLoading.value = true;
       const res = await axios.get('/api/proxies');
       // Convert tags array to comma-separated string for editing
       proxies.value = res.data.map(proxy => ({
         ...proxy,
         tags: Array.isArray(proxy.tags) ? proxy.tags.join(', ') : proxy.tags || ''
       }));
+      error.value = null;
     } catch (e) {
       error.value = e.response?.data || e.message;
+    } finally {
+      isLoading.value = false;
     }
   };
 
@@ -145,8 +149,9 @@ export const useAppStore = defineStore('app', () => {
     try {
       const res = await axios.get('/api/config/webport');
       webPort.value = res.data.web_port;
+      error.value = null;
     } catch (e) {
-      console.error('Failed to fetch web port', e);
+      error.value = e.response?.data || e.message;
     }
   };
 
@@ -168,8 +173,9 @@ export const useAppStore = defineStore('app', () => {
     try {
       const res = await axios.get('/api/status');
       status.value = res.data;
+      error.value = null;
     } catch (e) {
-      console.error('Status fetch failed', e);
+      error.value = e.response?.data || e.message;
     }
   };
 

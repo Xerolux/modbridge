@@ -201,7 +201,9 @@ const errorMessage = ref('');
 const layoutEditing = ref(false);
 const isMobileLayout = ref(window.innerWidth <= BREAKPOINTS.MOBILE);
 const sseConnected = ref(null);
+const liveStale = ref(false);
 let sseDisconnect = null;
+let sseWatchdogStop = null;
 let unwatchData = null;
 let gridInitialized = false;
 let fetchVersion = 0;
@@ -328,10 +330,28 @@ onMounted(async () => {
     initializeGrid();
     window.addEventListener('resize', handleResize);
 
-    const { data, disconnect, isConnected } = useEventSource('/api/proxies/stream');
+    const { data, disconnect, isConnected, lastMessageAt } = useEventSource('/api/proxies/stream');
     sseDisconnect = disconnect;
 
     watch(isConnected, (val) => { sseConnected.value = val; });
+
+    // Polling fallback: if SSE drops or stops delivering data for >30s, poll
+    // /api/proxies periodically so the dashboard never freezes on stale data.
+    let watchdogTimer = null;
+    const LIVE_STALE_MS = 30000;
+    const checkLiveness = () => {
+      const now = Date.now();
+      const stale = !isConnected.value || lastMessageAt.value === 0 || (now - lastMessageAt.value) > LIVE_STALE_MS;
+      liveStale.value = stale;
+      if (stale) {
+        // Best-effort refresh; ignore errors (toast already handled centrally).
+        fetchData(false).catch(() => {});
+      }
+    };
+    watchdogTimer = setInterval(checkLiveness, 15000);
+    sseWatchdogStop = () => { if (watchdogTimer) clearInterval(watchdogTimer); };
+    // Also react immediately when connectivity toggles.
+    watch(isConnected, () => checkLiveness());
 
     const flushSSEUpdates = () => {
       pendingSSEUpdates.forEach((proxyData) => updateProxyCollection(proxyData));
@@ -378,6 +398,7 @@ const handleResize = debounce(() => {
 onUnmounted(() => {
   if (unwatchData) unwatchData();
   if (sseBatchFrame) cancelAnimationFrame(sseBatchFrame);
+  if (sseWatchdogStop) sseWatchdogStop();
   window.removeEventListener('resize', handleResize);
   if (grid.value) {
     grid.value.destroy(false);

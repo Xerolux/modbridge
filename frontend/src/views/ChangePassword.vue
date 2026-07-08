@@ -1,97 +1,99 @@
 <script setup>
-import { ref, onMounted } from 'vue';
-import { useAuthStore } from '../stores/auth';
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useToast } from 'primevue/usetoast';
+import { useAuthStore } from '../stores/auth';
+import { useI18n } from 'vue-i18n';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
-import { useI18n } from 'vue-i18n';
 import axios from '../axios.js';
 
+const router = useRouter();
+const toast = useToast();
+const auth = useAuthStore();
 const { t } = useI18n();
 
-const username = ref('');
-const password = ref('');
-const error = ref('');
-const auth = useAuthStore();
-const router = useRouter();
+const currentPassword = ref('');
+const newPassword = ref('');
+const confirmPassword = ref('');
 const loading = ref(false);
-const multiUser = ref(false);
+const error = ref('');
 
-onMounted(async () => {
-  try {
-    const res = await axios.get('/api/status', { skipAuth: true });
-    multiUser.value = res.data.multi_user === true;
-  } catch {
-    multiUser.value = false;
-  }
-});
-
-const handleLogin = async () => {
-  loading.value = true;
+const submit = async () => {
   error.value = '';
-  // Username is always sent. Multi-user is the default mode; the single-user
-  // fallback ignores the username server-side, so sending "admin" is harmless.
-  const payload = {
-    username: username.value.trim() || 'admin',
-    password: password.value,
-  };
-  const result = await auth.login(payload);
-  loading.value = false;
-  if (result.success) {
-    if (result.mustChangePassword) {
-      router.push('/change-password');
-    } else {
-      router.push('/');
-    }
-  } else {
-    error.value = result.message || t('login.invalidCredentials');
+  if (newPassword.value !== confirmPassword.value) {
+    error.value = t('changePassword.mismatch');
+    return;
+  }
+  if (newPassword.value.length < 8) {
+    error.value = t('changePassword.tooShort');
+    return;
+  }
+  loading.value = true;
+  try {
+    await axios.post('/api/config/password', {
+      current_password: currentPassword.value,
+      new_password: newPassword.value,
+    });
+    toast.add({ severity: 'success', summary: t('changePassword.success'), life: 3000 });
+    // Sessions are invalidated server-side on password change, so force re-login.
+    await auth.logout();
+    router.push('/login');
+  } catch (err) {
+    const msg = err?.response?.data || err?.message || t('changePassword.error');
+    error.value = typeof msg === 'string' ? msg : t('changePassword.error');
+  } finally {
+    loading.value = false;
   }
 };
 </script>
 
 <template>
   <div class="login-stage flex items-center justify-center min-h-[90vh] px-4 py-8">
-    <div class="w-full max-w-[360px] flex flex-col gap-8">
+    <div class="w-full max-w-[380px] flex flex-col gap-8">
 
-      <!-- Brand mark -->
       <div class="flex flex-col items-center gap-4">
         <div class="brand-ring">
           <img src="../assets/logo.png" alt="ModBridge" class="w-12 h-12 object-contain" />
         </div>
         <div class="text-center">
           <h1 class="text-2xl font-bold tracking-tight text-[var(--text-primary)]">ModBridge</h1>
-          <p class="text-sm text-[var(--text-muted)] mt-1">Industrial Modbus Proxy Manager</p>
+          <p class="text-sm text-[var(--text-muted)] mt-1">{{ t('changePassword.subtitle') }}</p>
         </div>
       </div>
 
-      <!-- Form card -->
       <div class="login-card flex flex-col gap-5">
-        <p class="text-sm text-center text-[var(--text-secondary)]">
-          {{ t('login.loginWithCredentials') }}
-        </p>
-
         <div class="flex flex-col gap-2">
-          <label for="login-username" class="login-label">{{ t('login.username') }}</label>
+          <label for="cp-current" class="login-label">{{ t('changePassword.current') }}</label>
           <InputText
-            id="login-username"
-            v-model="username"
-            @keyup.enter="handleLogin"
-            :placeholder="t('login.usernamePlaceholder')"
+            id="cp-current"
+            v-model="currentPassword"
+            type="password"
             class="w-full"
-            autocomplete="username"
+            autocomplete="current-password"
           />
         </div>
 
         <div class="flex flex-col gap-2">
-          <label for="login-password" class="login-label">{{ t('login.password') }}</label>
+          <label for="cp-new" class="login-label">{{ t('changePassword.new') }}</label>
           <InputText
-            id="login-password"
-            v-model="password"
+            id="cp-new"
+            v-model="newPassword"
             type="password"
-            @keyup.enter="handleLogin"
-            :placeholder="t('login.passwordPlaceholder')"
             class="w-full"
-            autocomplete="current-password"
+            autocomplete="new-password"
+          />
+        </div>
+
+        <div class="flex flex-col gap-2">
+          <label for="cp-confirm" class="login-label">{{ t('changePassword.confirm') }}</label>
+          <InputText
+            id="cp-confirm"
+            v-model="confirmPassword"
+            type="password"
+            class="w-full"
+            autocomplete="new-password"
+            @keyup.enter="submit"
           />
         </div>
 
@@ -101,10 +103,10 @@ const handleLogin = async () => {
         </div>
 
         <Button
-          :label="t('login.login')"
-          icon="pi pi-sign-in"
+          :label="t('changePassword.submit')"
+          icon="pi pi-key"
           :loading="loading"
-          @click="handleLogin"
+          @click="submit"
           class="w-full"
         />
       </div>
@@ -116,7 +118,6 @@ const handleLogin = async () => {
 .login-stage {
   background: transparent;
 }
-
 .brand-ring {
   position: relative;
   width: 5rem;
@@ -132,7 +133,6 @@ const handleLogin = async () => {
     0 0 0 8px var(--border-subtle),
     var(--shadow-soft);
 }
-
 .login-card {
   background: var(--bg-surface-strong);
   backdrop-filter: var(--glass-blur);
@@ -142,7 +142,6 @@ const handleLogin = async () => {
   padding: 2rem;
   box-shadow: var(--shadow-strong);
 }
-
 .login-label {
   font-size: 0.78rem;
   font-weight: 700;
@@ -150,7 +149,6 @@ const handleLogin = async () => {
   letter-spacing: 0.12em;
   color: var(--text-muted);
 }
-
 .login-error {
   display: flex;
   align-items: center;

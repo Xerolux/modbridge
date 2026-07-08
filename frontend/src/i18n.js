@@ -81,6 +81,24 @@ const de = {
     passwordChanged: 'Passwort erfolgreich geändert'
   },
 
+  // Change password (forced on first login)
+  changePassword: {
+    subtitle: 'Bitte ändern Sie Ihr Passwort beim ersten Login.',
+    current: 'Aktuelles Passwort',
+    new: 'Neues Passwort',
+    confirm: 'Passwort bestätigen',
+    submit: 'Passwort ändern',
+    mismatch: 'Die Passwörter stimmen nicht überein.',
+    tooShort: 'Das neue Passwort muss mindestens 8 Zeichen lang sein.',
+    success: 'Passwort geändert. Bitte neu einloggen.',
+    error: 'Passwort konnte nicht geändert werden.'
+  },
+
+  // System info page
+  systemInfo: {
+    loadError: 'Systeminformationen konnten nicht geladen werden.'
+  },
+
   // System
   system: {
     title: 'Systeminformationen',
@@ -309,6 +327,8 @@ const de = {
     connected: 'Verbunden',
     disconnected: 'Getrennt',
     connecting: 'Verbinden...',
+    retry: 'Erneut versuchen',
+    forbidden: 'Keine Berechtigung für diese Aktion',
     running: 'Aktiv',
     justNow: 'Gerade eben',
     secondsAgo: 'vor {n}s',
@@ -405,6 +425,24 @@ const en = {
     newPassword: 'New Password',
     changePassword: 'Change Password',
     passwordChanged: 'Password changed successfully'
+  },
+
+  // Change password (forced on first login)
+  changePassword: {
+    subtitle: 'Please change your password on first login.',
+    current: 'Current password',
+    new: 'New password',
+    confirm: 'Confirm password',
+    submit: 'Change password',
+    mismatch: 'The passwords do not match.',
+    tooShort: 'The new password must be at least 8 characters long.',
+    success: 'Password changed. Please log in again.',
+    error: 'Could not change the password.'
+  },
+
+  // System info page
+  systemInfo: {
+    loadError: 'Failed to load system information.'
   },
 
   // System
@@ -633,6 +671,8 @@ const en = {
     connected: 'Connected',
     disconnected: 'Disconnected',
     connecting: 'Connecting...',
+    retry: 'Retry',
+    forbidden: 'You are not allowed to perform this action',
     running: 'Running',
     justNow: 'Just now',
     secondsAgo: '{n}s ago',

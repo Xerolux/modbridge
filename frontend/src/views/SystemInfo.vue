@@ -12,6 +12,14 @@
             <i class="pi pi-spin pi-spinner text-3xl sm:text-4xl text-blue-500"></i>
         </div>
 
+        <div v-else-if="loadError && !systemInfo.hostname" class="glass-card rounded-3xl border border-red-300 dark:border-red-500/30 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <i class="pi pi-exclamation-triangle text-red-500"></i>
+                <span class="text-sm">{{ t('systemInfo.loadError') }}</span>
+            </div>
+            <button @click="fetchInfo" class="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-sm hover:bg-gray-700 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200">{{ t('common.retry') }}</button>
+        </div>
+
         <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
                 <template #title><div class="text-lg sm:text-xl">{{ t('system.system') }}</div></template>
@@ -237,6 +245,7 @@
   const { t } = useI18n();
 
   const loading = ref(true);
+  const loadError = ref(null);
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -272,6 +281,7 @@
 
   const fetchInfo = async () => {
       try {
+          loadError.value = null;
           const [infoRes, configRes] = await Promise.all([
               axios.get('/api/system/info'),
               axios.get('/api/config/system')
@@ -279,7 +289,8 @@
           systemInfo.value = infoRes.data;
           config.value = configRes.data;
       } catch (e) {
-          console.error('Failed to fetch system info', e);
+          // Surface the error instead of silently leaving zeros/empty fields.
+          loadError.value = e.response?.data || e.message || 'Failed to fetch system info';
       }
   };
 

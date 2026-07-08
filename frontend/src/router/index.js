@@ -10,6 +10,7 @@ const Devices = () => import(/* webpackChunkName: "devices" */ '../views/Devices
 const SystemInfo = () => import(/* webpackChunkName: "system" */ '../views/SystemInfo.vue')
 const Users = () => import(/* webpackChunkName: "users" */ '../views/Users/Users.vue')
 const Audit = () => import(/* webpackChunkName: "audit" */ '../views/Audit/Audit.vue')
+const ChangePassword = () => import(/* webpackChunkName: "change-password" */ '../views/ChangePassword.vue')
 const Layout = () => import(/* webpackChunkName: "layout" */ '../components/Layout.vue')
 
 const prefetchMainRoutes = () => {
@@ -30,6 +31,12 @@ const prefetchMainRoutes = () => {
     name: 'Login',
     component: Login,
     meta: { preload: true }
+  },
+  {
+    path: '/change-password',
+    name: 'ChangePassword',
+    component: ChangePassword,
+    meta: { requiresAuth: true, allowDuringMustChange: true }
   },
   {
     path: '/',
@@ -108,6 +115,12 @@ router.beforeEach(async (to) => {
   const valid = await auth.checkAuth()
   if (!valid) {
     return { path: '/login', replace: true }
+  }
+
+  // Force password change on first login: only the dedicated change-password
+  // route is reachable until the flag is cleared.
+  if (auth.mustChangePassword && !to.meta.allowDuringMustChange) {
+    return { path: '/change-password', replace: true }
   }
 
   const requiredPermission = to.meta.permission

@@ -1,8 +1,13 @@
 <script setup>
 import { onMounted, onUnmounted, watch, computed } from 'vue';
 import { useAppStore } from './stores/appStore';
+import { useToast } from 'primevue/usetoast';
+import { useI18n } from 'vue-i18n';
+import Toast from 'primevue/toast';
 
 const store = useAppStore();
+const toast = useToast();
+const { t } = useI18n();
 
 const appShellClass = computed(() => [
   store.theme, // 'light' | 'dark' | 'bw'
@@ -45,11 +50,20 @@ onMounted(() => {
   };
   document.addEventListener('visibilitychange', handleVisibility);
   onUnmounted(() => document.removeEventListener('visibilitychange', handleVisibility));
+
+  // Global 403 handler: axios dispatches 'app:forbidden' whenever a request is
+  // rejected with Forbidden. Show a single toast instead of silent failures.
+  const handleForbidden = () => {
+    toast.add({ severity: 'warn', summary: t('common.forbidden'), life: 3000 });
+  };
+  window.addEventListener('app:forbidden', handleForbidden);
+  onUnmounted(() => window.removeEventListener('app:forbidden', handleForbidden));
 });
 </script>
 
 <template>
   <div :class="appShellClass">
+    <Toast />
     <template v-if="showAmbient">
       <div class="ambient-layer ambient-grid"></div>
       <div class="ambient-layer ambient-orb ambient-orb-a"></div>

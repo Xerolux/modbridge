@@ -5,6 +5,9 @@ export function useEventSource(url, options = {}) {
   const data = ref(null);
   const error = ref(null);
   const isConnected = ref(false);
+  // Timestamp of the last received message; consumers use it (together with
+  // isConnected) to detect stale connections and trigger a polling fallback.
+  const lastMessageAt = ref(0);
 
   const eventSource = ref(null);
   let reconnectAttempts = 0;
@@ -34,12 +37,18 @@ export function useEventSource(url, options = {}) {
       });
 
       eventSource.value.onopen = () => {
-        isConnected.value = true;
+        // Note: isConnected is intentionally NOT set here. A freshly opened
+        // connection that never delivers data would otherwise look "live". We
+        // only mark connected once the first message actually arrives.
         error.value = null;
         reconnectAttempts = 0;
       };
 
       eventSource.value.onmessage = (event) => {
+        if (!isConnected.value) {
+          isConnected.value = true;
+        }
+        lastMessageAt.value = Date.now();
         try {
           const parsed = JSON.parse(event.data);
           data.value = parsed;
@@ -119,6 +128,7 @@ export function useEventSource(url, options = {}) {
     data,
     error,
     isConnected,
+    lastMessageAt,
     disconnect,
     reconnect: connect,
   };
