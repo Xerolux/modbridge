@@ -237,6 +237,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/status", publicMW(s.handleStatus))
 	mux.HandleFunc("/api/metrics", s.cors.Middleware(s.handleMetrics))
 	mux.HandleFunc("/api/login", s.cors.Middleware(s.security.Middleware(s.loginRateLimiter.Middleware(s.handleLogin))))
+	mux.HandleFunc("/api/logout", csrfMW(s.handleLogout))
 	mux.HandleFunc("/api/setup", s.cors.Middleware(s.security.Middleware(s.handleSetup)))
 
 	// Pprof endpoints (debug mode only)
@@ -477,7 +478,16 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 
 	cfg := s.cfgMgr.Get()
 	if cfg.AdminPassHash != "" {
-		http.Error(w, "Already setup", http.StatusForbidden)
+		// Setup is deprecated: the default admin is auto-created on first run
+		// (single-user hash) or via the user store (multi-user). The endpoint
+		// is no longer reachable in normal operation; return 410 Gone so any
+		// legacy caller gets an explicit signal.
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusGone)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "setup is deprecated; default admin is auto-created on first run",
+		})
 		return
 	}
 
@@ -640,13 +650,43 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"user_id":     session.UserID,
-		"username":    session.Username,
-		"role":        session.Role,
-		"permissions": permissions,
+		"user_id":              session.UserID,
+		"username":             session.Username,
+		"role":                 session.Role,
+		"permissions":          permissions,
+		"must_change_password": session.MustChangePassword,
 	}); err != nil {
 		s.log.Error("API", fmt.Sprintf("Failed to encode /api/me response: %v", err))
 	}
+}
+
+// handleLogout ends the caller's server-side session. CSRF-protected because it
+// is a state-changing POST. The client also clears its cookies; this endpoint
+// guarantees the in-memory session is invalidated immediately and the logout
+// is recorded in the audit log.
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if c, err := r.Cookie("session_token"); err == nil && c.Value != "" {
+		// Capture identity BEFORE invalidating, so the audit log still resolves.
+		if session := s.auth.GetSession(c.Value); session != nil {
+			if s.auditor != nil {
+				s.auditor.LogLogout(session.UserID, session.Username, r.RemoteAddr, r.UserAgent())
+			}
+		}
+		s.auth.InvalidateSession(c.Value)
+	}
+	// Clear cookies defensively even though the client does it too.
+	for _, name := range []string{"session_token", "csrf_token"} {
+		http.SetCookie(w, &http.Cookie{
+			Name: name, Value: "", Expires: time.Unix(0, 0),
+			Path: "/", HttpOnly: true, MaxAge: -1,
+		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
