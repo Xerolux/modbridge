@@ -8,6 +8,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -177,6 +178,9 @@ func NewManager(path string) *Manager {
 			MetricsPort:         ":9090",
 			DebugMode:           false,
 			MaxConnections:      1000,
+			// Multi-user (DB-backed auth) is the default mode. Operators can opt
+			// out explicitly via {"multi_user": false} in config.json.
+			MultiUser: true,
 		},
 	}
 }
@@ -195,7 +199,33 @@ func (m *Manager) Load() error {
 	}
 	defer f.Close()
 
-	return json.NewDecoder(f).Decode(&m.cfg)
+	raw, err := io.ReadAll(f)
+	if err != nil {
+		return err
+	}
+
+	// Detect which top-level keys were explicitly present so we can apply
+	// defaults only for truly-absent keys (bool's zero value is false, so we
+	// cannot otherwise distinguish "absent" from "explicitly false").
+	var keySet map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &keySet); err != nil {
+		return err
+	}
+
+	var cfg Config
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return err
+	}
+
+	// Multi-user (DB-backed auth) is the default mode. An operator can opt out
+	// explicitly via {"multi_user": false} in config.json; that explicit value
+	// is honored because the key is present. An absent key defaults to true.
+	if _, ok := keySet["multi_user"]; !ok {
+		cfg.MultiUser = true
+	}
+
+	m.cfg = cfg
+	return nil
 }
 
 // Save writes config to disk.

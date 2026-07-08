@@ -19,6 +19,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -45,6 +46,56 @@ func generateSecurePassword(length int) string {
 	return encoded[:length]
 }
 
+// bootstrapUsers ensures a usable admin account exists in multi-user mode.
+//   - Fresh install (no users, no prior AdminPassHash): creates admin/admin with
+//     MustChangePassword=true (change forced on first login).
+//   - Migration (no users, but a prior single-user AdminPassHash): creates the
+//     admin from the EXISTING bcrypt hash so the operator's old password stays
+//     valid; MustChangePassword mirrors the prior ForcePasswordChange flag.
+//   - Already populated: no-op.
+//
+// Safe to call when multi-user is disabled (it still seeds the store if a DB is
+// present so the operator can switch to multi-user later without losing state).
+func bootstrapUsers(userMgr *users.Manager, cfg config.Config, l *logger.Logger) {
+	if userMgr == nil {
+		return
+	}
+	existing, err := userMgr.GetAllUsers()
+	if err != nil {
+		l.Error("SYSTEM", fmt.Sprintf("bootstrap: cannot read users: %v", err))
+		return
+	}
+	if len(existing) > 0 {
+		return // already populated
+	}
+
+	if strings.TrimSpace(cfg.AdminPassHash) == "" {
+		// Fresh install: default admin/admin.
+		if _, err := userMgr.EnsureDefaultAdmin("admin", "admin", "system"); err != nil {
+			l.Error("SYSTEM", fmt.Sprintf("bootstrap: failed to create default admin: %v", err))
+			return
+		}
+		l.Info("SYSTEM", "Default-Login erstellt — Benutzername: admin / Passwort: admin — BITTE beim ersten Login ändern.")
+		log.Println("SYSTEM: Default admin created (username: admin, password: admin). Change it on first login.")
+		return
+	}
+
+	// Migration: reuse the existing single-user password hash so the operator
+	// does not have to reconfigure their password.
+	if _, err := userMgr.EnsureDefaultAdminFromHash("admin", cfg.AdminPassHash, "system"); err != nil {
+		l.Error("SYSTEM", fmt.Sprintf("bootstrap: migration failed: %v", err))
+		return
+	}
+	if cfg.ForcePasswordChange {
+		// Carry over the prior "must change" requirement.
+		if err := userMgr.SetMustChangePasswordByUsername("admin", true); err != nil {
+			l.Error("SYSTEM", fmt.Sprintf("bootstrap: could not set MustChangePassword: %v", err))
+		}
+	}
+	l.Info("SYSTEM", "Bestehendes Admin-Passwort migriert (Benutzername: admin).")
+	log.Println("SYSTEM: Existing admin password migrated (username: admin).")
+}
+
 func main() {
 	// 1. Database
 	db, err := database.NewDB("modbridge.db")
@@ -62,27 +113,11 @@ func main() {
 		log.Printf("Starting with empty config: %v", err)
 	}
 
-	// Set default admin password if not configured
-	cfg := cfgMgr.Get()
-	if cfg.AdminPassHash == "" {
-		// Generate a secure random password instead of hardcoded one
-		randomPassword := generateSecurePassword(16)
-		defaultHash, err := auth.HashPassword(randomPassword)
-		if err != nil {
-			log.Fatalf("Failed to hash default admin password: %v", err)
-		}
-
-		err = cfgMgr.Update(func(c *config.Config) error {
-			c.AdminPassHash = defaultHash
-			c.ForcePasswordChange = true
-			return nil
-		})
-		if err != nil {
-			log.Fatalf("Failed to set default admin password: %v", err)
-		} else {
-			log.Printf("Default admin password set: %s (password change required on first login)", randomPassword)
-		}
-	}
+	// NOTE: The legacy single-user password bootstrap (random password written
+	// to AdminPassHash) has been removed. In the new default multi-user mode the
+	// admin account is seeded in the user store by bootstrapUsers() below. The
+	// single-user fallback path in handleLogin still honours AdminPassHash if a
+	// pre-existing config.json carries one.
 
 	// 3. Logger
 	l, err := logger.NewLogger("proxy.log", 1000)
@@ -108,18 +143,11 @@ func main() {
 	if db != nil {
 		userMgr := users.NewManager(db)
 
-		// Bootstrap an initial admin when multi-user mode is enabled and the
-		// user store is still empty (first run).
-		if cfgMgr.Get().MultiUser {
-			randomPassword := generateSecurePassword(16)
-			created, err := userMgr.EnsureDefaultAdmin("admin", randomPassword, "system")
-			if err != nil {
-				l.Error("SYSTEM", fmt.Sprintf("Failed to bootstrap default admin user: %v", err))
-			} else if created {
-				l.Info("SYSTEM", fmt.Sprintf("Multi-user mode: created default admin 'admin' (password: %s) — change on first login", randomPassword))
-				log.Printf("Multi-user mode enabled. Default admin password: %s", randomPassword)
-			}
-		}
+		// Bootstrap the initial admin account. Multi-user is the default mode:
+		//   - Fresh install -> admin/admin (MustChangePassword forced)
+		//   - Migration from single-user -> existing password hash reused
+		//   - Already populated -> no-op
+		bootstrapUsers(userMgr, cfgMgr.Get(), l)
 
 		go func() {
 			ticker := time.NewTicker(1 * time.Hour)
