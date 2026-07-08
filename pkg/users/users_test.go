@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"modbridge/pkg/auth"
 	"modbridge/pkg/database"
 )
 
@@ -190,5 +191,58 @@ func TestCountEnabledAdmins(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("expected 1 admin, got %d", count)
+	}
+}
+
+func TestEnsureDefaultAdminFromHash_MigratesAndIsIdempotent(t *testing.T) {
+	m := newTestManager(t)
+
+	// A real bcrypt hash of a known password (uses the unchecked hasher because
+	// the test value need not satisfy the policy).
+	hash, err := auth.HashPasswordUnchecked("oldpass-Strong!1")
+	if err != nil {
+		t.Fatalf("hash: %v", err)
+	}
+
+	created, err := m.EnsureDefaultAdminFromHash("admin", hash, "system")
+	if err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	if !created {
+		t.Fatal("expected created=true on empty store")
+	}
+
+	// Second call must be idempotent.
+	created2, err := m.EnsureDefaultAdminFromHash("admin", hash, "system")
+	if err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+	if created2 {
+		t.Fatal("expected created=false when users already exist")
+	}
+
+	users, err := m.GetAllUsers()
+	if err != nil {
+		t.Fatalf("GetAllUsers: %v", err)
+	}
+	if len(users) != 1 {
+		t.Fatalf("expected 1 user, got %d", len(users))
+	}
+	if users[0].MustChangePassword {
+		t.Fatal("migrated admin must NOT require password change")
+	}
+	if !auth.CheckPasswordHash("oldpass-Strong!1", users[0].PasswordHash) {
+		t.Fatal("migrated hash must verify against the original password")
+	}
+}
+
+func TestEnsureDefaultAdminFromHash_RejectsEmptyHash(t *testing.T) {
+	m := newTestManager(t)
+	created, err := m.EnsureDefaultAdminFromHash("admin", "  ", "system")
+	if err == nil {
+		t.Fatal("expected error for empty hash")
+	}
+	if created {
+		t.Fatal("expected created=false on error")
 	}
 }

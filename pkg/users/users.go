@@ -396,7 +396,10 @@ func (m *Manager) EnsureDefaultAdmin(username, password, createdBy string) (bool
 		username = "admin"
 	}
 
-	hash, err := auth.HashPassword(password)
+	// Use the UNCHECKED hasher so seeding a default password like "admin" is
+	// allowed even though it violates ValidatePasswordStrength. MustChangePassword
+	// is set true to force a strong replacement on first login.
+	hash, err := auth.HashPasswordUnchecked(password)
 	if err != nil {
 		return false, err
 	}
@@ -418,6 +421,58 @@ func (m *Manager) EnsureDefaultAdmin(username, password, createdBy string) (bool
 		return false, err
 	}
 	return true, nil
+}
+
+// EnsureDefaultAdminFromHash seeds an initial admin account from an EXISTING
+// bcrypt hash (used when migrating a single-user setup: the previous password
+// stays valid). Idempotent: no-op if any user already exists. The migrated
+// admin's MustChangePassword is false because the operator already knows the
+// password. Returns created=true only when a user was actually inserted.
+func (m *Manager) EnsureDefaultAdminFromHash(username, existingHash, createdBy string) (bool, error) {
+	existing, err := m.db.GetAllUsers()
+	if err != nil {
+		return false, err
+	}
+	if len(existing) > 0 {
+		return false, nil
+	}
+
+	username = strings.TrimSpace(username)
+	if username == "" {
+		username = "admin"
+	}
+	if strings.TrimSpace(existingHash) == "" {
+		return false, errors.New("EnsureDefaultAdminFromHash: existing hash must not be empty")
+	}
+
+	id, _ := generateID()
+	admin := &database.User{
+		ID:                 id,
+		Username:           username,
+		FullName:           "Administrator",
+		Email:              "admin@modbridge.local",
+		PasswordHash:       existingHash,
+		Role:               string(rbac.RoleAdmin),
+		Enabled:            true,
+		MustChangePassword: false,
+		CreatedBy:          createdBy,
+		Description:        "Migrated administrator account",
+	}
+	if err := m.db.CreateUser(admin); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// SetMustChangePasswordByUsername sets the MustChangePassword flag for the user
+// matching username. No-op (returns nil) if the user does not exist.
+func (m *Manager) SetMustChangePasswordByUsername(username string, must bool) error {
+	u, err := m.db.GetUserByUsername(username)
+	if err != nil || u == nil {
+		return err
+	}
+	u.MustChangePassword = must
+	return m.db.UpdateUser(u)
 }
 
 func generateID() (string, error) {
