@@ -95,7 +95,7 @@ func proxyTestServer(t *testing.T) (*Server, *manager.Manager, string) {
 	mgr := manager.NewManager(cfgMgr, log, nil)
 	authenticator := auth.NewAuthenticator()
 	server := NewServer(cfgMgr, mgr, authenticator, log, nil)
-	token, err := authenticator.CreateSession("1", "admin", "admin", 24*time.Hour)
+	token, err := authenticator.CreateSession("1", "admin", "admin", 24*time.Hour, false)
 	if err != nil {
 		t.Fatalf("Failed to create session: %v", err)
 	}
@@ -288,7 +288,7 @@ func TestHandleMe(t *testing.T) {
 	authenticator := auth.NewAuthenticator()
 	server := NewServer(cfgMgr, mgr, authenticator, log, nil)
 
-	token, err := authenticator.CreateSession("1", "admin", "admin", 24*time.Hour)
+	token, err := authenticator.CreateSession("1", "admin", "admin", 24*time.Hour, false)
 	if err != nil {
 		t.Fatalf("Failed to create session: %v", err)
 	}
@@ -415,7 +415,7 @@ func TestHandleProxiesRBACDeniesNonAdmin(t *testing.T) {
 	mgr := manager.NewManager(cfgMgr, log, nil)
 	authenticator := auth.NewAuthenticator()
 	// Create session for a "benutzer" role — only proxy:view is granted.
-	token, err := authenticator.CreateSession("2", "viewer", "benutzer", 24*time.Hour)
+	token, err := authenticator.CreateSession("2", "viewer", "benutzer", 24*time.Hour, false)
 	if err != nil {
 		t.Fatalf("Failed to create session: %v", err)
 	}
@@ -513,7 +513,7 @@ func TestChangePasswordInvalidatesSessions(t *testing.T) {
 	srv := NewServer(cfgMgr, mgr, authenticator, log, nil)
 
 	// Create a session before password change
-	token, err := authenticator.CreateSession("1", "admin", "admin", 24*time.Hour)
+	token, err := authenticator.CreateSession("1", "admin", "admin", 24*time.Hour, false)
 	if err != nil {
 		t.Fatalf("Failed to create session: %v", err)
 	}

@@ -41,7 +41,7 @@ func TestCheckPasswordHash(t *testing.T) {
 
 func TestCreateSession(t *testing.T) {
 	a := NewAuthenticator()
-	token, err := a.CreateSession("user1", "testuser", "admin", 24*time.Hour)
+	token, err := a.CreateSession("user1", "testuser", "admin", 24*time.Hour, false)
 	if err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestValidateSession(t *testing.T) {
 		t.Error("Invalid token should not validate")
 	}
 
-	token, _ := a.CreateSession("u1", "user", "admin", 24*time.Hour)
+	token, _ := a.CreateSession("u1", "user", "admin", 24*time.Hour, false)
 	if !a.ValidateSession(token) {
 		t.Error("Valid token should validate")
 	}
@@ -95,9 +95,65 @@ func TestValidateSession(t *testing.T) {
 	}
 }
 
+func TestHashPasswordUncheckedAllowsWeak(t *testing.T) {
+	// "admin" violates ValidatePasswordStrength, but the unchecked variant must
+	// accept it so we can seed the default admin/admin login on first run.
+	hash, err := HashPasswordUnchecked("admin")
+	if err != nil {
+		t.Fatalf("HashPasswordUnchecked returned error: %v", err)
+	}
+	if hash == "" {
+		t.Fatal("expected non-empty hash")
+	}
+	if !CheckPasswordHash("admin", hash) {
+		t.Fatal("CheckPasswordHash failed for unchecked hash of 'admin'")
+	}
+}
+
+func TestInvalidateSessionRemovesSession(t *testing.T) {
+	a := NewAuthenticator()
+	token, err := a.CreateSession("u1", "user", "admin", time.Hour, false)
+	if err != nil {
+		t.Fatalf("CreateSession error: %v", err)
+	}
+	if a.GetSession(token) == nil {
+		t.Fatal("expected session to exist")
+	}
+	if ok := a.InvalidateSession(token); !ok {
+		t.Fatal("expected InvalidateSession to return true for existing token")
+	}
+	if a.GetSession(token) != nil {
+		t.Fatal("expected session to be removed after InvalidateSession")
+	}
+	if ok := a.InvalidateSession("nonexistent"); ok {
+		t.Fatal("expected InvalidateSession to return false for missing token")
+	}
+}
+
+func TestCreateSessionStoresMustChangePassword(t *testing.T) {
+	a := NewAuthenticator()
+	token, _ := a.CreateSession("u1", "user", "admin", time.Hour, true)
+	s := a.GetSession(token)
+	if s == nil {
+		t.Fatal("expected session")
+	}
+	if !s.MustChangePassword {
+		t.Fatal("expected MustChangePassword=true when requested")
+	}
+
+	token2, _ := a.CreateSession("u2", "user2", "admin", time.Hour, false)
+	s2 := a.GetSession(token2)
+	if s2 == nil {
+		t.Fatal("expected second session")
+	}
+	if s2.MustChangePassword {
+		t.Fatal("expected MustChangePassword=false when not requested")
+	}
+}
+
 func TestMiddleware(t *testing.T) {
 	a := NewAuthenticator()
-	token, _ := a.CreateSession("u1", "user", "admin", 24*time.Hour)
+	token, _ := a.CreateSession("u1", "user", "admin", 24*time.Hour, false)
 
 	handler := a.Middleware(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

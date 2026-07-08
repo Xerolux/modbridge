@@ -569,7 +569,7 @@ func (s *Server) finalizeLogin(w http.ResponseWriter, r *http.Request, userID, u
 		sessionTimeoutHours = 24
 	}
 
-	token, err := s.auth.CreateSession(userID, username, role, time.Duration(sessionTimeoutHours)*time.Hour)
+	token, err := s.auth.CreateSession(userID, username, role, time.Duration(sessionTimeoutHours)*time.Hour, forcePasswordChange)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

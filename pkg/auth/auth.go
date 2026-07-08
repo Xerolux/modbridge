@@ -20,11 +20,12 @@ import (
 )
 
 type Session struct {
-	Token     string
-	UserID    string
-	Username  string
-	Role      string
-	ExpiresAt time.Time
+	Token              string
+	UserID             string
+	Username           string
+	Role               string
+	ExpiresAt          time.Time
+	MustChangePassword bool
 }
 
 type Authenticator struct {
@@ -42,6 +43,15 @@ func HashPassword(password string) (string, error) {
 	if err := ValidatePasswordStrength(password); err != nil {
 		return "", err
 	}
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	return string(bytes), err
+}
+
+// HashPasswordUnchecked hashes a password with bcrypt WITHOUT enforcing the
+// password-strength policy. Use ONLY for seeding a known default password
+// (e.g. admin/admin on first run); all user-driven password changes must go
+// through HashPassword, which enforces ValidatePasswordStrength.
+func HashPasswordUnchecked(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	return string(bytes), err
 }
@@ -112,7 +122,10 @@ func CheckPasswordHash(password, hash string) bool {
 	return err == nil
 }
 
-func (a *Authenticator) CreateSession(userID, username, role string, ttl time.Duration) (string, error) {
+// CreateSession creates a new session for the given identity and returns the
+// opaque session token. mustChangePassword is stored on the session and
+// surfaced via /api/me so the frontend can force a password change.
+func (a *Authenticator) CreateSession(userID, username, role string, ttl time.Duration, mustChangePassword bool) (string, error) {
 	if ttl <= 0 {
 		ttl = 24 * time.Hour
 	}
@@ -126,11 +139,12 @@ func (a *Authenticator) CreateSession(userID, username, role string, ttl time.Du
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.sessions[token] = Session{
-		Token:     token,
-		UserID:    userID,
-		Username:  username,
-		Role:      role,
-		ExpiresAt: time.Now().Add(ttl),
+		Token:              token,
+		UserID:             userID,
+		Username:           username,
+		Role:               role,
+		ExpiresAt:          time.Now().Add(ttl),
+		MustChangePassword: mustChangePassword,
 	}
 	return token, nil
 }
@@ -160,6 +174,18 @@ func (a *Authenticator) ValidateSession(token string) bool {
 		return false
 	}
 	return true
+}
+
+// InvalidateSession removes a single session by token. Returns true if the
+// token existed. Used by /api/logout to end a specific server-side session.
+func (a *Authenticator) InvalidateSession(token string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if _, ok := a.sessions[token]; ok {
+		delete(a.sessions, token)
+		return true
+	}
+	return false
 }
 
 func (a *Authenticator) Middleware(next http.HandlerFunc) http.HandlerFunc {
