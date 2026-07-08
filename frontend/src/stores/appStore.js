@@ -12,7 +12,9 @@ const readStoredTheme = () => {
   const legacy = localStorage.getItem('theme');
   if (legacy === 'dark') return 'dark';
   if (legacy === 'light') return 'light';
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  // Default to the light theme (SLZB-style light UI). Users who prefer dark can
+  // switch via the theme toggle; the choice is then persisted above.
+  return 'light';
 };
 
 export const useAppStore = defineStore('app', () => {
@@ -32,7 +34,7 @@ export const useAppStore = defineStore('app', () => {
   // density: 'comfortable' | 'compact'
   // reducedMotion: boolean — disables ambient animations for speed/battery
   const theme = ref(readStoredTheme());
-  const accent = ref(localStorage.getItem('modbridge_accent') || 'sky');
+  const accent = ref(localStorage.getItem('modbridge_accent') || 'mono');
   const density = ref(localStorage.getItem('modbridge_density') || 'comfortable');
   const reducedMotion = ref(
     localStorage.getItem('modbridge_reduced_motion') === 'true' ||
