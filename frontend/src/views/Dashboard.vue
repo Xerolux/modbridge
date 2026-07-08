@@ -242,7 +242,8 @@ const getStoredLayout = () => {
   if (!raw) return [];
 
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
   } catch (parseError) {
     console.error(parseError);
     return [];
@@ -341,8 +342,6 @@ onMounted(async () => {
     unwatchData = watch(data, (eventData) => {
       if (!eventData) return;
 
-      fetchVersion++;
-
       switch (eventData.type) {
         case 'proxy_added':
         case 'proxy_updated':
@@ -412,18 +411,25 @@ const loadGrid = (layout) => {
     if (!item.proxy_id) return false;
     return proxies.value.some(p => p.id === item.proxy_id);
   });
-  validLayout.forEach(item => {
+  const nextWidgets = validLayout.map(item => {
     const id = item.id || `w_${item.proxy_id || Date.now()}`;
     const proxy = proxies.value.find(p => p.id === item.proxy_id);
-    widgets.value.push({
+    return {
       ...item,
       id,
       title: proxy ? proxy.name : item.title || t('common.error'),
       status: proxy ? proxy.status : item.status || 'Unknown'
-    });
+    };
   });
+
   if (validLayout.length < layout.length) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(validLayout));
+  }
+
+  if (grid.value) {
+    nextWidgets.forEach(item => addWidgetToGrid(item));
+  } else {
+    widgets.value = nextWidgets;
   }
 };
 
@@ -448,9 +454,7 @@ const addWidgetToGrid = (item) => {
     }
   }
 
-  nextTick(() => {
-    widgets.value.push({ ...item, id });
-  });
+  widgets.value.push({ ...item, id });
 };
 
 const saveLayout = () => {
@@ -547,7 +551,7 @@ const confirmAddWidget = () => {
 
   showAddWidget.value = false;
   selectedProxy.value = null;
-  saveLayout();
+  nextTick(saveLayout);
 };
 
 const removeWidget = (id) => {
