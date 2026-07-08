@@ -1,7 +1,8 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { RouterLink, useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from "../stores/auth";
+import { useAppStore } from "../stores/appStore";
 import { useI18n } from 'vue-i18n';
 import LanguageSelector from './LanguageSelector.vue';
 import ThemeSettings from './ThemeSettings.vue';
@@ -11,23 +12,59 @@ const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
 const auth = useAuthStore();
+const app = useAppStore();
 
 const mobileMenuOpen = ref(false);
 
-const allItems = [
-  { labelKey: 'nav.dashboard', icon: 'pi pi-home',         path: '/',        permission: null },
-  { labelKey: 'nav.control',   icon: 'pi pi-sliders-h',    path: '/control', permission: 'proxy:view' },
-  { labelKey: 'nav.devices',   icon: 'pi pi-desktop',      path: '/devices', permission: 'device:view' },
-  { labelKey: 'nav.logs',      icon: 'pi pi-list',         path: '/logs',    permission: 'logs:view' },
-  { labelKey: 'nav.system',    icon: 'pi pi-info-circle',  path: '/system',  permission: 'system:view' },
-  { labelKey: 'nav.settings',  icon: 'pi pi-cog',          path: '/config',  permission: 'config:view' },
-  { labelKey: 'nav.users',     icon: 'pi pi-users',        path: '/users',   permission: 'user:view' },
-  { labelKey: 'nav.audit',     icon: 'pi pi-history',      path: '/audit',   permission: 'audit:view' },
+// Navigation is structured into collapsible groups (SLZB-style) so the top bar
+// stays compact even with many destinations. Each group toggles open/closed;
+// the first group defaults open.
+const item = (labelKey, icon, path, permission) => ({ labelKey, icon, path, permission });
+const navGroups = [
+  {
+    labelKey: 'nav.groupProxies',
+    icon: 'pi pi-sitemap',
+    open: ref(true),
+    items: [
+      item('nav.dashboard', 'pi pi-home',      '/',        null),
+      item('nav.control',   'pi pi-sliders-h', '/control', 'proxy:view'),
+    ],
+  },
+  {
+    labelKey: 'nav.devices',
+    icon: 'pi pi-desktop',
+    flat: true, // single-item group renders as a direct link
+    items: [ item('nav.devices', 'pi pi-desktop', '/devices', 'device:view') ],
+  },
+  {
+    labelKey: 'nav.groupSecurity',
+    icon: 'pi pi-shield',
+    open: ref(false),
+    items: [
+      item('nav.users', 'pi pi-users',   '/users', 'user:view'),
+      item('nav.audit', 'pi pi-history', '/audit', 'audit:view'),
+    ],
+  },
+  {
+    labelKey: 'nav.groupSystem',
+    icon: 'pi pi-cog',
+    open: ref(false),
+    items: [
+      item('nav.settings', 'pi pi-cog',          '/config', 'config:view'),
+      item('nav.system',   'pi pi-info-circle',  '/system', 'system:view'),
+      item('nav.logs',     'pi pi-list',         '/logs',   'logs:view'),
+    ],
+  },
 ];
 
-const items = computed(() =>
-  allItems.filter(item => !item.permission || auth.isAdmin || auth.hasPermission(item.permission))
-);
+// Flatten for permission filtering + active-group detection
+const groupVisible = (g) => g.items.some(i => !i.permission || auth.isAdmin || auth.hasPermission(i.permission));
+const visibleGroups = computed(() => navGroups.filter(groupVisible));
+const itemVisible = (i) => !i.permission || auth.isAdmin || auth.hasPermission(i.permission);
+
+const proxyCount = computed(() => app.proxies?.length ?? 0);
+
+const toggleGroup = (g) => { g.open.value = !g.open.value; };
 
 const logout = async () => {
   await auth.logout();
@@ -38,6 +75,15 @@ const isActiveRoute = (path) => {
   if (path === '/') return route.path === '/';
   return route.path.startsWith(path);
 };
+
+// Auto-expand a group when the active route is one of its children, so the
+// current location is always visible without the user having to hunt for it.
+watch(() => route.path, (p) => {
+  for (const g of navGroups) {
+    if (g.flat || !g.open) continue;
+    if (g.items.some(i => isActiveRoute(i.path))) g.open.value = true;
+  }
+}, { immediate: true });
 
 const handleKeydown = (e) => {
   if (e.key === 'Escape') mobileMenuOpen.value = false;
@@ -66,21 +112,62 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
 
         <div class="nav-divider hidden md:block"></div>
 
-        <!-- Desktop nav links -->
+        <!-- Status indicator (proxy count) -->
+        <div class="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs text-[var(--text-muted)]">
+          <span class="status-pill" :class="proxyCount > 0 ? 'status-pill--on' : 'status-pill--off'"></span>
+          <span>{{ proxyCount }} {{ t('nav.proxiesCount') }}</span>
+        </div>
+
+        <!-- Desktop nav: collapsible groups (SLZB-style) -->
         <div class="hidden md:flex items-center gap-0.5 flex-1 overflow-x-auto">
-          <RouterLink
-            v-for="item in items"
-            :key="item.path"
-            :to="item.path"
-            class="nav-link"
-            :class="{ 'nav-link--active': isActiveRoute(item.path) }"
-            active-class=""
-            exact-active-class=""
-            :aria-current="isActiveRoute(item.path) ? 'page' : undefined"
-          >
-            <i :class="item.icon" class="text-sm shrink-0"></i>
-            <span class="whitespace-nowrap">{{ t(item.labelKey) }}</span>
-          </RouterLink>
+          <template v-for="g in visibleGroups" :key="g.labelKey">
+            <!-- Single-item group renders as a direct link -->
+            <RouterLink
+              v-if="g.flat"
+              v-for="i in g.items.filter(itemVisible)"
+              :key="i.path"
+              :to="i.path"
+              class="nav-link"
+              :class="{ 'nav-link--active': isActiveRoute(i.path) }"
+              active-class=""
+              exact-active-class=""
+              :aria-current="isActiveRoute(i.path) ? 'page' : undefined"
+            >
+              <i :class="i.icon" class="text-sm shrink-0"></i>
+              <span class="whitespace-nowrap">{{ t(g.labelKey) }}</span>
+            </RouterLink>
+
+            <!-- Multi-item group: hover dropdown -->
+            <div v-else class="nav-group">
+              <button
+                type="button"
+                class="nav-link"
+                :class="{ 'nav-link--active': g.items.some(i => isActiveRoute(i.path)) }"
+                @click="toggleGroup(g)"
+              >
+                <i :class="g.icon" class="text-sm shrink-0"></i>
+                <span class="whitespace-nowrap">{{ t(g.labelKey) }}</span>
+                <i class="pi pi-chevron-down text-[0.65rem] shrink-0 nav-group-caret" :class="{ 'nav-group-caret--open': g.open.value }"></i>
+              </button>
+              <Transition name="dropdown">
+                <div v-if="g.open.value" class="nav-group-menu">
+                  <RouterLink
+                    v-for="i in g.items.filter(itemVisible)"
+                    :key="i.path"
+                    :to="i.path"
+                    class="nav-group-item"
+                    :class="{ 'nav-group-item--active': isActiveRoute(i.path) }"
+                    active-class=""
+                    exact-active-class=""
+                    @click="g.open.value = false"
+                  >
+                    <i :class="i.icon" class="text-sm shrink-0"></i>
+                    <span class="whitespace-nowrap">{{ t(i.labelKey) }}</span>
+                  </RouterLink>
+                </div>
+              </Transition>
+            </div>
+          </template>
         </div>
 
         <!-- Right controls -->
@@ -153,19 +240,21 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
 
         <!-- Links -->
         <nav class="flex flex-col gap-1 p-4 flex-1 overflow-y-auto">
-          <RouterLink
-            v-for="item in items"
-            :key="item.path"
-            :to="item.path"
-            class="mobile-nav-link"
-            :class="{ 'mobile-nav-link--active': isActiveRoute(item.path) }"
-            active-class=""
-            exact-active-class=""
-            @click="mobileMenuOpen = false"
-          >
-            <i :class="item.icon" class="text-base w-5 text-center shrink-0"></i>
-            <span>{{ t(item.labelKey) }}</span>
-          </RouterLink>
+          <template v-for="g in visibleGroups" :key="g.labelKey">
+            <template v-for="i in g.items.filter(itemVisible)" :key="i.path">
+              <RouterLink
+                :to="i.path"
+                class="mobile-nav-link"
+                :class="{ 'mobile-nav-link--active': isActiveRoute(i.path) }"
+                active-class=""
+                exact-active-class=""
+                @click="mobileMenuOpen = false"
+              >
+                <i :class="i.icon" class="text-base w-5 text-center shrink-0"></i>
+                <span>{{ t(g.flat ? g.labelKey : i.labelKey) }}</span>
+              </RouterLink>
+            </template>
+          </template>
         </nav>
 
         <!-- Footer -->
@@ -249,6 +338,61 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
   color: var(--accent);
   font-weight: 600;
 }
+
+/* ── Collapsible nav groups ────────────────────────────────────────── */
+.nav-group {
+  position: relative;
+}
+.nav-group-caret {
+  transition: transform 0.15s ease;
+  opacity: 0.7;
+}
+.nav-group-caret--open { transform: rotate(180deg); }
+
+.nav-group-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--bg-surface-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow-strong);
+  z-index: 60;
+}
+.nav-group-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+.nav-group-item:hover { background: var(--bg-soft); color: var(--text-primary); }
+.nav-group-item--active { background: var(--accent-tint); color: var(--accent); font-weight: 600; }
+
+.dropdown-enter-active { transition: opacity 0.15s ease, transform 0.15s ease; }
+.dropdown-leave-active { transition: opacity 0.12s ease, transform 0.12s ease; }
+.dropdown-enter-from, .dropdown-leave-to { opacity: 0; transform: translateY(-4px); }
+
+/* ── Status pill (proxy count) ─────────────────────────────────────── */
+.status-pill {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  display: inline-block;
+}
+.status-pill--on { background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.18); }
+.status-pill--off { background: var(--text-muted); opacity: 0.5; }
 
 .nav-icon-btn {
   display: flex;

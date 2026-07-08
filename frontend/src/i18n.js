@@ -18,7 +18,11 @@ const de = {
     closeNavigation: 'Schließen',
     lightMode: 'Heller Modus',
     darkMode: 'Dunkler Modus',
-    theme: 'Theme'
+    theme: 'Theme',
+    groupProxies: 'Proxies',
+    groupSecurity: 'Sicherheit',
+    groupSystem: 'System',
+    proxiesCount: 'Proxies'
   },
 
   // Theme controls
@@ -364,7 +368,11 @@ const en = {
     closeNavigation: 'Close',
     lightMode: 'Light mode',
     darkMode: 'Dark mode',
-    theme: 'Theme'
+    theme: 'Theme',
+    groupProxies: 'Proxies',
+    groupSecurity: 'Security',
+    groupSystem: 'System',
+    proxiesCount: 'Proxies'
   },
 
   // Theme controls
