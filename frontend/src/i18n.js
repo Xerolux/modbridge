@@ -159,6 +159,35 @@ const de = {
     emailAlerts: 'E-Mail-Benachrichtigungen'
   },
 
+  // Update
+  update: {
+    title: 'Update',
+    installed: 'Installiert',
+    latest: 'Neueste Version',
+    available: 'Update verfügbar',
+    upToDate: 'Aktuell',
+    assetUnavailable: 'Kein Binary für diese Plattform',
+    checkAgain: 'Erneut prüfen',
+    install: 'Update installieren',
+    viewOnGithub: 'Auf GitHub ansehen',
+    confirmTitle: 'Update installieren?',
+    confirmMessage: 'Der Dienst wird für ca. 5 Sekunden neu gestartet. Bestehende Proxy-Verbindungen werden unterbrochen.',
+    installSuccess: 'Update erfolgreich. Die Seite wird neu geladen.',
+    installFailed: 'Update fehlgeschlagen: {error}',
+    checkFailed: 'Update-Check fehlgeschlagen. Internetverbindung prüfen.',
+    alreadyRunning: 'Update läuft bereits.',
+    state: {
+      idle: 'Bereit',
+      checking: 'Prüfe…',
+      downloading: 'Lade herunter…',
+      verifying: 'Verifiziere Prüfsumme…',
+      swapping: 'Tausche Binary…',
+      restarting: 'Starte neu…',
+      done: 'Fertig',
+      error: 'Fehler'
+    }
+  },
+
   // Control
   control: {
     centerLabel: 'Control Center',
@@ -516,6 +545,35 @@ const en = {
     ipWhitelist: 'IP Whitelist',
     ipBlacklist: 'IP Blacklist',
     emailAlerts: 'Email Alerts'
+  },
+
+  // Update
+  update: {
+    title: 'Update',
+    installed: 'Installed',
+    latest: 'Latest Version',
+    available: 'Update available',
+    upToDate: 'Up to date',
+    assetUnavailable: 'No binary for this platform',
+    checkAgain: 'Check again',
+    install: 'Install update',
+    viewOnGithub: 'View on GitHub',
+    confirmTitle: 'Install update?',
+    confirmMessage: 'The service will restart for about 5 seconds. Existing proxy connections will be interrupted.',
+    installSuccess: 'Update successful. Reloading page.',
+    installFailed: 'Update failed: {error}',
+    checkFailed: 'Update check failed. Check internet connection.',
+    alreadyRunning: 'Update already running.',
+    state: {
+      idle: 'Ready',
+      checking: 'Checking…',
+      downloading: 'Downloading…',
+      verifying: 'Verifying checksum…',
+      swapping: 'Swapping binary…',
+      restarting: 'Restarting…',
+      done: 'Done',
+      error: 'Error'
+    }
   },
 
   // Control
