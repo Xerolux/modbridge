@@ -5,7 +5,11 @@
 
 package updater
 
-import "testing"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"testing"
+)
 
 func TestCompareVersions(t *testing.T) {
 	cases := []struct {
@@ -36,6 +40,48 @@ func TestCompareVersions(t *testing.T) {
 			}
 			if got != c.want {
 				t.Errorf("CompareVersions(%q, %q) = %v, want %v", c.current, c.latest, got, c.want)
+			}
+		})
+	}
+}
+
+func TestVerifyChecksum(t *testing.T) {
+	// Build a valid checksums.txt for a known asset
+	assetContent := []byte("fake-binary-content")
+	sum := sha256.Sum256(assetContent)
+	sumHex := hex.EncodeToString(sum[:])
+	assetName := "modbridge-linux-amd64"
+
+	checksumsValid := []byte(sumHex + "  " + assetName + "\n")
+	checksumsExtra := []byte("abc123  other-asset\n" + sumHex + "  " + assetName + "\n")
+	checksumsMissing := []byte("abcdef  some-other-asset\n")
+	checksumsMalformed := []byte("not-a-checksum-line\n")
+
+	cases := []struct {
+		name        string
+		asset       []byte
+		checksums   []byte
+		wantErr     error
+		wantErrType string // "" or "missing"/"mismatch"
+	}{
+		{"valid", assetContent, checksumsValid, nil, ""},
+		{"valid with extra lines", assetContent, checksumsExtra, nil, ""},
+		{"asset not in checksums", assetContent, checksumsMissing, ErrChecksumMissing, "missing"},
+		{"checksum mismatch", []byte("tampered"), checksumsValid, ErrChecksumMismatch, "mismatch"},
+		{"empty checksums file", assetContent, []byte(""), ErrChecksumMissing, "missing"},
+		{"malformed line skipped", assetContent, append(checksumsMalformed, checksumsValid...), nil, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := VerifyChecksum(c.asset, assetName, c.checksums)
+			if c.wantErrType == "" && err != nil {
+				t.Fatalf("expected no error, got: %v", err)
+			}
+			if c.wantErrType == "missing" && err != ErrChecksumMissing {
+				t.Fatalf("expected ErrChecksumMissing, got: %v", err)
+			}
+			if c.wantErrType == "mismatch" && err != ErrChecksumMismatch {
+				t.Fatalf("expected ErrChecksumMismatch, got: %v", err)
 			}
 		})
 	}
