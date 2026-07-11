@@ -83,9 +83,9 @@ func TestVerifyChecksum(t *testing.T) {
 			if c.wantErrType == "missing" && err != ErrChecksumMissing {
 				t.Fatalf("expected ErrChecksumMissing, got: %v", err)
 			}
-		if c.wantErrType == "mismatch" && err != ErrChecksumMismatch {
-			t.Fatalf("expected ErrChecksumMismatch, got: %v", err)
-		}
+			if c.wantErrType == "mismatch" && err != ErrChecksumMismatch {
+				t.Fatalf("expected ErrChecksumMismatch, got: %v", err)
+			}
 		})
 	}
 }
