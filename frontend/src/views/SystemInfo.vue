@@ -223,6 +223,65 @@
 
         <Toast />
         <ConfirmDialog />
+
+        <!-- ── Update Section ──────────────────────────────────── -->
+        <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
+            <template #title>
+              <div class="text-lg sm:text-xl flex items-center justify-between">
+                <span class="flex items-center gap-2"><i class="pi pi-cloud-download"></i> {{ t('update.title') }}</span>
+                <Badge
+                  :severity="updateData.update_available ? 'warn' : 'success'"
+                  :value="updateData.update_available ? t('update.available') : t('update.upToDate')"
+                />
+              </div>
+            </template>
+            <template #content>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                <div class="p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white/50 dark:bg-gray-800/50">
+                  <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">{{ t('update.installed') }}</div>
+                  <div class="text-lg font-bold text-gray-800 dark:text-gray-200">{{ updateData.current_version || '—' }}</div>
+                  <div class="text-xs text-gray-400 mt-1">{{ updateData.os }}/{{ updateData.arch }} · {{ updateData.go_version }}</div>
+                </div>
+                <div class="p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white/50 dark:bg-gray-800/50">
+                  <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">{{ t('update.latest') }}</div>
+                  <div class="text-lg font-bold text-gray-800 dark:text-gray-200">{{ updateData.latest_version || '—' }}</div>
+                  <div class="text-xs text-gray-400 mt-1" v-if="updateData.published_at">{{ formatReleaseDate(updateData.published_at) }}</div>
+                </div>
+              </div>
+
+              <div v-if="updateData.asset_unavailable" class="mb-3 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-600 dark:text-amber-400">
+                {{ t('update.assetUnavailable') }}
+              </div>
+
+              <div v-if="checkError" class="mb-3 p-2 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-600 dark:text-red-400">
+                {{ t('update.checkFailed') }}
+              </div>
+
+              <div v-if="updateData.release_notes" class="mb-3">
+                <pre class="text-xs text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-900/50 p-3 rounded-xl border border-gray-200 dark:border-white/10 whitespace-pre-wrap max-h-48 overflow-y-auto">{{ updateData.release_notes }}</pre>
+              </div>
+
+              <div class="flex flex-wrap gap-2">
+                <Button :label="t('update.checkAgain')" icon="pi pi-refresh" severity="secondary" @click="checkUpdate" :loading="checking" size="small" />
+                <Button v-if="updateData.update_available && !updateData.asset_unavailable" :label="t('update.install')" icon="pi pi-download" @click="confirmInstall" :disabled="updating" size="small" />
+                <a v-if="updateData.release_url" :href="updateData.release_url" target="_blank" rel="noopener" class="text-xs text-purple-600 dark:text-purple-400 hover:underline self-center ml-1">{{ t('update.viewOnGithub') }}</a>
+              </div>
+
+              <div v-if="updating || updateStatus.state === 'done'" class="mt-3">
+                <ProgressBar :value="updateStatus.progress" />
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">{{ t(`update.state.${updateStatus.state}`) }}</p>
+                <p v-if="updateStatus.message" class="text-[10px] text-gray-400 mt-1">{{ updateStatus.message }}</p>
+              </div>
+            </template>
+        </Card>
+
+        <Dialog v-model:visible="showUpdateDialog" :header="t('update.confirmTitle')" :modal="true" class="w-11/12 sm:w-full max-w-[440px]">
+          <p class="text-sm text-gray-600 dark:text-gray-400">{{ t('update.confirmMessage') }}</p>
+          <div class="flex justify-end gap-2 mt-4">
+            <Button :label="t('common.cancel')" severity="secondary" @click="showUpdateDialog = false" size="small" />
+            <Button :label="t('update.install')" icon="pi pi-download" @click="doInstall" size="small" />
+          </div>
+        </Dialog>
     </div>
 </template>
 
@@ -233,6 +292,9 @@
   import Button from 'primevue/button';
   import Toast from 'primevue/toast';
   import ConfirmDialog from 'primevue/confirmdialog';
+  import Badge from 'primevue/badge';
+  import ProgressBar from 'primevue/progressbar';
+  import Dialog from 'primevue/dialog';
   import { useToast } from 'primevue/usetoast';
   import { useConfirm } from 'primevue/useconfirm';
   import { downloadBlob } from '../utils/helpers';
@@ -278,6 +340,75 @@
   const portCheckLoading = ref(false);
   const portStatus = ref({});
   const blockedPorts = ref([]);
+
+  // ── Update module state ──────────────────────────────────────
+  const updateData = ref({
+    current_version: '', latest_version: '', update_available: false,
+    asset_unavailable: false, release_notes: '', release_url: '',
+    published_at: '', os: '', arch: '', go_version: '',
+  });
+  const updateStatus = ref({ state: 'idle', progress: 0, message: '' });
+  const checking = ref(false);
+  const updating = ref(false);
+  const checkError = ref(false);
+  const showUpdateDialog = ref(false);
+  let statusPollTimer = null;
+
+  const formatReleaseDate = (iso) => {
+    try {
+      return new Date(iso).toLocaleDateString('de-DE', { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch { return iso; }
+  };
+
+  const checkUpdate = async () => {
+    checking.value = true;
+    checkError.value = false;
+    try {
+      const res = await axios.get('/api/update/check');
+      updateData.value = res.data;
+    } catch {
+      checkError.value = true;
+    } finally {
+      checking.value = false;
+    }
+  };
+
+  const confirmInstall = () => { showUpdateDialog.value = true; };
+
+  const doInstall = async () => {
+    showUpdateDialog.value = false;
+    updating.value = true;
+    try {
+      await axios.post('/api/update/perform');
+      statusPollTimer = setInterval(pollStatus, 1500);
+    } catch (err) {
+      const msg = err.response?.status === 409
+        ? t('update.alreadyRunning')
+        : t('update.installFailed', { error: err.response?.data || err.message });
+      toast.add({ severity: 'error', summary: t('update.title'), detail: msg, life: 5000 });
+      updating.value = false;
+    }
+  };
+
+  const pollStatus = async () => {
+    try {
+      const res = await axios.get('/api/update/status');
+      updateStatus.value = res.data;
+      if (res.data.state === 'done') {
+        clearInterval(statusPollTimer);
+        statusPollTimer = null;
+        toast.add({ severity: 'success', summary: t('update.title'), detail: t('update.installSuccess'), life: 3000 });
+        setTimeout(() => window.location.reload(), 4000);
+      } else if (res.data.state === 'error') {
+        clearInterval(statusPollTimer);
+        statusPollTimer = null;
+        updating.value = false;
+        toast.add({ severity: 'error', summary: t('update.title'), detail: t('update.installFailed', { error: res.data.error }), life: 8000 });
+      }
+    } catch {
+      // Network error during restart is expected — keep polling
+    }
+  };
 
   const fetchInfo = async () => {
       try {
@@ -457,9 +588,11 @@ const releasePort = (portInfo) => {
       await fetchInfo();
       loading.value = false;
       timeAgoTimer = setInterval(updateTimeAgo, 5000);
+      checkUpdate(); // auto-check for updates in background
   });
 
   onUnmounted(() => {
       if (timeAgoTimer) clearInterval(timeAgoTimer);
+      if (statusPollTimer) clearInterval(statusPollTimer);
   });
   </script>
