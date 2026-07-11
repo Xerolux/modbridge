@@ -11,6 +11,9 @@ import (
 	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -165,5 +168,80 @@ func TestFetchLatestRelease(t *testing.T) {
 	}
 	if release.Assets[0].Name != "modbridge-linux-amd64" {
 		t.Errorf("Asset[0].Name = %q", release.Assets[0].Name)
+	}
+}
+
+func TestSwapBinary(t *testing.T) {
+	// Create a temp directory simulating the install dir
+	dir := t.TempDir()
+	binaryPath := filepath.Join(dir, "modbridge")
+
+	// Write the "current" binary
+	if err := os.WriteFile(binaryPath, []byte("OLD-BINARY"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write the "new" binary in the SAME directory (required for atomic rename)
+	newPath := filepath.Join(dir, "modbridge.new")
+	if err := os.WriteFile(newPath, []byte("NEW-BINARY"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	backupPath, err := SwapBinary(newPath)
+	if err != nil {
+		t.Fatalf("SwapBinary failed: %v", err)
+	}
+
+	// New binary should now be at binaryPath
+	got, err := os.ReadFile(binaryPath)
+	if err != nil {
+		t.Fatalf("reading swapped binary: %v", err)
+	}
+	if string(got) != "NEW-BINARY" {
+		t.Errorf("after swap, binary = %q, want NEW-BINARY", string(got))
+	}
+
+	// New binary must be executable (execute bit is not representable on
+	// Windows through Go's POSIX-ish file-mode API, so skip the check there).
+	info, _ := os.Stat(binaryPath)
+	if runtime.GOOS != "windows" && info.Mode()&0100 == 0 {
+		t.Error("swapped binary is not executable")
+	}
+
+	// Backup should contain the old content
+	backup, err := os.ReadFile(backupPath)
+	if err != nil {
+		t.Fatalf("reading backup: %v", err)
+	}
+	if string(backup) != "OLD-BINARY" {
+		t.Errorf("backup = %q, want OLD-BINARY", string(backup))
+	}
+
+	// Backup path should be alongside the binary
+	if filepath.Dir(backupPath) != dir {
+		t.Errorf("backup in wrong dir: %s", filepath.Dir(backupPath))
+	}
+}
+
+func TestSwapBinary_Rollback(t *testing.T) {
+	dir := t.TempDir()
+	binaryPath := filepath.Join(dir, "modbridge")
+	os.WriteFile(binaryPath, []byte("OLD"), 0755)
+
+	// Manually create a backup to simulate pre-swap state
+	backupPath := filepath.Join(dir, "modbridge.bak.test")
+	os.WriteFile(backupPath, []byte("BACKUP-CONTENT"), 0755)
+	// Corrupt the current binary
+	os.WriteFile(binaryPath, []byte("CORRUPTED"), 0755)
+
+	if err := RollbackBinary(backupPath); err != nil {
+		t.Fatalf("RollbackBinary failed: %v", err)
+	}
+
+	// The binary should be restored from backup. Rollback restores by
+	// copying backup -> binary (backup is preserved for forensics).
+	got, _ := os.ReadFile(binaryPath)
+	if string(got) != "BACKUP-CONTENT" {
+		t.Errorf("after rollback, binary = %q, want BACKUP-CONTENT", string(got))
 	}
 }
