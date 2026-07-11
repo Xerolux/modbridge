@@ -187,7 +187,7 @@ func TestSwapBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	backupPath, err := SwapBinary(newPath)
+	backupPath, err := SwapBinary(newPath, binaryPath)
 	if err != nil {
 		t.Fatalf("SwapBinary failed: %v", err)
 	}
