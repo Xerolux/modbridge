@@ -120,7 +120,7 @@ func main() {
 	go authenticator.CleanupExpiredSessions(authCtx)
 
 	// 5. API Server
-	apiServer := api.NewServer(cfgMgr, mgr, authenticator, l, db)
+	apiServer := api.NewServer(cfgMgr, mgr, authenticator, l, db, Version, BuildTime)
 
 	// 6. Auto-deactivate expired users periodically + bootstrap multi-user store
 	if db != nil {

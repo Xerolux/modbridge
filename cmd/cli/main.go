@@ -113,7 +113,7 @@ func runServer(configFile string, port int) {
 	go authenticator.CleanupExpiredSessions(authCtx)
 
 	// Initialize API server
-	apiServer := api.NewServer(cfgMgr, mgr, authenticator, l, db)
+	apiServer := api.NewServer(cfgMgr, mgr, authenticator, l, db, version, "unknown")
 
 	// Setup HTTP router
 	mux := http.NewServeMux()

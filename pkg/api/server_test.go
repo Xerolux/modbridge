@@ -23,7 +23,7 @@ func TestHandleHealth(t *testing.T) {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
 	defer log.Close()
-	server := NewServer(config.NewManager("test.json"), manager.NewManager(config.NewManager("test.json"), log, nil), nil, log, nil)
+	server := NewServer(config.NewManager("test.json"), manager.NewManager(config.NewManager("test.json"), log, nil), nil, log, nil, "test", "unknown")
 
 	req := httptest.NewRequest("GET", "/api/health", nil)
 	w := httptest.NewRecorder()
@@ -52,7 +52,7 @@ func TestHandleStatus(t *testing.T) {
 	defer log.Close()
 	cfgMgr := config.NewManager("test.json")
 	mgr := manager.NewManager(cfgMgr, log, nil)
-	server := NewServer(cfgMgr, mgr, nil, log, nil)
+	server := NewServer(cfgMgr, mgr, nil, log, nil, "test", "unknown")
 
 	req := httptest.NewRequest("GET", "/api/status", nil)
 	w := httptest.NewRecorder()
@@ -94,7 +94,7 @@ func proxyTestServer(t *testing.T) (*Server, *manager.Manager, string) {
 	cfgMgr := config.NewManager("test.json")
 	mgr := manager.NewManager(cfgMgr, log, nil)
 	authenticator := auth.NewAuthenticator()
-	server := NewServer(cfgMgr, mgr, authenticator, log, nil)
+	server := NewServer(cfgMgr, mgr, authenticator, log, nil, "test", "unknown")
 	token, err := authenticator.CreateSession("1", "admin", "admin", 24*time.Hour, false)
 	if err != nil {
 		t.Fatalf("Failed to create session: %v", err)
@@ -246,7 +246,7 @@ func TestHandleReady(t *testing.T) {
 
 	cfgMgr := config.NewManager("test.json")
 	mgr := manager.NewManager(cfgMgr, log, nil)
-	server := NewServer(cfgMgr, mgr, auth.NewAuthenticator(), log, nil)
+	server := NewServer(cfgMgr, mgr, auth.NewAuthenticator(), log, nil, "test", "unknown")
 
 	req := httptest.NewRequest("GET", "/api/ready", nil)
 	w := httptest.NewRecorder()
@@ -286,7 +286,7 @@ func TestHandleMe(t *testing.T) {
 	cfgMgr := config.NewManager("test.json")
 	mgr := manager.NewManager(cfgMgr, log, nil)
 	authenticator := auth.NewAuthenticator()
-	server := NewServer(cfgMgr, mgr, authenticator, log, nil)
+	server := NewServer(cfgMgr, mgr, authenticator, log, nil, "test", "unknown")
 
 	token, err := authenticator.CreateSession("1", "admin", "admin", 24*time.Hour, false)
 	if err != nil {
@@ -346,7 +346,7 @@ func TestNewServerLoadsCORSOriginsFromConfig(t *testing.T) {
 		t.Fatalf("Failed to update config: %v", err)
 	}
 
-	server := NewServer(cfgMgr, manager.NewManager(cfgMgr, log, nil), auth.NewAuthenticator(), log, nil)
+	server := NewServer(cfgMgr, manager.NewManager(cfgMgr, log, nil), auth.NewAuthenticator(), log, nil, "test", "unknown")
 	if !server.cors.IsOriginAllowed("https://example.com") {
 		t.Fatalf("Expected configured origin to be allowed")
 	}
@@ -360,7 +360,7 @@ func TestRoutesWithNilAuthDoesNotPanic(t *testing.T) {
 	defer log.Close()
 
 	cfgMgr := config.NewManager("test.json")
-	srv := NewServer(cfgMgr, manager.NewManager(cfgMgr, log, nil), nil, log, nil)
+	srv := NewServer(cfgMgr, manager.NewManager(cfgMgr, log, nil), nil, log, nil, "test", "unknown")
 
 	mux := http.NewServeMux()
 	srv.Routes(mux)
@@ -375,7 +375,7 @@ func TestHandleMetricsIncludesProxySnapshotMetrics(t *testing.T) {
 
 	cfgMgr := config.NewManager("test.json")
 	mgr := manager.NewManager(cfgMgr, log, nil)
-	srv := NewServer(cfgMgr, mgr, auth.NewAuthenticator(), log, nil)
+	srv := NewServer(cfgMgr, mgr, auth.NewAuthenticator(), log, nil, "test", "unknown")
 
 	err = mgr.AddProxy(config.ProxyConfig{
 		ID:                "proxy-a",
@@ -419,7 +419,7 @@ func TestHandleProxiesRBACDeniesNonAdmin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create session: %v", err)
 	}
-	srv := NewServer(cfgMgr, mgr, authenticator, log, nil)
+	srv := NewServer(cfgMgr, mgr, authenticator, log, nil, "test", "unknown")
 
 	t.Run("POST /api/proxies blocked for viewer", func(t *testing.T) {
 		body := bytes.NewReader([]byte(`{}`))
@@ -462,7 +462,7 @@ func TestHandleProxiesBlockedWithoutAuth(t *testing.T) {
 
 	cfgMgr := config.NewManager("test.json")
 	mgr := manager.NewManager(cfgMgr, log, nil)
-	srv := NewServer(cfgMgr, mgr, auth.NewAuthenticator(), log, nil)
+	srv := NewServer(cfgMgr, mgr, auth.NewAuthenticator(), log, nil, "test", "unknown")
 
 	// No cookie — requirePermission returns 401
 	req := httptest.NewRequest("GET", "/api/proxies", nil)
@@ -510,7 +510,7 @@ func TestChangePasswordInvalidatesSessions(t *testing.T) {
 
 	mgr := manager.NewManager(cfgMgr, log, nil)
 	authenticator := auth.NewAuthenticator()
-	srv := NewServer(cfgMgr, mgr, authenticator, log, nil)
+	srv := NewServer(cfgMgr, mgr, authenticator, log, nil, "test", "unknown")
 
 	// Create a session before password change
 	token, err := authenticator.CreateSession("1", "admin", "admin", 24*time.Hour, false)

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"modbridge/pkg/metrics"
 	"modbridge/pkg/middleware"
 	"modbridge/pkg/rbac"
+	"modbridge/pkg/updater"
 	"modbridge/pkg/users"
 )
 
@@ -109,6 +111,7 @@ type Server struct {
 	metrics          *metrics.Metrics
 	userMgr          *users.Manager
 	auditor          *audit.Auditor
+	updater          *updater.Updater
 
 	restartSignal chan struct{}
 }
@@ -130,7 +133,7 @@ func (s *Server) writeJSON(w http.ResponseWriter, v interface{}) {
 }
 
 // NewServer creates a new API server.
-func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator, l *logger.Logger, db *database.DB) *Server {
+func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator, l *logger.Logger, db *database.DB, version, buildTime string) *Server {
 	csrfSecret, err := buildCSRFSecret()
 	if err != nil {
 		panic(fmt.Sprintf("failed to initialize CSRF secret: %v", err))
@@ -174,6 +177,13 @@ func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator,
 		userMgr:          userMgr,
 		auditor:          auditorInstance,
 		restartSignal:    make(chan struct{}),
+		updater: updater.New("Xerolux/modbridge", updater.BuildInfo{
+			Version:   version,
+			BuildTime: buildTime,
+			GoVersion: runtime.Version(),
+			OS:        runtime.GOOS,
+			Arch:      runtime.GOARCH,
+		}),
 	}
 }
 
@@ -278,6 +288,11 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/system/ports/release", csrfMW(s.handlePortRelease))
 	mux.HandleFunc("/api/system/ports/check", authMW(s.handleCheckProxyPorts))
 	mux.HandleFunc("/api/system/diagnostics/connectivity", authMW(s.handleProxyConnectivityCheck))
+
+	// Update endpoints — admin-only (RBAC checked inside handlers via requirePermission)
+	mux.HandleFunc("/api/update/check", authMW(s.handleUpdateCheck))
+	mux.HandleFunc("/api/update/perform", csrfMW(s.handleUpdatePerform))
+	mux.HandleFunc("/api/update/status", authMW(s.handleUpdateStatus))
 }
 
 // Stop gracefully shuts down background goroutines owned by the server.

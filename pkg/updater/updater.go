@@ -82,6 +82,21 @@ func New(repo string, current BuildInfo) *Updater {
 	}
 }
 
+// CurrentVersion returns the version string of the running binary.
+func (u *Updater) CurrentVersion() string { return u.current.Version }
+
+// BuildTime returns the build timestamp of the running binary.
+func (u *Updater) BuildTime() string { return u.current.BuildTime }
+
+// GoVersion returns the Go runtime version.
+func (u *Updater) GoVersion() string { return u.current.GoVersion }
+
+// OS returns runtime.GOOS of the running binary.
+func (u *Updater) OS() string { return u.current.OS }
+
+// Arch returns runtime.GOARCH of the running binary.
+func (u *Updater) Arch() string { return u.current.Arch }
+
 // GetStatus returns a snapshot of the current update progress. Safe for
 // concurrent use.
 func (u *Updater) GetStatus() UpdateStatus {
