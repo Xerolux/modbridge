@@ -320,14 +320,20 @@ onMounted(async () => {
   try {
     await fetchData(true);
 
+    // Initialize GridStack BEFORE loading widgets: the <Teleport> targets
+    // (#mount_<id>) are created by GridStack.addWidget, so the grid must
+    // exist before widgets.value is populated — otherwise Vue tries to
+    // teleport into non-existent DOM nodes and crashes with
+    // "Cannot read properties of null (reading 'emitsOptions')".
+    await nextTick();
+    initializeGrid();
+
     let layoutToLoad = getStoredLayout();
     if (!layoutToLoad.length) {
       layoutToLoad = buildDefaultLayout(proxies.value);
     }
 
     loadGrid(layoutToLoad);
-    await nextTick();
-    initializeGrid();
     window.addEventListener('resize', handleResize);
 
     const { data, disconnect, isConnected, lastMessageAt } = useEventSource('/api/proxies/stream');

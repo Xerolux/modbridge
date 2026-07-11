@@ -58,7 +58,16 @@ const de = {
     layout: 'Layout',
     layoutLocked: 'Gesperrt',
     layoutDrag: 'Ziehen',
-    workspace: 'Arbeitsbereich'
+    workspace: 'Arbeitsbereich',
+    dragDropActive: 'Drag-and-Drop aktiv',
+    mobileLayoutActive: 'Mobiles Layout (automatisch gesperrt)',
+    layoutHintDrag: 'Kacheln per Drag-and-Drop verschieben',
+    layoutHintTouch: 'Layout auf Mobilgeräten gesperrt',
+    layoutHintDropZone: 'Hier ablegen',
+    layoutEditBanner: 'Layout wird bearbeitet — Kachel loslassen zum Ablegen',
+    noWidgets: 'Noch keine Widgets — Proxy als Widget hinzufügen',
+    showErrors: 'Fehler anzeigen',
+    proxyConfigTooltip: 'Proxy-Konfiguration'
   },
 
   // Login
@@ -408,7 +417,16 @@ const en = {
     layout: 'Layout',
     layoutLocked: 'Locked',
     layoutDrag: 'Drag',
-    workspace: 'Workspace'
+    workspace: 'Workspace',
+    dragDropActive: 'Drag-and-drop active',
+    mobileLayoutActive: 'Mobile layout (auto-locked)',
+    layoutHintDrag: 'Drag tiles to rearrange the dashboard',
+    layoutHintTouch: 'Layout locked on mobile devices',
+    layoutHintDropZone: 'Drop here',
+    layoutEditBanner: 'Editing layout — release tile to drop',
+    noWidgets: 'No widgets yet — add a proxy as a widget',
+    showErrors: 'Show errors',
+    proxyConfigTooltip: 'Proxy configuration'
   },
 
   // Login
