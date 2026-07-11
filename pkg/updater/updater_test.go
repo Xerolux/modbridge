@@ -245,3 +245,48 @@ func TestSwapBinary_Rollback(t *testing.T) {
 		t.Errorf("after rollback, binary = %q, want BACKUP-CONTENT", string(got))
 	}
 }
+
+func TestCheckForUpdate_Cache(t *testing.T) {
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"tag_name":"v2.0.7.18","prerelease":false,"assets":[{"name":"modbridge-linux-amd64","browser_download_url":"http://example.com/a","size":100}]}`))
+	}))
+	defer srv.Close()
+
+	u := New("Xerolux/modbridge", BuildInfo{Version: "2.0.7.17", OS: "linux", Arch: "amd64"})
+	u.apiBase = srv.URL // inject test server
+
+	_, err := u.CheckForUpdate(context.Background())
+	if err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	_, err = u.CheckForUpdate(context.Background())
+	if err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+	if callCount != 1 {
+		t.Errorf("GitHub API called %d times, expected 1 (cache hit on second call)", callCount)
+	}
+}
+
+func TestGetStatus_InitialState(t *testing.T) {
+	u := New("Xerolux/modbridge", BuildInfo{Version: "2.0.7.17"})
+	st := u.GetStatus()
+	if st.State != StateIdle {
+		t.Errorf("initial state = %v, want %v", st.State, StateIdle)
+	}
+}
+
+func TestPerformUpdate_RejectsWhenAlreadyRunning(t *testing.T) {
+	u := New("Xerolux/modbridge", BuildInfo{Version: "2.0.7.17"})
+	u.mu.Lock()
+	u.status.State = StateDownloading
+	u.mu.Unlock()
+
+	err := u.PerformUpdate(context.Background())
+	if err == nil {
+		t.Error("expected error when update already in progress")
+	}
+}
