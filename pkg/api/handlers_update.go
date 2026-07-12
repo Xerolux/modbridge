@@ -84,21 +84,30 @@ func (s *Server) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
 
 // handleUpdatePerform starts the update process asynchronously.
 func (s *Server) handleUpdatePerform(w http.ResponseWriter, r *http.Request) {
-	if s.requirePermission(w, r, rbac.PermSystemRestart) == nil {
+	session := s.requirePermission(w, r, rbac.PermSystemRestart)
+	if session == nil {
 		return
 	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	ip, ua := requestMeta(r)
 
 	if err := s.updater.PerformUpdate(r.Context()); err != nil {
+		if s.auditor != nil {
+			s.auditor.LogAction("system.update", "system", "", session.UserID, session.Username, "", ip, ua, false, err.Error())
+		}
 		status := http.StatusInternalServerError
 		if err == updater.ErrUpdateInProgress {
 			status = http.StatusConflict
 		}
 		http.Error(w, err.Error(), status)
 		return
+	}
+
+	if s.auditor != nil {
+		s.auditor.LogAction("system.update", "system", "", session.UserID, session.Username, "update started", ip, ua, true, "")
 	}
 
 	// Observe state: when updater reaches StateDone, trigger restart.

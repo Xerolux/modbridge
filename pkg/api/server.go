@@ -1376,6 +1376,16 @@ func (s *Server) handleSystemRestart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	session := s.requirePermission(w, r, rbac.PermSystemRestart)
+	if session == nil {
+		return
+	}
+	ip, ua := requestMeta(r)
+
+	if s.auditor != nil {
+		s.auditor.LogAction("system.restart", "system", "", session.UserID, session.Username, "", ip, ua, true, "")
+	}
+
 	s.log.Info("API", "System restart requested via API")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

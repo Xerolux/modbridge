@@ -8,16 +8,18 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"modbridge/pkg/config"
-	"modbridge/pkg/database"
-	"modbridge/pkg/logger"
-	"modbridge/pkg/portmanager"
 	"net"
 	"net/http"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	"modbridge/pkg/config"
+	"modbridge/pkg/database"
+	"modbridge/pkg/logger"
+	"modbridge/pkg/portmanager"
+	"modbridge/pkg/rbac"
 )
 
 type auditLogResponse struct {
@@ -105,6 +107,12 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	session := s.requirePermission(w, r, rbac.PermConfigImport)
+	if session == nil {
+		return
+	}
+	ip, ua := requestMeta(r)
+
 	var newCfg config.Config
 	if err := decodeJSON(w, r, &newCfg); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -117,6 +125,9 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 
 	v := config.NewValidator()
 	if err := v.Validate(&newCfg); err != nil {
+		if s.auditor != nil {
+			s.auditor.LogConfigChange("config.imported", session.UserID, session.Username, err.Error(), ip, ua, false)
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -125,6 +136,9 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 		*c = newCfg
 		return nil
 	}); err != nil {
+		if s.auditor != nil {
+			s.auditor.LogConfigChange("config.imported", session.UserID, session.Username, err.Error(), ip, ua, false)
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -133,6 +147,9 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 	if s.mgr != nil {
 		s.mgr.StopAll()
 		s.mgr.Initialize()
+	}
+	if s.auditor != nil {
+		s.auditor.LogConfigChange("config.imported", session.UserID, session.Username, "", ip, ua, true)
 	}
 	w.WriteHeader(http.StatusOK)
 }

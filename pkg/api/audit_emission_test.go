@@ -242,3 +242,51 @@ func TestAuditProxyControl_BulkActions(t *testing.T) {
 		}
 	}
 }
+
+func TestAuditConfigImport(t *testing.T) {
+	server, cleanup := auditedTestServer(t)
+	defer cleanup()
+	token := sessionFor(t, server, "admin", "adminuser")
+
+	// Build a validator-passing config via the struct so field names stay
+	// correct if the schema changes.
+	validCfg := config.Config{
+		WebPort:  ":8080",
+		Proxies:  []config.ProxyConfig{},
+		LogLevel: "INFO", LogMaxSize: 10, LogMaxFiles: 5, LogMaxAgeDays: 30,
+		SessionTimeout: 24, MaxConnections: 100,
+		CORSAllowedOrigins: []string{"*"},
+		CORSAllowedHeaders: []string{"Content-Type"},
+		RateLimitEnabled:   true, RateLimitRequests: 100, RateLimitBurst: 100,
+	}
+	bodyBytes, _ := json.Marshal(validCfg)
+	req := httptest.NewRequest(http.MethodPost, "/api/config/import", strings.NewReader(string(bodyBytes)))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
+	w := httptest.NewRecorder()
+	server.handleConfigImport(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body: %s)", w.Code, w.Body.String())
+	}
+	if findAuditEntry(t, server, "config.imported", true) == nil {
+		t.Fatal("config.imported success not audited")
+	}
+}
+
+func TestAuditSystemRestart(t *testing.T) {
+	server, cleanup := auditedTestServer(t)
+	defer cleanup()
+	token := sessionFor(t, server, "admin", "adminuser")
+
+	// handleSystemRestart writes a response and then triggers restart in a
+	// goroutine; we only assert the audit entry is emitted synchronously.
+	req := httptest.NewRequest(http.MethodPost, "/api/system/restart", nil)
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
+	w := httptest.NewRecorder()
+	server.handleSystemRestart(w, req)
+
+	if findAuditEntry(t, server, "system.restart", true) == nil {
+		t.Fatal("system.restart not audited")
+	}
+}
