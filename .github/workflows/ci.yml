@@ -145,11 +145,69 @@ jobs:
           path: modbridge-${{ matrix.suffix }}
           retention-days: 7
 
+  build-headless:
+    name: Headless (${{ matrix.suffix }})
+    runs-on: ubuntu-latest
+    needs: [quality, test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64-headless
+            packages: ''
+            cc: ''
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64-headless
+            packages: gcc-aarch64-linux-gnu
+            cc: aarch64-linux-gnu-gcc
+          - goos: linux
+            goarch: arm
+            goarm: '6'
+            suffix: linux-arm-headless
+            packages: gcc-arm-linux-gnueabihf
+            cc: arm-linux-gnueabihf-gcc
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install cross-compiler
+        if: matrix.packages != ''
+        run: sudo apt-get update && sudo apt-get install -y ${{ matrix.packages }}
+
+      # Headless needs NO frontend-dist — it has no embedded Web UI and shares
+      # only pkg/config, pkg/logger, pkg/manager with the Web binary.
+      - name: Build headless binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: 1
+          CC: ${{ matrix.cc }}
+        run: |
+          go build \
+            -ldflags="-s -w -X main.Version=${{ github.ref_name == 'main' && 'dev' || github.ref_name }}" \
+            -trimpath \
+            -o "modbridge-${{ matrix.suffix }}" \
+            ./cmd/modbridge-headless
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: modbridge-${{ matrix.suffix }}
+          path: modbridge-${{ matrix.suffix }}
+          retention-days: 7
+
   auto-release:
     name: Auto Release
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    needs: [quality, test, build-frontend, build-binaries]
+    needs: [quality, test, build-frontend, build-binaries, build-headless]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -225,6 +283,13 @@ jobs:
             |----------|------|
             | Linux x64 | `modbridge-linux-amd64` |
             | Linux ARM64 | `modbridge-linux-arm64` |
+
+            ### Headless Binaries (without WebUI)
+            | Platform | File |
+            |----------|------|
+            | Linux x64 | `modbridge-linux-amd64-headless` |
+            | Linux ARM64 | `modbridge-linux-arm64-headless` |
+            | Linux ARMv6 (32-bit) | `modbridge-linux-arm-headless` |
 
             SHA256 checksums: see `checksums.txt`
         env:
