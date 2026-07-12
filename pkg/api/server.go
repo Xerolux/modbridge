@@ -1329,6 +1329,9 @@ func isBulkAction(action string) bool {
 }
 
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
+	if s.requirePermission(w, r, rbac.PermLogsView) == nil {
+		return
+	}
 	logs := s.log.GetRecent(100)
 	if err := json.NewEncoder(w).Encode(logs); err != nil {
 		s.log.Error("API", fmt.Sprintf("Failed to encode logs response: %v", err))
@@ -1336,6 +1339,11 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
+	// Permission check MUST come before any flush — a 403 after headers are
+	// sent is impossible.
+	if s.requirePermission(w, r, rbac.PermLogsView) == nil {
+		return
+	}
 	if s.log == nil {
 		http.Error(w, "Logger unavailable", http.StatusServiceUnavailable)
 		return

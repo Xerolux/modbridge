@@ -51,6 +51,9 @@ func normalizeIP(value string) string {
 }
 
 func (s *Server) handleLogDownload(w http.ResponseWriter, r *http.Request) {
+	if s.requirePermission(w, r, rbac.PermLogsExport) == nil {
+		return
+	}
 	w.Header().Set("Content-Disposition", "attachment; filename=proxy.log")
 	w.Header().Set("Content-Type", "application/json")
 	logs := s.log.GetRecent(10000)
@@ -60,6 +63,9 @@ func (s *Server) handleLogDownload(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleConfigExport(w http.ResponseWriter, r *http.Request) {
+	if s.requirePermission(w, r, rbac.PermConfigExport) == nil {
+		return
+	}
 	w.Header().Set("Content-Disposition", "attachment; filename=config.json")
 	w.Header().Set("Content-Type", "application/json")
 
@@ -237,6 +243,10 @@ func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.requirePermission(w, r, rbac.PermSystemView) == nil {
+		return
+	}
+
 	if startTime.IsZero() {
 		startTime = time.Now()
 	}
@@ -362,6 +372,10 @@ func (s *Server) handleCheckProxyPorts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.requirePermission(w, r, rbac.PermSystemView) == nil {
+		return
+	}
+
 	cfg := s.cfgMgr.Get()
 	var ports []int
 	portMap := make(map[int]string) // port -> proxy name
@@ -464,6 +478,10 @@ func (s *Server) handleAuditLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.requirePermission(w, r, rbac.PermAuditView) == nil {
+		return
+	}
+
 	if s.auditor == nil {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode([]interface{}{}); err != nil {
@@ -538,6 +556,10 @@ func (s *Server) handleAuditLogs(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAuditLogsExport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.requirePermission(w, r, rbac.PermAuditExport) == nil {
 		return
 	}
 
