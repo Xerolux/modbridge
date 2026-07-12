@@ -5,7 +5,7 @@
 *.so
 *.dylib
 modbridge
-modbridge-*
+/modbridge-*
 modbusmanager
 modbusproxy
 
