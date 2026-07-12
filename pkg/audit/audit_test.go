@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"modbridge/pkg/database"
 )
 
 // TestNewFileAuditLogger tests creating a new file audit logger
@@ -721,5 +723,57 @@ func TestFileAuditLogger_Close(t *testing.T) {
 
 	if len(data) == 0 {
 		t.Error("Log file should contain event written before close")
+	}
+}
+
+// TestAuditor_LogLogin_WithReason verifies that LogLogin captures the reason
+// on failure (e.g. "invalid credentials") and leaves ErrorMsg empty on
+// success. The reason threading is the only signature change in this spec.
+func TestAuditor_LogLogin_WithReason(t *testing.T) {
+	db, err := database.NewDB(":memory:")
+	if err != nil {
+		t.Fatalf("NewDB: %v", err)
+	}
+	defer db.Close()
+	a := NewAuditor(db)
+	// Close drains the async buffer synchronously, guaranteeing entries are
+	// persisted before we read them back below.
+	defer a.Close()
+
+	a.LogLogin("attacker", "1.2.3.4", "TestAgent/1.0", "invalid credentials", false)
+	a.LogLogin("admin", "5.6.7.8", "TestAgent/1.0", "", true)
+
+	// Close drains the async buffer synchronously so entries are persisted
+	// before GetLogs reads them back. (GetLogs itself is a pure DB read.)
+	a.Close()
+
+	logs, err := a.GetLogs(100, 0)
+	if err != nil {
+		t.Fatalf("GetLogs: %v", err)
+	}
+
+	var failEntry, successEntry *database.AuditLogEntry
+	for _, e := range logs {
+		if e.Action == "user.login" && !e.Success && e.Username == "attacker" {
+			failEntry = e
+		}
+		if e.Action == "user.login" && e.Success && e.Username == "admin" {
+			successEntry = e
+		}
+	}
+	if failEntry == nil {
+		t.Fatal("failed login not logged")
+	}
+	if failEntry.ErrorMsg != "invalid credentials" {
+		t.Errorf("failed login ErrorMsg = %q, want %q", failEntry.ErrorMsg, "invalid credentials")
+	}
+	if failEntry.IPAddress != "1.2.3.4" {
+		t.Errorf("IPAddress = %q, want 1.2.3.4", failEntry.IPAddress)
+	}
+	if successEntry == nil {
+		t.Fatal("successful login not logged")
+	}
+	if successEntry.ErrorMsg != "" {
+		t.Errorf("success ErrorMsg = %q, want empty", successEntry.ErrorMsg)
 	}
 }

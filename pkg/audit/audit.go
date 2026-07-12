@@ -541,6 +541,7 @@ type Auditor struct {
 	closed        bool
 	fileLogger    *FileAuditLogger
 	enableFileLog bool
+	wg            sync.WaitGroup
 }
 
 // NewAuditor creates a new auditor with database backing
@@ -549,6 +550,7 @@ func NewAuditor(db *database.DB) *Auditor {
 		db:  db,
 		buf: make(chan *database.AuditLogEntry, 1000),
 	}
+	a.wg.Add(1)
 	go a.processBuffer()
 	return a
 }
@@ -566,6 +568,7 @@ func NewAuditorWithFile(db *database.DB, fileLoggerCfg FileLoggerConfig) (*Audit
 		fileLogger:    fileLogger,
 		enableFileLog: true,
 	}
+	a.wg.Add(1)
 	go a.processBuffer()
 	return a, nil
 }
@@ -655,9 +658,14 @@ func mapActionToEventType(action string) EventType {
 	}
 }
 
-// LogLogin logs a login attempt
-func (a *Auditor) LogLogin(username, ipAddress, userAgent string, success bool) {
-	a.LogAction("user.login", "user", username, "", username, "", ipAddress, userAgent, success, "")
+// LogLogin logs a login attempt. reason is captured on failure (e.g.
+// "invalid credentials", "user disabled"); pass "" on success.
+func (a *Auditor) LogLogin(username, ipAddress, userAgent, reason string, success bool) {
+	errMsg := ""
+	if !success {
+		errMsg = reason
+	}
+	a.LogAction("user.login", "user", username, "", username, "", ipAddress, userAgent, success, errMsg)
 }
 
 // LogLogout logs a logout
@@ -682,6 +690,7 @@ func (a *Auditor) LogUserAction(action, targetUserID, userID, username, details,
 
 // processBuffer processes buffered audit log entries
 func (a *Auditor) processBuffer() {
+	defer a.wg.Done()
 	for entry := range a.buf {
 		if err := a.db.AddAuditLog(entry); err != nil {
 			log.Printf("ERROR: Failed to write audit log: %v", err)
@@ -712,7 +721,9 @@ func (a *Auditor) GetFileLogger() *FileAuditLogger {
 	return a.fileLogger
 }
 
-// Close closes the auditor
+// Close closes the auditor. It closes the buffer channel and blocks until
+// processBuffer has drained every queued entry, guaranteeing that no audit
+// event is lost on shutdown.
 func (a *Auditor) Close() {
 	a.mu.Lock()
 	if a.closed {
@@ -722,6 +733,9 @@ func (a *Auditor) Close() {
 	a.closed = true
 	close(a.buf)
 	a.mu.Unlock()
+
+	// Wait for processBuffer to finish draining the buffer.
+	a.wg.Wait()
 
 	if a.fileLogger != nil {
 		a.fileLogger.Close()
