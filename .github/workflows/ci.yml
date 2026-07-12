@@ -61,7 +61,27 @@ jobs:
       - uses: codecov/codecov-action@v7
         with:
           file: ./coverage.txt
-        continue-on-error: true
+          continue-on-error: true
+
+  benchmarks:
+    name: Benchmark Guardrails
+    runs-on: ubuntu-latest
+    needs: [quality, test]
+    # Run on PRs + pushes to main. Continue-on-error would hide regressions,
+    # so the job fails the build when a threshold is exceeded. Thresholds are
+    # intentionally generous (see scripts/ci/check_bench.sh) to reduce CI flak.
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run benchmark guardrails
+        env:
+          CGO_ENABLED: 1
+        run: bash scripts/ci/check_bench.sh
 
   build-frontend:
     name: Build Frontend

@@ -107,3 +107,27 @@ func TestReadFrameTruncatedPayload(t *testing.T) {
 		t.Fatal("expected error for truncated payload, got nil")
 	}
 }
+
+// BenchmarkReadFrame measures the per-request cost of reading and validating
+// a Modbus TCP frame. This is the proxy's hottest function — it runs once
+// per request in handleClient. The benchmark uses a realistic 12-byte frame
+// (read holding registers, single register).
+func BenchmarkReadFrame(b *testing.B) {
+	// Build a valid 12-byte frame: MBAP(6) + UnitID(1) + FC(1) + Data(4)
+	frame := make([]byte, 12)
+	binary.BigEndian.PutUint16(frame[0:2], 42)  // txID
+	binary.BigEndian.PutUint16(frame[2:4], 0)   // protoID
+	binary.BigEndian.PutUint16(frame[4:6], 6)   // length = unitID + FC + 4 data
+	frame[6] = 1                                // unitID
+	frame[7] = 0x03                             // FC = read holding registers
+	binary.BigEndian.PutUint16(frame[8:10], 0)  // start addr
+	binary.BigEndian.PutUint16(frame[10:12], 1) // quantity
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := ReadFrame(bytes.NewReader(frame)); err != nil {
+			b.Fatal(err)
+		}
+	}
+}

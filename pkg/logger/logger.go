@@ -275,6 +275,20 @@ func (l *Logger) GetLogLevel() LogLevel {
 	return priorityToLevel(l.minLevel.Load())
 }
 
+// IsDebugEnabled reports whether DEBUG-level messages will actually be
+// emitted. Intended for hot paths where the message argument is expensive to
+// build (e.g. fmt.Sprintf of a binary frame) — wrap the call in
+// `if l.IsDebugEnabled() { l.Debug(...) }` to skip the formatting cost
+// entirely when DEBUG is off (the default in production).
+func (l *Logger) IsDebugEnabled() bool {
+	return l.minLevel.Load() <= levelPriority(DEBUG)
+}
+
+// IsInfoEnabled reports whether INFO-level messages will be emitted.
+func (l *Logger) IsInfoEnabled() bool {
+	return l.minLevel.Load() <= levelPriority(INFO)
+}
+
 // Close closes all logger files.
 func (l *Logger) Close() error {
 	l.mu.Lock()

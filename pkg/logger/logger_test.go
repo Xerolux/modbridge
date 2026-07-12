@@ -137,3 +137,21 @@ func TestSetLogLevelFiltersMessages(t *testing.T) {
 		t.Fatalf("Expected second level ERROR, got %s", logs[1].Level)
 	}
 }
+
+// BenchmarkIsDebugEnabled measures the cost of the level guard that hot paths
+// (proxy handleClient) use to skip expensive fmt.Sprintf when DEBUG is off.
+// This is the key call behind the lazy-logging optimization — it must be
+// cheap enough that guarding every request costs less than the avoided sprintf.
+func BenchmarkIsDebugEnabled(b *testing.B) {
+	log, err := NewLogger("bench-debug.log", 100)
+	if err != nil {
+		b.Fatalf("logger: %v", err)
+	}
+	defer log.Close()
+	// Default level is INFO, so DEBUG is disabled — the cold path (returns false).
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = log.IsDebugEnabled()
+	}
+}

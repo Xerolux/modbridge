@@ -7,6 +7,7 @@ package modbus
 
 import (
 	"bytes"
+	"encoding/binary"
 	"io"
 	"testing"
 )
@@ -204,5 +205,22 @@ func TestReadRTUFrame(t *testing.T) {
 	}
 	if !bytes.Equal(got, rtuFrame) {
 		t.Errorf("ReadRTUFrame: got %X, want %X", got, rtuFrame)
+	}
+}
+
+// BenchmarkCreateExceptionResponse measures the cost of building an exception
+// response, which happens on every circuit-breaker-open and forward-failure
+// request in the proxy hot path.
+func BenchmarkCreateExceptionResponse(b *testing.B) {
+	reqFrame := make([]byte, 12)
+	binary.BigEndian.PutUint16(reqFrame[0:2], 42)
+	binary.BigEndian.PutUint16(reqFrame[4:6], 6)
+	reqFrame[6] = 1
+	reqFrame[7] = 0x03
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = CreateExceptionResponse(reqFrame, 0x0B)
 	}
 }

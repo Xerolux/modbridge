@@ -442,8 +442,12 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 			return
 		}
 
-		// Debug: Log incoming Modbus request
-		p.log.Debug(p.ID, fmt.Sprintf("Received Modbus request: %X (%d bytes)", reqFrame, len(reqFrame)))
+		// Debug: Log incoming Modbus request. Guard the formatting call so we
+		// skip the (expensive) %X sprintf on every request when DEBUG is off,
+		// which is the production default.
+		if p.log.IsDebugEnabled() {
+			p.log.Debug(p.ID, fmt.Sprintf("Received Modbus request: %X (%d bytes)", reqFrame, len(reqFrame)))
+		}
 
 		// Check circuit breaker BEFORE forwarding
 		if !p.circuitBreaker.AllowRequest() {
@@ -500,8 +504,10 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 			p.adaptiveTimeout.Record(time.Since(forwardStart))
 		}
 
-		// Debug: Log Modbus response
-		p.log.Debug(p.ID, fmt.Sprintf("Sending Modbus response: %X (%d bytes)", respFrame, len(respFrame)))
+		// Debug: Log Modbus response (guarded — see request-side comment).
+		if p.log.IsDebugEnabled() {
+			p.log.Debug(p.ID, fmt.Sprintf("Sending Modbus response: %X (%d bytes)", respFrame, len(respFrame)))
+		}
 
 		if _, err := clientConn.Write(respFrame); err != nil {
 			p.log.Error(p.ID, fmt.Sprintf("Write response error: %v", err))
