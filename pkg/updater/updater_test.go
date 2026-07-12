@@ -6,6 +6,7 @@
 package updater
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -14,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"testing"
 )
 
@@ -288,5 +290,124 @@ func TestPerformUpdate_RejectsWhenAlreadyRunning(t *testing.T) {
 	err := u.PerformUpdate(context.Background())
 	if err == nil {
 		t.Error("expected error when update already in progress")
+	}
+}
+
+// TestDownloadFile_EmitsProgress verifies that downloadFile reports
+// intermediate progress (Fix 4): with a known body size, the updater's status
+// must advance beyond the initial 10% before reaching the "complete" mark.
+func TestDownloadFile_EmitsProgress(t *testing.T) {
+	// Serve a ~1 MB body so progress throttling (≥3% or ≥400ms) is guaranteed
+	// to emit at least one intermediate update.
+	const bodySize = 1 << 20
+	body := bytes.Repeat([]byte("x"), bodySize)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", strconv.Itoa(bodySize))
+		w.Write(body)
+	}))
+	defer srv.Close()
+
+	u := New("Xerolux/modbridge", BuildInfo{Version: "2.0.7.17"})
+	dest := filepath.Join(t.TempDir(), "blob")
+	if err := downloadFile(context.Background(), u.client, srv.URL, dest, bodySize, u); err != nil {
+		t.Fatalf("downloadFile failed: %v", err)
+	}
+
+	// Drain the final status. Since progressWriter updates happen during the
+	// io.Copy, the last seen progress should have advanced past the 10% start
+	// (and at least one update should have fired given 1MB >> 3% threshold).
+	st := u.GetStatus()
+	if st.Progress <= 10 {
+		t.Errorf("expected progress to advance beyond 10 during download, got %d", st.Progress)
+	}
+	if st.Progress > 55 {
+		t.Errorf("progress %d exceeds the download band ceiling 55", st.Progress)
+	}
+
+	got, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatalf("reading downloaded file: %v", err)
+	}
+	if len(got) != bodySize {
+		t.Errorf("downloaded %d bytes, want %d", len(got), bodySize)
+	}
+}
+
+// TestDownloadFile_UnknownSizeDoesNotPanic ensures that when neither
+// Content-Length nor expectedSize is available, downloadFile still succeeds
+// without dividing by zero in progressWriter.
+func TestDownloadFile_UnknownSize(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Deliberately no Content-Length; chunked encoding.
+		w.Write([]byte("small-body"))
+	}))
+	defer srv.Close()
+
+	u := New("Xerolux/modbridge", BuildInfo{Version: "2.0.7.17"})
+	dest := filepath.Join(t.TempDir(), "blob")
+	if err := downloadFile(context.Background(), u.client, srv.URL, dest, 0, u); err != nil {
+		t.Fatalf("downloadFile with unknown size failed: %v", err)
+	}
+	got, _ := os.ReadFile(dest)
+	if string(got) != "small-body" {
+		t.Errorf("got %q, want small-body", string(got))
+	}
+}
+
+// TestCheckForUpdate_DoesNotClobberActiveState verifies the state-machine guard
+// (Fix 6): when CheckForUpdate runs while another phase is already in progress,
+// its deferred Idle reset must not overwrite the active state.
+func TestCheckForUpdate_DoesNotClobberActiveState(t *testing.T) {
+	// A working GitHub mock so the check itself succeeds.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"tag_name":"v9.9.9.9","prerelease":false,"assets":[]}`))
+	}))
+	defer srv.Close()
+
+	u := New("Xerolux/modbridge", BuildInfo{Version: "2.0.7.17"})
+	u.SetAPIBase(srv.URL)
+
+	// Simulate an update already in flight (runUpdate would have set this).
+	u.mu.Lock()
+	u.status.State = StateDownloading
+	u.status.Progress = 25
+	u.mu.Unlock()
+
+	if _, err := u.CheckForUpdate(context.Background()); err != nil {
+		t.Fatalf("CheckForUpdate failed: %v", err)
+	}
+
+	st := u.GetStatus()
+	if st.State == StateIdle {
+		t.Errorf("CheckForUpdate clobbered an active %v state back to Idle", StateDownloading)
+	}
+}
+
+// TestRollbackTargetPath_MultipleBakSegments ensures rollbackTargetPath strips
+// at the LAST .bak (Fix 7), so binary names containing ".bak" earlier are
+// handled correctly.
+func TestRollbackTargetPath_MultipleBakSegments(t *testing.T) {
+	cases := []struct {
+		name    string
+		backup  string
+		want    string
+		wantErr bool
+	}{
+		{"standard", filepath.Join("opt", "modbridge.bak.20260711_120000"), filepath.Join("opt", "modbridge"), false},
+		{"multiple bak segments", filepath.Join("opt", "modbridge.bak-tool.bak.20260711_120000"), filepath.Join("opt", "modbridge.bak-tool"), false},
+		{"no bak segment", filepath.Join("opt", "modbridge.20260711"), "", true},
+		{"bak at start (invalid)", filepath.Join("opt", ".bak.something"), "", true}, // i>0 guard rejects leading .bak
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := rollbackTargetPath(c.backup)
+			if (err != nil) != c.wantErr {
+				t.Fatalf("rollbackTargetPath(%q) err = %v, wantErr %v", c.backup, err, c.wantErr)
+			}
+			if !c.wantErr && got != c.want {
+				t.Errorf("rollbackTargetPath(%q) = %q, want %q", c.backup, got, c.want)
+			}
+		})
 	}
 }

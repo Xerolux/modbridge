@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -114,6 +115,7 @@ type Server struct {
 	updater          *updater.Updater
 
 	restartSignal chan struct{}
+	restartOnce   sync.Once
 }
 
 // RestartSignal returns a channel that is closed when the server should
@@ -122,6 +124,14 @@ type Server struct {
 // handler calling os.Exit directly.
 func (s *Server) RestartSignal() <-chan struct{} {
 	return s.restartSignal
+}
+
+// triggerRestart closes restartSignal exactly once. It is safe to call from
+// multiple goroutines (e.g. POST /api/system/restart and the update-module's
+// done-state poller) — without the sync.Once guard, a second close would
+// panic and crash the process.
+func (s *Server) triggerRestart() {
+	s.restartOnce.Do(func() { close(s.restartSignal) })
 }
 
 // writeJSON encodes v as JSON and logs encoding failures. It avoids
@@ -1274,7 +1284,7 @@ func (s *Server) handleSystemRestart(w http.ResponseWriter, r *http.Request) {
 	// Modbus connections are handled gracefully.
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		close(s.restartSignal)
+		s.triggerRestart()
 	}()
 }
 

@@ -51,9 +51,11 @@ func (s *Server) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
 		Arch:             s.updater.Arch(),
 	}
 	if err != nil {
-		resp.UpdateAvailable = false
-		w.Header().Set("Content-Type", "application/json")
-		s.writeJSON(w, resp)
+		// Surface upstream failures (GitHub API down, rate limited, parse
+		// error) as 502 so the frontend's checkError path activates. Returning
+		// 200 with UpdateAvailable:false here would mask an outage as "no
+		// update available".
+		http.Error(w, "update check failed: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 
@@ -106,7 +108,7 @@ func (s *Server) handleUpdatePerform(w http.ResponseWriter, r *http.Request) {
 		for i := 0; i < 60; i++ { // max ~60 seconds
 			st := s.updater.GetStatus()
 			if st.State == updater.StateDone {
-				close(s.restartSignal)
+				s.triggerRestart()
 				return
 			}
 			if st.State == updater.StateError {

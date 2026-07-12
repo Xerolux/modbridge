@@ -7,6 +7,7 @@ package updater
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,7 +70,7 @@ func RollbackBinary(backupPath string) error {
 	}
 	defer dst.Close()
 
-	if _, err := copyAll(dst, src); err != nil {
+	if _, err := io.Copy(dst, src); err != nil {
 		return fmt.Errorf("copying backup to target: %w", err)
 	}
 	return nil
@@ -80,31 +81,12 @@ func RollbackBinary(backupPath string) error {
 func rollbackTargetPath(backupPath string) (string, error) {
 	dir := filepath.Dir(backupPath)
 	base := filepath.Base(backupPath)
-	// Strip a single ".bak" segment plus any trailing ".<timestamp>".
-	if i := strings.Index(base, ".bak"); i > 0 {
+	// Strip at the LAST ".bak" segment so binary names that legitimately
+	// contain ".bak" earlier (e.g. "modbridge.bak-tool.bak.<ts>") are handled.
+	// LastIndex matches the suffix appended by SwapBinary; Index would wrongly
+	// cut at the first occurrence.
+	if i := strings.LastIndex(base, ".bak"); i > 0 {
 		return filepath.Join(dir, base[:i]), nil
 	}
 	return "", fmt.Errorf("backup path %q does not contain a .bak segment", backupPath)
-}
-
-// copyAll is a small io.Copy-style helper used by the rollback path.
-func copyAll(dst *os.File, src *os.File) (int64, error) {
-	buf := make([]byte, 32*1024)
-	var total int64
-	for {
-		n, err := src.Read(buf)
-		if n > 0 {
-			written, werr := dst.Write(buf[:n])
-			total += int64(written)
-			if werr != nil {
-				return total, werr
-			}
-		}
-		if err != nil {
-			if err.Error() == "EOF" {
-				return total, nil
-			}
-			return total, err
-		}
-	}
 }
