@@ -586,6 +586,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 		user, err := s.userMgr.AuthenticateUser(strings.TrimSpace(req.Username), req.Password)
 		if err != nil || user == nil {
+			ip, ua := requestMeta(r)
+			if s.auditor != nil {
+				s.auditor.LogLogin(req.Username, ip, ua, "invalid credentials", false)
+			}
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 			return
 		}
@@ -604,6 +608,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !auth.CheckPasswordHash(req.Password, cfg.AdminPassHash) {
+		ip, ua := requestMeta(r)
+		if s.auditor != nil {
+			s.auditor.LogLogin("admin", ip, ua, "invalid password", false)
+		}
 		http.Error(w, "Invalid password", http.StatusUnauthorized)
 		return
 	}
@@ -626,6 +634,13 @@ func (s *Server) finalizeLogin(w http.ResponseWriter, r *http.Request, userID, u
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	// Audit successful login. Logged here (not in handleLogin) because both
+	// multi-user and legacy login paths funnel through finalizeLogin.
+	ip, ua := requestMeta(r)
+	if s.auditor != nil {
+		s.auditor.LogLogin(username, ip, ua, "", true)
 	}
 
 	http.SetCookie(w, &http.Cookie{
