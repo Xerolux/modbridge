@@ -290,3 +290,58 @@ func TestAuditSystemRestart(t *testing.T) {
 		t.Fatal("system.restart not audited")
 	}
 }
+
+func TestAuditUser_CreateAndDelete(t *testing.T) {
+	server, cleanup := auditedTestServer(t)
+	defer cleanup()
+	token := sessionFor(t, server, "admin", "adminuser")
+
+	// Create
+	createBody := `{"username":"victim","full_name":"Victim","email":"v@e.com","password":"Pass123!","role":"benutzer","enabled":true}`
+	req := httptest.NewRequest(http.MethodPost, "/api/users", strings.NewReader(createBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
+	w := httptest.NewRecorder()
+	server.handleUsers(w, req)
+	if w.Code != http.StatusCreated && w.Code != http.StatusOK {
+		t.Fatalf("create: status %d, body %s", w.Code, w.Body.String())
+	}
+
+	target := func() string {
+		all, _ := server.userMgr.GetAllUsers()
+		for _, u := range all {
+			if u.Username == "victim" {
+				return u.ID
+			}
+		}
+		t.Fatal("victim user not found after create")
+		return ""
+	}()
+
+	// Delete
+	delReq := httptest.NewRequest(http.MethodDelete, "/api/users/"+target, nil)
+	delReq.AddCookie(&http.Cookie{Name: "session_token", Value: token})
+	delW := httptest.NewRecorder()
+	server.handleUserByID(delW, delReq)
+	if delW.Code != http.StatusNoContent && delW.Code != http.StatusOK {
+		t.Fatalf("delete: status %d", delW.Code)
+	}
+
+	logs := auditEntries(t, server)
+	created := false
+	deleted := false
+	for _, e := range logs {
+		if e.Action == "user.created" && e.Success {
+			created = true
+		}
+		if e.Action == "user.deleted" && e.Success {
+			deleted = true
+		}
+	}
+	if !created {
+		t.Error("user.created not audited")
+	}
+	if !deleted {
+		t.Error("user.deleted not audited")
+	}
+}

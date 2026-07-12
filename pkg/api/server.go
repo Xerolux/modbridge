@@ -833,6 +833,7 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	ip, ua := requestMeta(r)
 
 	if r.Method == http.MethodGet {
 		if s.userMgr == nil {
@@ -884,10 +885,16 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 
 		user, err := s.userMgr.CreateUser(&req, createdBy)
 		if err != nil {
+			if s.auditor != nil {
+				s.auditor.LogUserAction("user.created", req.Username, session.UserID, session.Username, err.Error(), ip, ua, false)
+			}
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
+		if s.auditor != nil {
+			s.auditor.LogUserAction("user.created", user.ID, session.UserID, session.Username, "created user "+user.Username, ip, ua, true)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		if err := json.NewEncoder(w).Encode(user); err != nil {
@@ -904,6 +911,7 @@ func (s *Server) handleUserByID(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	ip, ua := requestMeta(r)
 
 	if s.userMgr == nil {
 		http.Error(w, "User management not available", http.StatusServiceUnavailable)
@@ -941,6 +949,9 @@ func (s *Server) handleUserByID(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := s.userMgr.UpdateUser(id, &req); err != nil {
+			if s.auditor != nil {
+				s.auditor.LogUserAction("user.updated", id, session.UserID, session.Username, err.Error(), ip, ua, false)
+			}
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -951,6 +962,9 @@ func (s *Server) handleUserByID(w http.ResponseWriter, r *http.Request) {
 			s.auth.InvalidateUserSessions(id)
 		}
 
+		if s.auditor != nil {
+			s.auditor.LogUserAction("user.updated", id, session.UserID, session.Username, "", ip, ua, true)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
 			s.log.Warn("API", fmt.Sprintf("failed to encode user update response: %v", err))
@@ -965,6 +979,9 @@ func (s *Server) handleUserByID(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := s.userMgr.DeleteUser(id); err != nil {
+			if s.auditor != nil {
+				s.auditor.LogUserAction("user.deleted", id, session.UserID, session.Username, err.Error(), ip, ua, false)
+			}
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -972,6 +989,9 @@ func (s *Server) handleUserByID(w http.ResponseWriter, r *http.Request) {
 		// Ensure the deleted user cannot continue to use any active session.
 		s.auth.InvalidateUserSessions(id)
 
+		if s.auditor != nil {
+			s.auditor.LogUserAction("user.deleted", id, session.UserID, session.Username, "", ip, ua, true)
+		}
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
