@@ -6,6 +6,10 @@
 package api
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,17 +21,27 @@ import (
 	"modbridge/pkg/users"
 )
 
-// auditedTestServer builds a Server backed by an in-memory SQLite DB so that
-// auditor.GetLogs() works and userMgr.CreateUser succeeds (the existing
+// dbCounter ensures each test gets a unique temp DB file, avoiding collisions
+// when the full suite runs in parallel. We use a file (not :memory:) because
+// Go's database/sql pool may hand a handler a different connection than the
+// one that ran initExtendedSchema — and an un-shared :memory: DB is per-
+// connection, so the handler would see "no such table".
+var dbCounter int64
+
+// auditedTestServer builds a Server backed by a unique temp SQLite DB file so
+// that auditor.GetLogs() works and userMgr.CreateUser succeeds (the existing
 // proxyTestServer passes db=nil, leaving both auditor and userMgr nil).
-// Returns the server and a cleanup func that closes the auditor + DB + log.
+// Returns the server and a cleanup func that closes the auditor + DB + log
+// and removes the temp file.
 func auditedTestServer(t *testing.T) (*Server, func()) {
 	t.Helper()
 	log, err := logger.NewLogger("test.log", 100)
 	if err != nil {
 		t.Fatalf("logger: %v", err)
 	}
-	db, err := database.NewDB(":memory:")
+	n := atomic.AddInt64(&dbCounter, 1)
+	dbPath := filepath.Join(t.TempDir(), fmt.Sprintf("audit-test-%d.db", n))
+	db, err := database.NewDB(dbPath)
 	if err != nil {
 		t.Fatalf("db: %v", err)
 	}
@@ -42,6 +56,9 @@ func auditedTestServer(t *testing.T) (*Server, func()) {
 		}
 		db.Close()
 		log.Close()
+		os.Remove(dbPath)
+		os.Remove(dbPath + "-wal")
+		os.Remove(dbPath + "-shm")
 	}
 	return server, cleanup
 }

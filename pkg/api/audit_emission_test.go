@@ -7,22 +7,38 @@ package api
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"modbridge/pkg/config"
 	"modbridge/pkg/database"
 )
 
+// testPortCounter hands out distinct high ports so concurrent/sequential api
+// tests don't collide on a fixed port (a previous version used :15050, which
+// clashed when another package's proxy test ran first).
+var testPortCounter int32 = 20000
+
+// freeTestPort returns a distinct high port (20000+) for test proxies. We
+// don't rely on :0 because the config validator rejects port 0.
+func freeTestPort() string {
+	p := atomic.AddInt32(&testPortCounter, 1)
+	return ":" + strconv.Itoa(int(p))
+}
+
 // proxyConfig is a minimal valid ProxyConfig for audit tests. The proxy is
-// created disabled so no real listener is bound.
+// created disabled so no real listener is bound; the control tests enable it
+// explicitly via StartProxy and need a valid, collision-free listen port.
 func proxyConfig(id string) config.ProxyConfig {
 	return config.ProxyConfig{
 		ID:                id,
 		Name:              "test-" + id,
-		ListenAddr:        ":15050",
+		ListenAddr:        freeTestPort(),
 		TargetAddr:        "127.0.0.1:15050",
 		ConnectionTimeout: 10,
 		ReadTimeout:       30,
@@ -163,12 +179,47 @@ func proxyConfigJSON(pc config.ProxyConfig) string {
 	return string(b)
 }
 
+// startDummyTarget opens a listening TCP socket on an ephemeral port and
+// returns its "host:port" address plus a cleanup func. Some proxy operations
+// (StartProxy, restart) probe the target address; without a listener they
+// fail with "connection refused", which would make the audit tests fail for
+// reasons unrelated to the audit emission. The listener accepts and drops
+// connections in a goroutine.
+func startDummyTarget(t *testing.T) (string, func()) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("dummy target listen: %v", err)
+	}
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return // listener closed
+			}
+			conn.Close()
+		}
+	}()
+	return ln.Addr().String(), func() { ln.Close() }
+}
+
+// proxyConfigWithTarget is like proxyConfig but points at an explicit target
+// address (used by control tests that need StartProxy to succeed).
+func proxyConfigWithTarget(id, targetAddr string) config.ProxyConfig {
+	pc := proxyConfig(id)
+	pc.TargetAddr = targetAddr
+	return pc
+}
+
 func TestAuditProxyControl_StartStopRestartPauseResume(t *testing.T) {
 	server, cleanup := auditedTestServer(t)
 	defer cleanup()
 	token := sessionFor(t, server, "admin", "adminuser")
 
-	if err := server.mgr.AddProxy(proxyConfig("px-ctrl"), true); err != nil {
+	targetAddr, stopTarget := startDummyTarget(t)
+	defer stopTarget()
+
+	if err := server.mgr.AddProxy(proxyConfigWithTarget("px-ctrl", targetAddr), true); err != nil {
 		t.Fatalf("AddProxy: %v", err)
 	}
 
@@ -308,13 +359,16 @@ func TestAuditUser_CreateAndDelete(t *testing.T) {
 	}
 
 	target := func() string {
-		all, _ := server.userMgr.GetAllUsers()
+		all, err := server.userMgr.GetAllUsers()
+		if err != nil {
+			t.Fatalf("GetAllUsers: %v", err)
+		}
 		for _, u := range all {
 			if u.Username == "victim" {
 				return u.ID
 			}
 		}
-		t.Fatal("victim user not found after create")
+		t.Fatalf("victim user not found after create (status was %d, body %s, %d users total)", w.Code, w.Body.String(), len(all))
 		return ""
 	}()
 
