@@ -5,6 +5,7 @@
 *.so
 *.dylib
 modbridge
+modbridge-*
 modbusmanager
 modbusproxy
 
@@ -55,3 +56,6 @@ test_config.json
 venv/
 .gomodcache/
 .gocache/
+
+# AI assistant working directories
+.zcode/
