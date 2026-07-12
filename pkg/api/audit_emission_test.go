@@ -6,13 +6,30 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"modbridge/pkg/config"
 	"modbridge/pkg/database"
 )
+
+// proxyConfig is a minimal valid ProxyConfig for audit tests. The proxy is
+// created disabled so no real listener is bound.
+func proxyConfig(id string) config.ProxyConfig {
+	return config.ProxyConfig{
+		ID:                id,
+		Name:              "test-" + id,
+		ListenAddr:        ":15050",
+		TargetAddr:        "127.0.0.1:15050",
+		ConnectionTimeout: 10,
+		ReadTimeout:       30,
+		MaxRetries:        3,
+		Enabled:           false,
+	}
+}
 
 // findAuditEntry returns the first audit log entry matching action + success,
 // or nil if no such entry exists. The auditor is drained synchronously via
@@ -80,4 +97,58 @@ func TestAuditLogin_SuccessIsLogged(t *testing.T) {
 	if e.Username != "realuser" {
 		t.Errorf("Username = %q, want realuser", e.Username)
 	}
+}
+
+func TestAuditProxy_CreateSuccess(t *testing.T) {
+	server, cleanup := auditedTestServer(t)
+	defer cleanup()
+	token := sessionFor(t, server, "admin", "adminuser")
+
+	pc := proxyConfig("px-1")
+	body := proxyConfigJSON(pc)
+	req := httptest.NewRequest(http.MethodPost, "/api/proxies", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
+	w := httptest.NewRecorder()
+	server.handleProxies(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body: %s)", w.Code, w.Body.String())
+	}
+	e := findAuditEntry(t, server, "proxy.created", true)
+	if e == nil {
+		t.Fatal("proxy.created success not audited")
+	}
+	if e.ResourceID != "px-1" {
+		t.Errorf("ResourceID = %q, want px-1", e.ResourceID)
+	}
+}
+
+func TestAuditProxy_DeleteSuccess(t *testing.T) {
+	server, cleanup := auditedTestServer(t)
+	defer cleanup()
+	token := sessionFor(t, server, "admin", "adminuser")
+
+	// Create first so delete has something to remove.
+	if err := server.mgr.AddProxy(proxyConfig("px-del"), true); err != nil {
+		t.Fatalf("AddProxy: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/proxies?id=px-del", nil)
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
+	w := httptest.NewRecorder()
+	server.handleProxies(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	if findAuditEntry(t, server, "proxy.deleted", true) == nil {
+		t.Fatal("proxy.deleted success not audited")
+	}
+}
+
+// proxyConfigJSON marshals a ProxyConfig to JSON for request bodies.
+func proxyConfigJSON(pc config.ProxyConfig) string {
+	b, _ := json.Marshal(pc)
+	return string(b)
 }

@@ -1091,9 +1091,11 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.requirePermission(w, r, permission) == nil {
+	session := s.requirePermission(w, r, permission)
+	if session == nil {
 		return
 	}
+	ip, ua := requestMeta(r)
 
 	if s.mgr == nil {
 		http.Error(w, "Proxy manager unavailable", http.StatusServiceUnavailable)
@@ -1124,11 +1126,17 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := s.validator.ValidateProxyConfig(req); err != nil {
+			if s.auditor != nil {
+				s.auditor.LogProxyAction("proxy.created", req.ID, session.UserID, session.Username, req.Name, ip, ua, false)
+			}
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
 		if err := s.mgr.AddProxy(req, true); err != nil {
+			if s.auditor != nil {
+				s.auditor.LogProxyAction("proxy.created", req.ID, session.UserID, session.Username, req.Name, ip, ua, false)
+			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -1136,11 +1144,17 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 		if req.Enabled && !req.Paused {
 			if err := s.mgr.StartProxy(req.ID); err != nil {
 				s.log.Error(req.ID, fmt.Sprintf("Failed to start proxy after creation: %v", err))
+				if s.auditor != nil {
+					s.auditor.LogProxyAction("proxy.created", req.ID, session.UserID, session.Username, req.Name, ip, ua, false)
+				}
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 		}
 
+		if s.auditor != nil {
+			s.auditor.LogProxyAction("proxy.created", req.ID, session.UserID, session.Username, req.Name, ip, ua, true)
+		}
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -1157,15 +1171,24 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := s.validator.ValidateProxyConfig(req); err != nil {
+			if s.auditor != nil {
+				s.auditor.LogProxyAction("proxy.updated", req.ID, session.UserID, session.Username, req.Name, ip, ua, false)
+			}
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
 		if err := s.mgr.UpdateProxy(req); err != nil {
+			if s.auditor != nil {
+				s.auditor.LogProxyAction("proxy.updated", req.ID, session.UserID, session.Username, req.Name, ip, ua, false)
+			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
+		if s.auditor != nil {
+			s.auditor.LogProxyAction("proxy.updated", req.ID, session.UserID, session.Username, req.Name, ip, ua, true)
+		}
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -1173,8 +1196,14 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodDelete {
 		id := r.URL.Query().Get("id")
 		if err := s.mgr.RemoveProxy(id); err != nil {
+			if s.auditor != nil {
+				s.auditor.LogProxyAction("proxy.deleted", id, session.UserID, session.Username, id, ip, ua, false)
+			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+		if s.auditor != nil {
+			s.auditor.LogProxyAction("proxy.deleted", id, session.UserID, session.Username, id, ip, ua, true)
 		}
 		w.WriteHeader(http.StatusOK)
 		return
