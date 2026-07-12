@@ -85,6 +85,24 @@ func (s *Server) requirePermission(w http.ResponseWriter, r *http.Request, permi
 	return session
 }
 
+// requestMeta extracts the actor identity (IP, User-Agent) from a request for
+// audit logging. IP prefers X-Forwarded-For (first hop), falls back to the
+// host portion of RemoteAddr.
+func requestMeta(r *http.Request) (ip, userAgent string) {
+	userAgent = r.UserAgent()
+	ip = r.RemoteAddr
+	if h := r.Header.Get("X-Forwarded-For"); h != "" {
+		if idx := strings.Index(h, ","); idx > 0 {
+			ip = strings.TrimSpace(h[:idx])
+		} else {
+			ip = strings.TrimSpace(h)
+		}
+	} else if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		ip = host
+	}
+	return
+}
+
 // checkPortAvailable checks if a port is available for binding
 func checkPortAvailable(port string) error {
 	// Try to create a listener on the port
