@@ -777,3 +777,37 @@ func TestAuditor_LogLogin_WithReason(t *testing.T) {
 		t.Errorf("success ErrorMsg = %q, want empty", successEntry.ErrorMsg)
 	}
 }
+
+// TestMapActionToEventType_AllActions verifies that every action string used
+// by the API handlers maps to its typed EventType constant (so FileAuditLogger,
+// if ever enabled, emits typed events instead of generic fallback strings).
+func TestMapActionToEventType_AllActions(t *testing.T) {
+	cases := []struct {
+		action string
+		want   EventType
+	}{
+		{"user.login", EventAuthLogin},
+		{"user.logout", EventAuthLogout},
+		{"proxy.created", EventProxyCreated},
+		{"proxy.updated", EventProxyUpdated},
+		{"proxy.deleted", EventProxyDeleted},
+		{"proxy.started", EventProxyStarted},
+		{"proxy.stopped", EventProxyStopped},
+		{"proxy.restarted", EventProxyRestarted},
+		{"proxy.paused", EventProxyPaused},
+		{"proxy.resumed", EventProxyResumed},
+		{"config.updated", EventConfigUpdated},
+		{"config.imported", EventConfigImported},
+		{"user.created", EventUserCreated},
+		{"user.updated", EventUserUpdated},
+		{"user.deleted", EventUserDeleted},
+	}
+	for _, c := range cases {
+		t.Run(c.action, func(t *testing.T) {
+			got := mapActionToEventType(c.action)
+			if got != c.want {
+				t.Errorf("mapActionToEventType(%q) = %v, want %v", c.action, got, c.want)
+			}
+		})
+	}
+}

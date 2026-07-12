@@ -39,11 +39,14 @@ const (
 	EventUserRoleChange EventType = "user.role_changed"
 
 	// Proxy management events
-	EventProxyCreated EventType = "proxy.created"
-	EventProxyUpdated EventType = "proxy.updated"
-	EventProxyDeleted EventType = "proxy.deleted"
-	EventProxyStarted EventType = "proxy.started"
-	EventProxyStopped EventType = "proxy.stopped"
+	EventProxyCreated   EventType = "proxy.created"
+	EventProxyUpdated   EventType = "proxy.updated"
+	EventProxyDeleted   EventType = "proxy.deleted"
+	EventProxyStarted   EventType = "proxy.started"
+	EventProxyStopped   EventType = "proxy.stopped"
+	EventProxyRestarted EventType = "proxy.restarted"
+	EventProxyPaused    EventType = "proxy.paused"
+	EventProxyResumed   EventType = "proxy.resumed"
 
 	// Configuration events
 	EventConfigUpdated  EventType = "config.updated"
@@ -647,12 +650,30 @@ func mapActionToEventType(action string) EventType {
 		return EventAuthLogout
 	case "proxy.created":
 		return EventProxyCreated
+	case "proxy.updated":
+		return EventProxyUpdated
+	case "proxy.deleted":
+		return EventProxyDeleted
 	case "proxy.started":
 		return EventProxyStarted
 	case "proxy.stopped":
 		return EventProxyStopped
+	case "proxy.restarted":
+		return EventProxyRestarted
+	case "proxy.paused":
+		return EventProxyPaused
+	case "proxy.resumed":
+		return EventProxyResumed
 	case "config.updated":
 		return EventConfigUpdated
+	case "config.imported":
+		return EventConfigImported
+	case "user.created":
+		return EventUserCreated
+	case "user.updated":
+		return EventUserUpdated
+	case "user.deleted":
+		return EventUserDeleted
 	default:
 		return EventType(action)
 	}
