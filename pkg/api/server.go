@@ -1216,9 +1216,11 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.requirePermission(w, r, rbac.PermProxyControl) == nil {
+	session := s.requirePermission(w, r, rbac.PermProxyControl)
+	if session == nil {
 		return
 	}
+	ip, ua := requestMeta(r)
 
 	var req struct {
 		ID     string `json:"id"`
@@ -1258,10 +1260,52 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
+		if s.auditor != nil {
+			auditAction := actionForAudit(req.Action)
+			if isBulkAction(req.Action) {
+				s.auditor.LogAction("proxy."+req.Action, "proxy", "", session.UserID, session.Username, "", ip, ua, false, err.Error())
+			} else {
+				s.auditor.LogProxyAction(auditAction, req.ID, session.UserID, session.Username, "", ip, ua, false)
+			}
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if s.auditor != nil {
+		if isBulkAction(req.Action) {
+			s.auditor.LogAction("proxy."+req.Action, "proxy", "", session.UserID, session.Username, "", ip, ua, true, "")
+		} else {
+			s.auditor.LogProxyAction(actionForAudit(req.Action), req.ID, session.UserID, session.Username, "", ip, ua, true)
+		}
+	}
 	w.WriteHeader(http.StatusOK)
+}
+
+// actionForAudit maps a proxy-control action to its audit action string.
+func actionForAudit(action string) string {
+	switch action {
+	case "start":
+		return "proxy.started"
+	case "stop":
+		return "proxy.stopped"
+	case "restart":
+		return "proxy.restarted"
+	case "pause":
+		return "proxy.paused"
+	case "resume":
+		return "proxy.resumed"
+	default:
+		return "proxy." + action
+	}
+}
+
+// isBulkAction reports whether the action targets all proxies (no single ID).
+func isBulkAction(action string) bool {
+	switch action {
+	case "start_all", "stop_all", "restart_all":
+		return true
+	}
+	return false
 }
 
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {

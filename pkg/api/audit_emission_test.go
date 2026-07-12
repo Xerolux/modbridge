@@ -32,25 +32,35 @@ func proxyConfig(id string) config.ProxyConfig {
 }
 
 // findAuditEntry returns the first audit log entry matching action + success,
-// or nil if no such entry exists. The auditor is drained synchronously via
-// Close() before reading.
+// or nil if no such entry exists. It drains the auditor once (idempotent) and
+// reads from the DB. NOTE: after the first call, the auditor buffer is closed;
+// further emits from handlers will be discarded. For tests that issue multiple
+// actions before asserting, collect the logs once via auditEntries and search
+// in-memory.
 func findAuditEntry(t *testing.T, server *Server, action string, success bool) *database.AuditLogEntry {
 	t.Helper()
-	if server.auditor == nil {
-		t.Fatal("server.auditor is nil; use auditedTestServer")
-	}
-	// Drain the async buffer so all emitted entries are persisted.
-	server.auditor.Close()
-	logs, err := server.auditor.GetLogs(500, 0)
-	if err != nil {
-		t.Fatalf("GetLogs: %v", err)
-	}
-	for _, e := range logs {
+	for _, e := range auditEntries(t, server) {
 		if e.Action == action && e.Success == success {
 			return e
 		}
 	}
 	return nil
+}
+
+// auditEntries drains the auditor (idempotent) and returns all persisted
+// entries. Safe to call multiple times: the first call drains, subsequent
+// calls just re-read the DB.
+func auditEntries(t *testing.T, server *Server) []*database.AuditLogEntry {
+	t.Helper()
+	if server.auditor == nil {
+		t.Fatal("server.auditor is nil; use auditedTestServer")
+	}
+	server.auditor.Close()
+	logs, err := server.auditor.GetLogs(500, 0)
+	if err != nil {
+		t.Fatalf("GetLogs: %v", err)
+	}
+	return logs
 }
 
 func TestAuditLogin_FailureIsLogged(t *testing.T) {
@@ -151,4 +161,84 @@ func TestAuditProxy_DeleteSuccess(t *testing.T) {
 func proxyConfigJSON(pc config.ProxyConfig) string {
 	b, _ := json.Marshal(pc)
 	return string(b)
+}
+
+func TestAuditProxyControl_StartStopRestartPauseResume(t *testing.T) {
+	server, cleanup := auditedTestServer(t)
+	defer cleanup()
+	token := sessionFor(t, server, "admin", "adminuser")
+
+	if err := server.mgr.AddProxy(proxyConfig("px-ctrl"), true); err != nil {
+		t.Fatalf("AddProxy: %v", err)
+	}
+
+	actions := []struct {
+		act, auditAction string
+	}{
+		{"start", "proxy.started"},
+		{"stop", "proxy.stopped"},
+		{"start", "proxy.started"},
+		{"restart", "proxy.restarted"},
+		{"pause", "proxy.paused"},
+		{"resume", "proxy.resumed"},
+	}
+	// Execute ALL actions before draining the auditor (findAuditEntry closes
+	// the auditor on first call, which would discard later emits).
+	for _, a := range actions {
+		body := `{"id":"px-ctrl","action":"` + a.act + `"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/proxies/control", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
+		w := httptest.NewRecorder()
+		server.handleProxyControl(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("action %s: status %d, body %s", a.act, w.Code, w.Body.String())
+		}
+	}
+	// Now drain once and check all expected entries are present.
+	logs := auditEntries(t, server)
+	for _, a := range actions {
+		found := false
+		for _, e := range logs {
+			if e.Action == a.auditAction && e.Success {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("action %s: no %s success entry audited", a.act, a.auditAction)
+		}
+	}
+}
+
+func TestAuditProxyControl_BulkActions(t *testing.T) {
+	server, cleanup := auditedTestServer(t)
+	defer cleanup()
+	token := sessionFor(t, server, "admin", "adminuser")
+
+	// Execute all bulk actions before draining the auditor.
+	for _, a := range []string{"start_all", "stop_all", "restart_all"} {
+		body := `{"id":"","action":"` + a + `"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/proxies/control", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
+		w := httptest.NewRecorder()
+		server.handleProxyControl(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s: status %d", a, w.Code)
+		}
+	}
+	logs := auditEntries(t, server)
+	for _, a := range []string{"start_all", "stop_all", "restart_all"} {
+		found := false
+		for _, e := range logs {
+			if e.Action == "proxy."+a && e.Success {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("%s not audited", a)
+		}
+	}
 }
