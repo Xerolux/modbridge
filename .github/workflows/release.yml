@@ -181,7 +181,7 @@ jobs:
     if: always() && (needs.prepare.outputs.valid == 'true' || needs.resolve-tag.outputs.valid == 'true')
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -232,7 +232,7 @@ jobs:
             cc: aarch64-linux-gnu-gcc
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -294,7 +294,7 @@ jobs:
             cc: arm-linux-gnueabihf-gcc
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
