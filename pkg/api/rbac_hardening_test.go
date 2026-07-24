@@ -68,6 +68,24 @@ func TestRBAC_ConfigImport_BenutzerDenied(t *testing.T) {
 	denyWith(t, server, "benutzer", "u5", server.handleConfigImport, http.MethodPost, "/api/config/import")
 }
 
+func TestRBAC_ConfigSystemEdit_BenutzerDenied(t *testing.T) {
+	server, cleanup := auditedTestServer(t)
+	defer cleanup()
+	denyWith(t, server, "benutzer", "config-editor", server.handleSystemConfig, http.MethodPut, "/api/config/system")
+}
+
+func TestRBAC_ConfigRollback_BenutzerDenied(t *testing.T) {
+	server, cleanup := auditedTestServer(t)
+	defer cleanup()
+	denyWith(t, server, "benutzer", "config-rollback", server.handleConfigRollback, http.MethodPost, "/api/config/rollback")
+}
+
+func TestRBAC_WebPortEdit_BenutzerDenied(t *testing.T) {
+	server, cleanup := auditedTestServer(t)
+	defer cleanup()
+	denyWith(t, server, "benutzer", "webport-editor", server.handleWebPort, http.MethodPut, "/api/config/webport")
+}
+
 func TestRBAC_SystemRestart_BenutzerDenied(t *testing.T) {
 	server, cleanup := auditedTestServer(t)
 	defer cleanup()

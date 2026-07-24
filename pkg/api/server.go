@@ -1433,6 +1433,19 @@ func (s *Server) handleSystemRestart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleWebPort(w http.ResponseWriter, r *http.Request) {
+	permissionByMethod := map[string]rbac.Permission{
+		http.MethodGet: rbac.PermConfigView,
+		http.MethodPut: rbac.PermConfigEdit,
+	}
+	permission, exists := permissionByMethod[r.Method]
+	if !exists {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.requirePermission(w, r, permission) == nil {
+		return
+	}
+
 	if r.Method == http.MethodGet {
 		cfg := s.cfgMgr.Get()
 		w.Header().Set("Content-Type", "application/json")
@@ -1479,6 +1492,4 @@ func (s *Server) handleWebPort(w http.ResponseWriter, r *http.Request) {
 		s.writeJSON(w, map[string]string{"status": "ok", "message": "Port updated, restart required"})
 		return
 	}
-
-	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }
