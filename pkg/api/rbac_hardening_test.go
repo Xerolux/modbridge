@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 // These tests verify that endpoints previously guarded only by authMW (session
@@ -35,6 +36,21 @@ func denyWith(t *testing.T, server *Server, role, username string, fn func(w htt
 	fn(w, req)
 	if w.Code != http.StatusForbidden {
 		t.Errorf("%s on %s: got %d, want 403", role, target, w.Code)
+	}
+}
+
+func denyUnknownRoleWith(t *testing.T, server *Server, fn func(w http.ResponseWriter, r *http.Request), target string) {
+	t.Helper()
+	token, err := server.auth.CreateSession("unknown-role", "unknown-role", "unknown", time.Hour, false)
+	if err != nil {
+		t.Fatalf("CreateSession(unknown): %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
+	w := httptest.NewRecorder()
+	fn(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("unknown role on %s: got %d, want 403", target, w.Code)
 	}
 }
 
@@ -102,6 +118,24 @@ func TestRBAC_PortRelease_BenutzerDenied(t *testing.T) {
 	server, cleanup := auditedTestServer(t)
 	defer cleanup()
 	denyWith(t, server, "benutzer", "port-release", server.handlePortRelease, http.MethodPost, "/api/system/ports/release")
+}
+
+func TestRBAC_ProxyStream_UnknownRoleDenied(t *testing.T) {
+	server, cleanup := auditedTestServer(t)
+	defer cleanup()
+	denyUnknownRoleWith(t, server, server.handleProxiesStream, "/api/proxies/stream")
+}
+
+func TestRBAC_DeviceHistory_UnknownRoleDenied(t *testing.T) {
+	server, cleanup := auditedTestServer(t)
+	defer cleanup()
+	denyUnknownRoleWith(t, server, server.handleDeviceHistory, "/api/devices/history")
+}
+
+func TestRBAC_ConnectivityCheck_UnknownRoleDenied(t *testing.T) {
+	server, cleanup := auditedTestServer(t)
+	defer cleanup()
+	denyUnknownRoleWith(t, server, server.handleProxyConnectivityCheck, "/api/system/diagnostics/connectivity")
 }
 
 func TestRBAC_UpdateStatus_BenutzerDenied(t *testing.T) {

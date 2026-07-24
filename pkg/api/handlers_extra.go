@@ -461,6 +461,9 @@ func (s *Server) handleProxyConnectivityCheck(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if s.requirePermission(w, r, rbac.PermSystemView) == nil {
+		return
+	}
 
 	cfg := s.cfgMgr.Get()
 	results := make(map[string]map[string]interface{})

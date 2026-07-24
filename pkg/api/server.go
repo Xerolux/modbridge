@@ -1040,6 +1040,13 @@ func (s *Server) requirePermissionForUserRoute(w http.ResponseWriter, r *http.Re
 
 // handleProxiesStream streams proxy updates via SSE
 func (s *Server) handleProxiesStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.requirePermission(w, r, rbac.PermProxyView) == nil {
+		return
+	}
 	if s.mgr == nil {
 		http.Error(w, "Proxy manager unavailable", http.StatusServiceUnavailable)
 		return

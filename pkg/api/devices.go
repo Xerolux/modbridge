@@ -63,6 +63,9 @@ func (s *Server) handleDeviceHistory(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if s.requirePermission(w, r, rbac.PermDeviceView) == nil {
+		return
+	}
 
 	// Get query parameters
 	deviceIP := r.URL.Query().Get("device_ip")
