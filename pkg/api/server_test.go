@@ -82,6 +82,18 @@ func TestHandleStatus(t *testing.T) {
 	}
 }
 
+func TestWriteSSEHeartbeatUsesNamedEvent(t *testing.T) {
+	var output strings.Builder
+	if err := writeSSEHeartbeat(&output); err != nil {
+		t.Fatalf("writeSSEHeartbeat returned error: %v", err)
+	}
+
+	const expected = "event: heartbeat\ndata: {}\n\n"
+	if output.String() != expected {
+		t.Fatalf("heartbeat = %q, want %q", output.String(), expected)
+	}
+}
+
 // proxyTestServer returns a server and an admin session cookie for use in
 // handler tests that now require RBAC checks.
 func proxyTestServer(t *testing.T) (*Server, *manager.Manager, string) {

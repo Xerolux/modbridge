@@ -205,6 +205,8 @@ const liveStale = ref(false);
 let sseDisconnect = null;
 let sseWatchdogStop = null;
 let unwatchData = null;
+let unwatchConnected = null;
+let unwatchLiveness = null;
 let gridInitialized = false;
 let fetchVersion = 0;
 // SSE update batching — coalesce rapid updates into a single rAF flush
@@ -339,7 +341,7 @@ onMounted(async () => {
     const { data, disconnect, isConnected, lastMessageAt } = useEventSource('/api/proxies/stream');
     sseDisconnect = disconnect;
 
-    watch(isConnected, (val) => { sseConnected.value = val; });
+    unwatchConnected = watch(isConnected, (val) => { sseConnected.value = val; });
 
     // Polling fallback: if SSE drops or stops delivering data for >30s, poll
     // /api/proxies periodically so the dashboard never freezes on stale data.
@@ -357,7 +359,7 @@ onMounted(async () => {
     watchdogTimer = setInterval(checkLiveness, 15000);
     sseWatchdogStop = () => { if (watchdogTimer) clearInterval(watchdogTimer); };
     // Also react immediately when connectivity toggles.
-    watch(isConnected, () => checkLiveness());
+    unwatchLiveness = watch(isConnected, () => checkLiveness());
 
     const flushSSEUpdates = () => {
       pendingSSEUpdates.forEach((proxyData) => updateProxyCollection(proxyData));
@@ -403,6 +405,8 @@ const handleResize = debounce(() => {
 
 onUnmounted(() => {
   if (unwatchData) unwatchData();
+  if (unwatchConnected) unwatchConnected();
+  if (unwatchLiveness) unwatchLiveness();
   if (sseBatchFrame) cancelAnimationFrame(sseBatchFrame);
   if (sseWatchdogStop) sseWatchdogStop();
   window.removeEventListener('resize', handleResize);

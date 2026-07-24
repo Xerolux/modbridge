@@ -483,6 +483,11 @@ func getFloat64MetricValue(v interface{}) float64 {
 	return 0
 }
 
+func writeSSEHeartbeat(w io.Writer) error {
+	_, err := io.WriteString(w, "event: heartbeat\ndata: {}\n\n")
+	return err
+}
+
 // multiUserEnabled reports whether DB-backed multi-user authentication is
 // active. It requires a working user manager and is enabled either via the
 // config flag or the MODBRIDGE_MULTI_USER environment override.
@@ -1076,7 +1081,7 @@ func (s *Server) handleProxiesStream(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-heartbeat.C:
-			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
+			if err := writeSSEHeartbeat(w); err != nil {
 				return
 			}
 			flusher.Flush()
@@ -1380,7 +1385,7 @@ func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-heartbeat.C:
-			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
+			if err := writeSSEHeartbeat(w); err != nil {
 				return
 			}
 			flusher.Flush()
