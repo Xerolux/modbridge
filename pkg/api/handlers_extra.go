@@ -302,6 +302,9 @@ func (s *Server) handlePortDiagnostics(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if s.requirePermission(w, r, rbac.PermSystemManage) == nil {
+		return
+	}
 
 	var req struct {
 		Ports []int `json:"ports"`
@@ -329,6 +332,9 @@ func (s *Server) handlePortDiagnostics(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlePortRelease(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.requirePermission(w, r, rbac.PermSystemManage) == nil {
 		return
 	}
 

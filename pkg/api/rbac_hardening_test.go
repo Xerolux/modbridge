@@ -92,6 +92,18 @@ func TestRBAC_SystemRestart_BenutzerDenied(t *testing.T) {
 	denyWith(t, server, "benutzer", "u6", server.handleSystemRestart, http.MethodPost, "/api/system/restart")
 }
 
+func TestRBAC_PortDiagnostics_BenutzerDenied(t *testing.T) {
+	server, cleanup := auditedTestServer(t)
+	defer cleanup()
+	denyWith(t, server, "benutzer", "port-diagnostics", server.handlePortDiagnostics, http.MethodPost, "/api/system/ports/diagnostics")
+}
+
+func TestRBAC_PortRelease_BenutzerDenied(t *testing.T) {
+	server, cleanup := auditedTestServer(t)
+	defer cleanup()
+	denyWith(t, server, "benutzer", "port-release", server.handlePortRelease, http.MethodPost, "/api/system/ports/release")
+}
+
 func TestRBAC_UpdateStatus_BenutzerDenied(t *testing.T) {
 	server, cleanup := auditedTestServer(t)
 	defer cleanup()
