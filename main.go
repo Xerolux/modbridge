@@ -87,7 +87,13 @@ func main() {
 	resetPasswordUser := flag.String("reset-password", "", "generate a new one-time password for the named local user, then exit")
 	enableAccountRecovery := flag.Bool("enable-account-recovery", false, "enable a 15-minute WebUI recovery for the local admin, then exit")
 	recoveryUser := flag.String("recovery-user", "", "admin username to recover when more than one administrator exists")
+	showVersion := flag.Bool("version", false, "print version and build time, then exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(Version)
+		return
+	}
 
 	// 1. Database
 	db, err := database.NewDB("modbridge.db")

@@ -185,7 +185,9 @@ compare_versions() {
 
 get_current_version() {
     is_modbridge_installed || { echo ""; return; }
-    "$INSTALL_DIR/modbridge" -version 2>/dev/null || echo "unbekannt"
+    local V
+    V=$("$INSTALL_DIR/modbridge" -version 2>/dev/null | head -1 | tr -d '[:space:]')
+    [ -n "$V" ] && echo "$V" || echo "unbekannt"
 }
 
 get_latest_version() {
