@@ -72,6 +72,7 @@ type ProxyConfig struct {
 	MaxRetries        int          `json:"max_retries"`        // Max retry attempts (default: 3)
 	Description       string       `json:"description"`        // User description
 	MaxReadSize       int          `json:"max_read_size"`
+	ConnectDelayMs    int          `json:"connect_delay_ms"` // Delay after TCP connect before first request (ms). For slow devices like Huawei inverters/sDongles.
 	Tags              FlexibleTags `json:"tags"`
 	// Protocol controls the wire format used when talking to the target.
 	// "tcp"     – standard Modbus TCP (MBAP header, default)

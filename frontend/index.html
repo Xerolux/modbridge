@@ -40,16 +40,9 @@
 
     <!-- Author -->
     <meta name="author" content="ModBridge Team" />
+    <script src="/theme-bootstrap.js"></script>
   </head>
   <body>
-    <!-- Inline theme bootstrap — runs before first paint to prevent dark/light flash -->
-    <script>
-      (function () {
-        var t = localStorage.getItem('theme');
-        if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        document.documentElement.classList.add(t);
-      })();
-    </script>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>

@@ -10,6 +10,7 @@
       </div>
       <div class="flex gap-2 w-full sm:w-auto">
         <Button
+          v-if="auth.hasPermission('audit:export')"
           label="Export JSON"
           icon="pi pi-download"
           severity="success"
@@ -129,10 +130,12 @@ import Button from 'primevue/button';
 import Tag from 'primevue/tag';
 import Toast from 'primevue/toast';
 import { useToast } from 'primevue/usetoast';
+import { useAuthStore } from '../../stores/auth';
 import { useAutoRefresh } from '../../utils/useAutoRefresh';
 import { REFRESH_INTERVALS } from '../../utils/constants';
 
 const { t } = useI18n();
+const auth = useAuthStore();
 
 const auditLogs = ref([]);
 const loading = ref(true);

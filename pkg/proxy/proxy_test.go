@@ -11,6 +11,7 @@ import (
 	"net"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestSplitLogic_Integration(t *testing.T) {
@@ -100,6 +101,98 @@ func TestSplitLogic_Integration(t *testing.T) {
 		if b != 0xAA {
 			t.Errorf("Byte %d mismatch: got %x, want AA", i, b)
 		}
+	}
+}
+
+func TestProxyInstance_ConnectDelay(t *testing.T) {
+	// Track timing of when the target accepts a connection vs. when it first
+	// receives bytes. With ConnectDelay set, there should be a measurable gap
+	// on a fresh outbound connection (the pool pre-warms exactly one).
+	var (
+		acceptNs    int64
+		firstByteNs int64
+	)
+
+	targetListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start mock target: %v", err)
+	}
+	defer targetListener.Close()
+
+	go func() {
+		for {
+			conn, err := targetListener.Accept()
+			if err != nil {
+				return
+			}
+			atomic.StoreInt64(&acceptNs, time.Now().UnixNano())
+			go func(c net.Conn) {
+				defer c.Close()
+				frame, err := modbus.ReadFrame(c)
+				if err != nil {
+					return
+				}
+				atomic.StoreInt64(&firstByteNs, time.Now().UnixNano())
+				txID, unitID, fc, _, quantity, perr := modbus.ParseReadRequest(frame)
+				if perr != nil {
+					return
+				}
+				data := make([]byte, quantity*2)
+				for i := range data {
+					data[i] = 0xAA
+				}
+				resp, _ := modbus.CreateReadResponse(txID, unitID, fc, data)
+				_, _ = c.Write(resp)
+			}(conn)
+		}
+	}()
+
+	proxyListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start proxy listener: %v", err)
+	}
+	proxyAddr := proxyListener.Addr().String()
+	proxyListener.Close()
+
+	const delay = 150 * time.Millisecond
+	l := logger.NewNullLogger(100)
+	p := NewProxyInstance("delay-test", "delay-test", proxyAddr, targetListener.Addr().String(), 10, 5, 5, 3, l, nil)
+	p.ConnectDelay = delay
+
+	if err := p.Start(); err != nil {
+		t.Fatalf("Failed to start proxy: %v", err)
+	}
+	defer p.Stop()
+
+	conn, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("Failed to connect to proxy: %v", err)
+	}
+	defer conn.Close()
+
+	req := modbus.CreateReadRequest(1, 1, 3, 0, 5)
+	if _, err := conn.Write(req); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+	if _, err := modbus.ReadFrame(conn); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+
+	accept := atomic.LoadInt64(&acceptNs)
+	first := atomic.LoadInt64(&firstByteNs)
+	if accept == 0 || first == 0 {
+		t.Fatalf("target did not observe connection (accept=%d firstByte=%d)", accept, first)
+	}
+
+	gap := time.Duration(first - accept)
+	// The gap should be at least the configured delay. Allow a small tolerance
+	// for clock granularity, and a generous upper bound to catch regressions
+	// where the delay is applied in the wrong place.
+	if gap < delay-30*time.Millisecond {
+		t.Errorf("connect delay not applied: gap=%v, want >= %v", gap, delay-30*time.Millisecond)
+	}
+	if gap > 5*time.Second {
+		t.Errorf("connect delay unexpectedly large: gap=%v", gap)
 	}
 }
 

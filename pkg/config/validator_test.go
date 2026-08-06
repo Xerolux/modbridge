@@ -255,6 +255,41 @@ func TestValidator_RetryValidation(t *testing.T) {
 	}
 }
 
+func TestValidator_ConnectDelayValidation(t *testing.T) {
+	tests := []struct {
+		name           string
+		connectDelayMs int
+		wantErr        bool
+	}{
+		{"negative connect delay", -1, true},
+		{"connect delay too high", 60001, true},
+		{"zero connect delay (allowed)", 0, false},
+		{"small delay (Huawei typical)", 300, false},
+		{"max delay", 60000, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewValidator()
+			cfg := getValidBaseConfig()
+			cfg.Proxies = []ProxyConfig{
+				{
+					ID:             "test-proxy",
+					Name:           "Test Proxy",
+					ListenAddr:     ":8080",
+					TargetAddr:     "localhost:502",
+					ConnectDelayMs: tt.connectDelayMs,
+				},
+			}
+
+			err := v.Validate(&cfg)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestValidator_IPValidation(t *testing.T) {
 	tests := []struct {
 		name  string

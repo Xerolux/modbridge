@@ -37,12 +37,16 @@ export function useEventSource(url, options = {}) {
       });
 
       eventSource.value.onopen = () => {
-        // Note: isConnected is intentionally NOT set here. A freshly opened
-        // connection that never delivers data would otherwise look "live". We
-        // only mark connected once the first message actually arrives.
+        isConnected.value = true;
+        lastMessageAt.value = Date.now();
         error.value = null;
         reconnectAttempts = 0;
       };
+
+      eventSource.value.addEventListener('heartbeat', () => {
+        isConnected.value = true;
+        lastMessageAt.value = Date.now();
+      });
 
       eventSource.value.onmessage = (event) => {
         if (!isConnected.value) {
@@ -64,13 +68,16 @@ export function useEventSource(url, options = {}) {
         if (manualClose) return;
         if (reconnecting) return;
 
+        // EventSource retries automatically unless it is closed. We own the
+        // retry schedule below so only one connection attempt can be active.
+        if (eventSource.value) {
+          eventSource.value.close();
+          eventSource.value = null;
+        }
+
         // Stop retrying after max attempts to prevent infinite loops
         if (reconnectAttempts >= maxReconnectAttempts) {
           error.value = new Error(`SSE: Max reconnect attempts (${maxReconnectAttempts}) reached`);
-          if (eventSource.value) {
-            eventSource.value.close();
-            eventSource.value = null;
-          }
           return;
         }
 

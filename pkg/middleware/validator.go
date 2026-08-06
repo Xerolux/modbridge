@@ -113,6 +113,15 @@ func (v *Validator) ValidateProxyConfig(cfg config.ProxyConfig) error {
 		})
 	}
 
+	// Validate Connect Delay (ms). 0 = disabled. Required by some devices
+	// (e.g. Huawei inverters/sDongles) that need a pause after TCP connect.
+	if cfg.ConnectDelayMs < 0 || cfg.ConnectDelayMs > 60000 {
+		errs = append(errs, &ValidationError{
+			Field:   "connect_delay_ms",
+			Message: "must be between 0 and 60000 ms",
+		})
+	}
+
 	if len(errs) > 0 {
 		return v.combineErrors(errs)
 	}

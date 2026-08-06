@@ -33,6 +33,13 @@ on:
         type: boolean
         default: false
 
+# Serialize release runs per ref: a manual dispatch while a tag-triggered run
+# is in flight must wait, not cancel — two runs publishing the same tag would
+# race. Cancelling is disabled because release steps are not idempotent.
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -45,6 +52,7 @@ jobs:
     name: Prepare Release
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       tag: ${{ steps.compute.outputs.tag }}
       prerelease: ${{ steps.compute.outputs.prerelease }}
@@ -177,6 +185,7 @@ jobs:
   test:
     name: Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [prepare, resolve-tag]
     if: always() && (needs.prepare.outputs.valid == 'true' || needs.resolve-tag.outputs.valid == 'true')
     steps:
@@ -193,6 +202,7 @@ jobs:
   build-frontend:
     name: Build Frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [prepare, resolve-tag]
     if: always() && (needs.prepare.outputs.valid == 'true' || needs.resolve-tag.outputs.valid == 'true')
     steps:
@@ -213,6 +223,7 @@ jobs:
 
   build-binaries:
     name: Build (${{ matrix.suffix }})
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     needs: [prepare, resolve-tag, test, build-frontend]
     if: always() && needs.test.result == 'success' && needs.build-frontend.result == 'success'
@@ -269,6 +280,7 @@ jobs:
 
   build-headless:
     name: Headless (${{ matrix.suffix }})
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     needs: [prepare, resolve-tag, test]
     if: always() && needs.test.result == 'success'
@@ -328,6 +340,7 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [prepare, resolve-tag, build-binaries, build-headless]
     if: always() && needs.build-binaries.result == 'success' && needs.build-headless.result == 'success'
     steps:

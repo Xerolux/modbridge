@@ -84,6 +84,9 @@ func (s *Server) handleConfigRollback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if s.requirePermission(w, r, rbac.PermConfigEdit) == nil {
+		return
+	}
 
 	if !s.cfgMgr.CanRollback() {
 		http.Error(w, "no previous configuration available for rollback", http.StatusConflict)
@@ -161,6 +164,19 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSystemConfig(w http.ResponseWriter, r *http.Request) {
+	permissionByMethod := map[string]rbac.Permission{
+		http.MethodGet: rbac.PermConfigView,
+		http.MethodPut: rbac.PermConfigEdit,
+	}
+	permission, exists := permissionByMethod[r.Method]
+	if !exists {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.requirePermission(w, r, permission) == nil {
+		return
+	}
+
 	if r.Method == http.MethodGet {
 		cfg := s.cfgMgr.Get()
 		// Sanitize sensitive fields before sending to client
@@ -231,8 +247,6 @@ func (s *Server) handleSystemConfig(w http.ResponseWriter, r *http.Request) {
 		s.writeJSON(w, map[string]string{"status": "ok"})
 		return
 	}
-
-	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }
 
 var startTime time.Time
@@ -288,6 +302,9 @@ func (s *Server) handlePortDiagnostics(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if s.requirePermission(w, r, rbac.PermSystemManage) == nil {
+		return
+	}
 
 	var req struct {
 		Ports []int `json:"ports"`
@@ -315,6 +332,9 @@ func (s *Server) handlePortDiagnostics(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlePortRelease(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.requirePermission(w, r, rbac.PermSystemManage) == nil {
 		return
 	}
 
@@ -439,6 +459,9 @@ func countFreePortsInMap(results map[int]*portmanager.PortInfo) int {
 func (s *Server) handleProxyConnectivityCheck(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.requirePermission(w, r, rbac.PermSystemView) == nil {
 		return
 	}
 

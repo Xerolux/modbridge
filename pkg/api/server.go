@@ -483,6 +483,11 @@ func getFloat64MetricValue(v interface{}) float64 {
 	return 0
 }
 
+func writeSSEHeartbeat(w io.Writer) error {
+	_, err := io.WriteString(w, "event: heartbeat\ndata: {}\n\n")
+	return err
+}
+
 // multiUserEnabled reports whether DB-backed multi-user authentication is
 // active. It requires a working user manager and is enabled either via the
 // config flag or the MODBRIDGE_MULTI_USER environment override.
@@ -1040,6 +1045,13 @@ func (s *Server) requirePermissionForUserRoute(w http.ResponseWriter, r *http.Re
 
 // handleProxiesStream streams proxy updates via SSE
 func (s *Server) handleProxiesStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.requirePermission(w, r, rbac.PermProxyView) == nil {
+		return
+	}
 	if s.mgr == nil {
 		http.Error(w, "Proxy manager unavailable", http.StatusServiceUnavailable)
 		return
@@ -1069,7 +1081,7 @@ func (s *Server) handleProxiesStream(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-heartbeat.C:
-			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
+			if err := writeSSEHeartbeat(w); err != nil {
 				return
 			}
 			flusher.Flush()
@@ -1243,8 +1255,9 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 	ip, ua := requestMeta(r)
 
 	var req struct {
-		ID     string `json:"id"`
-		Action string `json:"action"` // start, stop, restart, pause, resume, start_all, stop_all
+		ID     string   `json:"id"`
+		Action string   `json:"action"` // start, stop, restart, pause, resume, start_all, stop_all
+		IDs    []string `json:"ids"`    // optional: restrict bulk actions to these proxy IDs
 	}
 	if err := decodeJSON(w, r, &req); err != nil {
 		writeJSONDecodeError(w, err)
@@ -1268,13 +1281,29 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 	case "resume":
 		err = s.mgr.ResumeProxy(req.ID)
 	case "start_all":
-		s.mgr.StartAll()
+		if len(req.IDs) > 0 {
+			err = s.mgr.StartProxies(req.IDs)
+		} else {
+			s.mgr.StartAll()
+		}
 	case "stop_all":
-		s.mgr.StopAll()
+		if len(req.IDs) > 0 {
+			err = s.mgr.StopProxies(req.IDs)
+		} else {
+			s.mgr.StopAll()
+		}
 	case "restart_all":
-		s.mgr.StopAll()
-		time.Sleep(100 * time.Millisecond)
-		s.mgr.StartAll()
+		if len(req.IDs) > 0 {
+			if err = s.mgr.StopProxies(req.IDs); err != nil {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+			err = s.mgr.StartProxies(req.IDs)
+		} else {
+			s.mgr.StopAll()
+			time.Sleep(100 * time.Millisecond)
+			s.mgr.StartAll()
+		}
 	default:
 		err = fmt.Errorf("unknown action")
 	}
@@ -1373,7 +1402,7 @@ func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-heartbeat.C:
-			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
+			if err := writeSSEHeartbeat(w); err != nil {
 				return
 			}
 			flusher.Flush()
@@ -1433,6 +1462,19 @@ func (s *Server) handleSystemRestart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleWebPort(w http.ResponseWriter, r *http.Request) {
+	permissionByMethod := map[string]rbac.Permission{
+		http.MethodGet: rbac.PermConfigView,
+		http.MethodPut: rbac.PermConfigEdit,
+	}
+	permission, exists := permissionByMethod[r.Method]
+	if !exists {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.requirePermission(w, r, permission) == nil {
+		return
+	}
+
 	if r.Method == http.MethodGet {
 		cfg := s.cfgMgr.Get()
 		w.Header().Set("Content-Type", "application/json")
@@ -1479,6 +1521,4 @@ func (s *Server) handleWebPort(w http.ResponseWriter, r *http.Request) {
 		s.writeJSON(w, map[string]string{"status": "ok", "message": "Port updated, restart required"})
 		return
 	}
-
-	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }

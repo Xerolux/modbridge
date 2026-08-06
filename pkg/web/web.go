@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+
+	"modbridge/pkg/middleware"
 )
 
 //go:embed dist
@@ -27,7 +29,7 @@ func Handler() (http.Handler, error) {
 	}
 
 	// Use a custom handler for SPA support
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spaHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/")
 		if path == "" {
 			path = "index.html"
@@ -75,5 +77,8 @@ func Handler() (http.Handler, error) {
 		}
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = w.Write(content) // Ignore write error (already committed response)
-	}), nil
+	})
+
+	security := middleware.NewSecurityMiddleware()
+	return security.Middleware(spaHandler), nil
 }
