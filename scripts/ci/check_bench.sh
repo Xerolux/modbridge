@@ -22,20 +22,24 @@ fi
 mkdir -p "$GOMODCACHE" "$GOCACHE"
 
 # run_bench_and_extract_ns runs a benchmark in the given package and returns
-# the last ns/op value from its output.
+# the last ns/op value from its output. The full benchmark output is printed
+# to stderr for debugging; only the extracted value is printed to stdout, so
+# callers never accidentally pick up the "ok  <pkg>" trailer line.
 run_bench_and_extract_ns() {
   local bench_name="$1"
   local pkg="$2"
   local output
+  local result
 
   output="$(
-    go test -run '^$' -bench "^${bench_name}$" -benchmem "$pkg"
-  )"
-  echo "$output"
+    go test -run '^$' -bench "^${bench_name}$" -benchmem "$pkg" 2>&1
+  )" || true
+  echo "$output" >&2
 
   # Keep the last ns/op token from the benchmark output.
   # shellcheck disable=SC2001
-  echo "$output" | sed -nE 's/.*[[:space:]]([0-9]+)[[:space:]]ns\/op.*/\1/p' | tail -n1
+  result="$(echo "$output" | sed -nE 's/.*[[:space:]]([0-9]+)[[:space:]]ns\/op.*/\1/p' | tail -n1)"
+  echo "$result"
 }
 
 assert_threshold() {
@@ -44,7 +48,12 @@ assert_threshold() {
   local max="$3"
 
   if [[ -z "$value" ]]; then
-    echo "ERROR: ${name} benchmark not found in output"
+    echo "ERROR: ${name} benchmark produced no ns/op result"
+    exit 1
+  fi
+
+  if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: ${name} benchmark produced invalid result: '${value}'"
     exit 1
   fi
 
@@ -59,14 +68,14 @@ MODBUS_PKG="./pkg/modbus"
 LOGGER_PKG="./pkg/logger"
 
 # Full-stack proxy benchmarks (require mock modbus server).
-proxy_connection_ns="$(run_bench_and_extract_ns "BenchmarkProxyConnection" "$PERF_PKG" | tail -n1)"
-proxy_request_ns="$(run_bench_and_extract_ns "BenchmarkProxyRequest" "$PERF_PKG" | tail -n1)"
-proxy_concurrent_ns="$(run_bench_and_extract_ns "BenchmarkProxyConcurrent" "$PERF_PKG" | tail -n1)"
+proxy_connection_ns="$(run_bench_and_extract_ns "BenchmarkProxyConnection" "$PERF_PKG")"
+proxy_request_ns="$(run_bench_and_extract_ns "BenchmarkProxyRequest" "$PERF_PKG")"
+proxy_concurrent_ns="$(run_bench_and_extract_ns "BenchmarkProxyConcurrent" "$PERF_PKG")"
 
 # Unit benchmarks on the hot-path functions (no network).
-readframe_ns="$(run_bench_and_extract_ns "BenchmarkReadFrame" "$MODBUS_PKG" | tail -n1)"
-exception_ns="$(run_bench_and_extract_ns "BenchmarkCreateExceptionResponse" "$MODBUS_PKG" | tail -n1)"
-isdebug_ns="$(run_bench_and_extract_ns "BenchmarkIsDebugEnabled" "$LOGGER_PKG" | tail -n1)"
+readframe_ns="$(run_bench_and_extract_ns "BenchmarkReadFrame" "$MODBUS_PKG")"
+exception_ns="$(run_bench_and_extract_ns "BenchmarkCreateExceptionResponse" "$MODBUS_PKG")"
+isdebug_ns="$(run_bench_and_extract_ns "BenchmarkIsDebugEnabled" "$LOGGER_PKG")"
 
 assert_threshold "BenchmarkProxyConnection" "$proxy_connection_ns" "$MAX_PROXY_CONNECTION_NS"
 assert_threshold "BenchmarkProxyRequest" "$proxy_request_ns" "$MAX_PROXY_REQUEST_NS"
