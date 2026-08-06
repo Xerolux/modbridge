@@ -502,7 +502,6 @@ func (s *Server) multiUserEnabled() bool {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	cfg := s.cfgMgr.Get()
 	proxies := []map[string]interface{}{}
 	if s.mgr != nil {
 		proxies = s.mgr.GetProxies()
