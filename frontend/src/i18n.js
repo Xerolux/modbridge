@@ -822,13 +822,18 @@ const en = {
   }
 };
 
-// Get saved language preference or default to German
+// Get saved language preference, falling back to browser language, then German
 function getSavedLanguage() {
   const saved = localStorage.getItem('modbridge_language');
   if (saved && (saved === 'de' || saved === 'en')) {
     return saved;
   }
-  return 'de'; // Default to German
+  // Auto-detect from browser/system language
+  const browserLang = (navigator.language || navigator.userLanguage || '').toLowerCase();
+  if (browserLang.startsWith('en')) {
+    return 'en';
+  }
+  return 'de';
 }
 
 // Save language preference
