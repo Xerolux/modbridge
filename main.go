@@ -85,6 +85,8 @@ func bootstrapUsers(userMgr *users.Manager, cfg config.Config, l *logger.Logger)
 
 func main() {
 	resetPasswordUser := flag.String("reset-password", "", "generate a new one-time password for the named local user, then exit")
+	enableAccountRecovery := flag.Bool("enable-account-recovery", false, "enable a 15-minute WebUI recovery for the local admin, then exit")
+	recoveryUser := flag.String("recovery-user", "", "admin username to recover when more than one administrator exists")
 	flag.Parse()
 
 	// 1. Database
@@ -124,6 +126,49 @@ func main() {
 			log.Fatalf("Password reset failed: %v", err)
 		}
 		log.Printf("One-time password for %s: %s", target.Username, password)
+		return
+	}
+
+	if *enableAccountRecovery {
+		if db == nil {
+			log.Fatal("Account recovery requires an available database")
+		}
+		userMgr := users.NewManager(db)
+		allUsers, err := userMgr.GetAllUsers()
+		if err != nil {
+			log.Fatalf("Account recovery failed: %v", err)
+		}
+		var admins []*database.User
+		requested := strings.TrimSpace(*recoveryUser)
+		for _, user := range allUsers {
+			if user.Role != "admin" {
+				continue
+			}
+			if requested == "" || strings.EqualFold(user.Username, requested) {
+				admins = append(admins, user)
+			}
+		}
+		if len(admins) != 1 {
+			var names []string
+			for _, user := range allUsers {
+				if user.Role == "admin" {
+					names = append(names, user.Username)
+				}
+			}
+			if requested != "" {
+				log.Fatalf("Account recovery failed: administrator %q not found (available: %s)", requested, strings.Join(names, ", "))
+			}
+			log.Fatalf("More than one administrator exists. Repeat with --recovery-user <name> (available: %s)", strings.Join(names, ", "))
+		}
+		token, err := auth.GenerateRecoveryToken()
+		if err != nil {
+			log.Fatalf("Account recovery failed: %v", err)
+		}
+		if err := userMgr.CreateAccountRecovery(admins[0].ID, token, time.Now().Add(15*time.Minute)); err != nil {
+			log.Fatalf("Account recovery failed: %v", err)
+		}
+		log.Printf("WebUI account recovery enabled for 15 minutes. Recovery code: %s", token)
+		log.Println("Start ModBridge normally, open the login page, and select 'Forgot login details?'.")
 		return
 	}
 

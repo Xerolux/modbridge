@@ -3,6 +3,7 @@ import { useAuthStore } from '../stores/auth'
 
 const Dashboard = () => import(/* webpackChunkName: "dashboard" */ '../views/Dashboard.vue')
 const Login = () => import(/* webpackChunkName: "login" */ '../views/Login.vue')
+const AccountRecovery = () => import(/* webpackChunkName: "account-recovery" */ '../views/AccountRecovery.vue')
 const Control = () => import(/* webpackChunkName: "control" */ '../views/Control.vue')
 const Config = () => import(/* webpackChunkName: "config" */ '../views/Config.vue')
 const Logs = () => import(/* webpackChunkName: "logs" */ '../views/Logs.vue')
@@ -19,6 +20,11 @@ const routes = [
     name: 'Login',
     component: Login,
     meta: { preload: true }
+  },
+  {
+    path: '/account-recovery',
+    name: 'AccountRecovery',
+    component: AccountRecovery
   },
   {
     path: '/change-password',

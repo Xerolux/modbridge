@@ -25,6 +25,26 @@ nc -zv 192.168.1.100 502
 
 ## Admin-Passwort vergessen
 
+### Benutzername und Passwort über die WebUI neu vergeben
+
+Stoppen Sie ModBridge und schalten Sie die WebUI-Wiederherstellung einmalig frei:
+
+```bash
+sudo systemctl stop modbridge.service
+sudo -u modbridge ./modbridge --enable-account-recovery
+sudo systemctl start modbridge.service
+```
+
+Öffnen Sie anschließend die Anmeldung und wählen Sie **„Zugangsdaten vergessen?“**. Mit dem ausgegebenen, 15 Minuten gültigen Wiederherstellungscode können Sie einen neuen Benutzernamen und ein neues Passwort vergeben. Der Code ist nur einmal verwendbar.
+
+Existieren mehrere Administratoren, geben Sie das Zielkonto explizit an:
+
+```bash
+sudo -u modbridge ./modbridge --enable-account-recovery --recovery-user bisheriger-name
+```
+
+### Nur das Passwort per Konsole zurücksetzen
+
 Stoppen Sie ModBridge und erzeugen Sie lokal ein neues einmaliges Passwort für den Admin-Benutzer:
 
 ```bash
