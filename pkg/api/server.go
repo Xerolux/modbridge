@@ -1255,8 +1255,9 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 	ip, ua := requestMeta(r)
 
 	var req struct {
-		ID     string `json:"id"`
-		Action string `json:"action"` // start, stop, restart, pause, resume, start_all, stop_all
+		ID     string   `json:"id"`
+		Action string   `json:"action"` // start, stop, restart, pause, resume, start_all, stop_all
+		IDs    []string `json:"ids"`    // optional: restrict bulk actions to these proxy IDs
 	}
 	if err := decodeJSON(w, r, &req); err != nil {
 		writeJSONDecodeError(w, err)
@@ -1280,13 +1281,29 @@ func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {
 	case "resume":
 		err = s.mgr.ResumeProxy(req.ID)
 	case "start_all":
-		s.mgr.StartAll()
+		if len(req.IDs) > 0 {
+			err = s.mgr.StartProxies(req.IDs)
+		} else {
+			s.mgr.StartAll()
+		}
 	case "stop_all":
-		s.mgr.StopAll()
+		if len(req.IDs) > 0 {
+			err = s.mgr.StopProxies(req.IDs)
+		} else {
+			s.mgr.StopAll()
+		}
 	case "restart_all":
-		s.mgr.StopAll()
-		time.Sleep(100 * time.Millisecond)
-		s.mgr.StartAll()
+		if len(req.IDs) > 0 {
+			if err = s.mgr.StopProxies(req.IDs); err != nil {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+			err = s.mgr.StartProxies(req.IDs)
+		} else {
+			s.mgr.StopAll()
+			time.Sleep(100 * time.Millisecond)
+			s.mgr.StartAll()
+		}
 	default:
 		err = fmt.Errorf("unknown action")
 	}

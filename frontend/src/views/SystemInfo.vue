@@ -505,7 +505,7 @@ const stopAllProxies = async () => {
 
 const restartAllProxies = async () => {
     confirm.require({
-        message: t('control.stopAllConfirm'),
+        message: t('control.restartAllConfirm'),
         header: t('common.confirm'),
         icon: 'pi pi-exclamation-triangle',
         accept: async () => {

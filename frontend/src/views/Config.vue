@@ -462,6 +462,7 @@
          });
          toast.add({ severity: 'success', summary: 'Success', detail: 'Configuration imported', life: 3000 });
          await store.fetchProxies();
+         await fetchConfig();
      } catch (e) {
          toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to import configuration', life: 5000 });
      }

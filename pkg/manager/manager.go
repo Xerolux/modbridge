@@ -7,6 +7,7 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"modbridge/pkg/config"
 	"modbridge/pkg/database"
@@ -78,6 +79,9 @@ func (m *Manager) AddProxy(cfg config.ProxyConfig, save bool) error {
 	p := proxy.NewProxyInstance(cfg.ID, cfg.Name, cfg.ListenAddr, cfg.TargetAddr, cfg.MaxReadSize, cfg.ConnectionTimeout, cfg.ReadTimeout, cfg.MaxRetries, m.log, m.deviceTracker)
 	if cfg.Protocol != "" {
 		p.Protocol = cfg.Protocol
+	}
+	if cfg.ConnectDelayMs > 0 {
+		p.ConnectDelay = time.Duration(cfg.ConnectDelayMs) * time.Millisecond
 	}
 	m.proxies[cfg.ID] = p
 
@@ -202,6 +206,32 @@ func (m *Manager) StopProxy(id string) error {
 	})
 }
 
+// StartProxies starts multiple proxies (used by selective bulk actions).
+// It continues on individual failures and returns a combined error listing
+// every proxy that could not be started.
+func (m *Manager) StartProxies(ids []string) error {
+	var errs []error
+	for _, id := range ids {
+		if err := m.StartProxy(id); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", id, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// StopProxies stops multiple proxies (used by selective bulk actions).
+// It continues on individual failures and returns a combined error listing
+// every proxy that could not be stopped.
+func (m *Manager) StopProxies(ids []string) error {
+	var errs []error
+	for _, id := range ids {
+		if err := m.StopProxy(id); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", id, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // PauseProxy pauses a running proxy.
 func (m *Manager) PauseProxy(id string) error {
 	m.mu.Lock()
@@ -273,6 +303,9 @@ func (m *Manager) UpdateProxy(cfg config.ProxyConfig) error {
 	if cfg.Protocol != "" {
 		p.Protocol = cfg.Protocol
 	}
+	if cfg.ConnectDelayMs > 0 {
+		p.ConnectDelay = time.Duration(cfg.ConnectDelayMs) * time.Millisecond
+	}
 	m.proxies[cfg.ID] = p
 
 	// Start if it was enabled and not paused
@@ -324,6 +357,13 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 
 		pCfg := cfgMap[p.ID]
 
+		// Normalize tags so the JSON response never carries a bare null that
+		// would break frontend form round-trips (Chips v-model expects an array).
+		tags := pCfg.Tags
+		if tags == nil {
+			tags = config.FlexibleTags{}
+		}
+
 		res = append(res, map[string]interface{}{
 			"id":                 p.ID,
 			"name":               p.Name,
@@ -344,6 +384,10 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 			"connection_timeout": pCfg.ConnectionTimeout,
 			"read_timeout":       pCfg.ReadTimeout,
 			"max_retries":        pCfg.MaxRetries,
+			"max_read_size":      pCfg.MaxReadSize,
+			"connect_delay_ms":   pCfg.ConnectDelayMs,
+			"tags":               tags,
+			"protocol":           pCfg.Protocol,
 		})
 	}
 	return res
@@ -528,6 +572,11 @@ func (m *Manager) getProxyStatusLocked(id string) map[string]interface{} {
 
 	pCfg := cfgMap[p.ID]
 
+	tags := pCfg.Tags
+	if tags == nil {
+		tags = config.FlexibleTags{}
+	}
+
 	return map[string]interface{}{
 		"id":                 p.ID,
 		"name":               p.Name,
@@ -548,5 +597,9 @@ func (m *Manager) getProxyStatusLocked(id string) map[string]interface{} {
 		"connection_timeout": pCfg.ConnectionTimeout,
 		"read_timeout":       pCfg.ReadTimeout,
 		"max_retries":        pCfg.MaxRetries,
+		"max_read_size":      pCfg.MaxReadSize,
+		"connect_delay_ms":   pCfg.ConnectDelayMs,
+		"tags":               tags,
+		"protocol":           pCfg.Protocol,
 	}
 }

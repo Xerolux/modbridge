@@ -89,8 +89,9 @@ type ProxyInstance struct {
 	ConnectionTimeout time.Duration
 	ReadTimeout       time.Duration
 	MaxRetries        int
-	MaxConns          int    // Maximum concurrent connections (0 = unlimited)
-	Protocol          string // "tcp" (default) or "rtu-tcp"
+	MaxConns          int           // Maximum concurrent connections (0 = unlimited)
+	Protocol          string        // "tcp" (default) or "rtu-tcp"
+	ConnectDelay      time.Duration // Optional pause after TCP connect before first request (for slow devices like Huawei inverters/sDongles)
 
 	listener net.Listener
 	connPool *pool.Pool
@@ -227,7 +228,24 @@ func (p *ProxyInstance) Start() error {
 				Timeout:   p.ConnectionTimeout,
 				KeepAlive: 30 * time.Second, // Optimized: TCP keep-alive
 			}
-			return d.DialContext(ctx, "tcp", p.TargetAddr)
+			conn, err := d.DialContext(ctx, "tcp", p.TargetAddr)
+			if err != nil {
+				return nil, err
+			}
+			// Some Modbus devices (e.g. Huawei inverters/sDongles) drop or
+			// ignore requests that arrive immediately after the TCP handshake.
+			// Apply the configured connect delay once per fresh outbound
+			// connection before handing it back to the pool consumer. This is
+			// NOT applied when a pooled connection is reused.
+			if p.ConnectDelay > 0 {
+				select {
+				case <-time.After(p.ConnectDelay):
+				case <-ctx.Done():
+					conn.Close()
+					return nil, ctx.Err()
+				}
+			}
+			return conn, nil
 		},
 	}
 

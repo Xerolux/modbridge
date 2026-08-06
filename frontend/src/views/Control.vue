@@ -262,6 +262,13 @@
                          <InputNumber v-model="proxyForm.max_read_size" :min="0" class="w-full" />
                      </div>
                  </div>
+                 <div class="flex flex-col sm:flex-row gap-4">
+                     <div class="flex-1">
+                         <label class="block text-sm font-medium mb-1">{{ $t('control.form.connectDelay') }}</label>
+                         <InputNumber v-model="proxyForm.connect_delay_ms" :min="0" :max="60000" class="w-full" />
+                     </div>
+                     <div class="flex-1" />
+                 </div>
                  <div class="flex items-center gap-4">
                      <div class="flex items-center gap-2">
                          <Checkbox v-model="proxyForm.enabled" binary />
@@ -377,6 +384,7 @@ const defaultProxyForm = () => ({
     read_timeout: 30,
     max_retries: 3,
     max_read_size: 0,
+    connect_delay_ms: 0,
     enabled: true,
     paused: false,
     tags: []

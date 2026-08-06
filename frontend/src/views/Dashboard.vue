@@ -467,7 +467,10 @@ const loadGrid = (layout) => {
 const addWidgetToGrid = (item) => {
   if (!grid.value) return;
 
-  const id = item.id || `w_${item.proxy_id || Date.now()}`;
+  // Sanitize the id: it is interpolated into innerHTML below, so only allow
+  // a safe character set (gridstack ids also break with spaces/quotes).
+  const rawId = item.id || `w_${item.proxy_id || Date.now()}`;
+  const id = String(rawId).replace(/[^A-Za-z0-9_-]/g, '_');
   const contentHtml = `<div id="mount_${id}" class="h-full w-full relative"></div>`;
   const el = grid.value.addWidget({
     x: item.x ?? 0,

@@ -59,10 +59,12 @@ axios.interceptors.response.use(
             return Promise.reject(error);
         }
 
-        // Retry idempotent requests on transient failures.
+        // Retry idempotent requests on transient failures. PUT/DELETE are
+        // excluded: a retry after a network drop can double-apply a
+        // state-changing request (e.g. a DELETE that already succeeded).
         const isRetryable = !originalRequest._retryCount &&
             (!error.response || error.response.status >= 503 || error.response.status === 429);
-        if (isRetryable && ['get', 'head', 'options', 'put', 'delete'].includes(originalRequest.method?.toLowerCase())) {
+        if (isRetryable && ['get', 'head', 'options'].includes(originalRequest.method?.toLowerCase())) {
             originalRequest._retryCount = (originalRequest._retryCount || 0) + 1;
             await new Promise(resolve => setTimeout(resolve, 500));
             return axios(originalRequest);

@@ -215,6 +215,7 @@ const searchTerm = ref('');
 const selectedSort = ref('name_asc');
 const deviceDetailsVisible = ref(false);
 const historyVisible = ref(false);
+const historyLoading = ref(false);
 const selectedDevice = ref(null);
 const connectionHistory = ref([]);
 
@@ -304,15 +305,15 @@ const showDeviceDetails = (device) => {
 
 const showConnectionHistory = async (ip) => {
   selectedDevice.value = devices.value.find(d => d.ip === ip);
-  loading.value = true;
+  historyLoading.value = true;
   try {
     const res = await axios.get(`/api/devices/history?device_ip=${ip}`);
     connectionHistory.value = res.data;
     historyVisible.value = true;
-    loading.value = false;
+    historyLoading.value = false;
   } catch (e) {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch history', life: 3000 });
-    loading.value = false;
+    historyLoading.value = false;
   }
 };
 

@@ -7,8 +7,17 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Cancel superseded runs of the same branch/PR to save CI minutes. The
+# auto-release job is NOT cancelled this way: it gets its own queueing
+# concurrency group further down so rapid main pushes can never race the
+# version bump (two concurrent auto-releases would otherwise fight over
+# version.txt and the next tag).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
-  contents: write
+  contents: read
 
 env:
   GO_VERSION: '1.26.4'
@@ -18,6 +27,7 @@ jobs:
   quality:
     name: Code Quality
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
@@ -43,6 +53,7 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
@@ -67,6 +78,7 @@ jobs:
     name: Benchmark Guardrails
     runs-on: ubuntu-latest
     needs: [quality, test]
+    timeout-minutes: 20
     # Run on PRs + pushes to main. Continue-on-error would hide regressions,
     # so the job fails the build when a threshold is exceeded. Thresholds are
     # intentionally generous (see scripts/ci/check_bench.sh) to reduce CI flak.
@@ -86,6 +98,7 @@ jobs:
   build-frontend:
     name: Build Frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -109,6 +122,7 @@ jobs:
     name: Build (${{ matrix.suffix }})
     runs-on: ubuntu-latest
     needs: [quality, test, build-frontend]
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -169,6 +183,7 @@ jobs:
     name: Headless (${{ matrix.suffix }})
     runs-on: ubuntu-latest
     needs: [quality, test]
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -228,6 +243,14 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs: [quality, test, build-frontend, build-binaries, build-headless]
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    # Serialize auto-releases: a second push while one is running must wait
+    # (not cancel) so the version bump + tag push never race.
+    concurrency:
+      group: auto-release-main
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
         with:

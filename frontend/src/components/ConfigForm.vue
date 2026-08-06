@@ -221,6 +221,11 @@
                     <input v-model.number="proxy.max_read_size" type="number" min="0" max="65535" @input="markDirty(proxy, index)" />
                     <small v-if="getFieldError(proxy, index, 'max_read_size')" class="field-error">{{ getFieldError(proxy, index, 'max_read_size') }}</small>
                   </div>
+                  <div class="field-group">
+                    <label>Connect Delay (ms)</label>
+                    <input v-model.number="proxy.connect_delay_ms" type="number" min="0" max="60000" @input="markDirty(proxy, index)" />
+                    <small v-if="getFieldError(proxy, index, 'connect_delay_ms')" class="field-error">{{ getFieldError(proxy, index, 'connect_delay_ms') }}</small>
+                  </div>
                 </div>
               </div>
             </article>
@@ -345,6 +350,7 @@ const addProxy = () => {
     read_timeout: 30,
     max_retries: 3,
     max_read_size: 0,
+    connect_delay_ms: 0,
     description: '',
     tags: '',
     _isNew: true,
@@ -396,6 +402,9 @@ const saveProxy = async (proxy, index) => {
 
   if (success) {
     activeProxyKey.value = null;
+    // Refetch to drop transient flags (_isDirty/_isNew) and restore the
+    // canonical server state; otherwise the card stays stuck on "Geändert".
+    await store.fetchProxies();
   }
 
   activeSaveKey.value = null;

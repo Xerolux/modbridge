@@ -106,6 +106,17 @@
             />
           </div>
 
+          <div class="config-group">
+            <label class="config-label">Connect Delay (ms)</label>
+            <InputNumber
+              v-model="batchConfig.connect_delay_ms"
+              :min="0"
+              :max="60000"
+              class="w-full"
+              showButtons
+            />
+          </div>
+
           <div class="config-group checkbox-group">
             <div class="flex items-center gap-2">
               <Checkbox v-model="batchConfig.enabled" binary />
@@ -200,6 +211,7 @@ const batchConfig = reactive({
   read_timeout: 30,
   max_retries: 3,
   max_read_size: 0,
+  connect_delay_ms: 0,
   enabled: true,
   paused: false
 });
@@ -296,6 +308,7 @@ const applyBatchConfig = async () => {
         read_timeout: batchConfig.read_timeout,
         max_retries: batchConfig.max_retries,
         max_read_size: batchConfig.max_read_size,
+        connect_delay_ms: batchConfig.connect_delay_ms,
         enabled: batchConfig.enabled,
         paused: batchConfig.paused
       };
@@ -316,8 +329,8 @@ const applyBatchConfig = async () => {
 
 const batchAction = async (action) => {
   const message = action === 'start_all'
-    ? 'Sollen wirklich alle ausgewählten Proxies gestartet werden?'
-    : 'Sollen wirklich alle ausgewählten Proxies gestoppt werden?';
+    ? `Sollen wirklich alle ${selectedProxies.value.length} ausgewählten Proxies gestartet werden?`
+    : `Sollen wirklich alle ${selectedProxies.value.length} ausgewählten Proxies gestoppt werden?`;
   confirm.require({
     message,
     header: 'Batch-Aktion bestätigen',
@@ -325,7 +338,7 @@ const batchAction = async (action) => {
     accept: async () => {
       applying.value = true;
       try {
-        await axios.post('/api/proxies/control', { action });
+        await axios.post('/api/proxies/control', { action, ids: selectedProxies.value });
         toast.add({ severity: 'success', summary: 'Erfolg', detail: `Aktion "${action}" ausgeführt`, life: 3000 });
         emit('refresh');
       } catch (error) {

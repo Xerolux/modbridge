@@ -93,6 +93,53 @@ func TestValidateProxyConfig(t *testing.T) {
 		}
 	})
 
+	t.Run("Negative connect delay", func(t *testing.T) {
+		cfg := config.ProxyConfig{
+			ID:             "test-id",
+			Name:           "Test Proxy",
+			ListenAddr:     ":5020",
+			TargetAddr:     "192.168.1.100:502",
+			ConnectDelayMs: -1,
+		}
+
+		err := v.ValidateProxyConfig(cfg)
+		if err == nil {
+			t.Error("Expected error for negative connect delay")
+		}
+	})
+
+	t.Run("Connect delay too high", func(t *testing.T) {
+		cfg := config.ProxyConfig{
+			ID:             "test-id",
+			Name:           "Test Proxy",
+			ListenAddr:     ":5020",
+			TargetAddr:     "192.168.1.100:502",
+			ConnectDelayMs: 60001,
+		}
+
+		err := v.ValidateProxyConfig(cfg)
+		if err == nil {
+			t.Error("Expected error for connect delay too high")
+		}
+	})
+
+	t.Run("Valid connect delay (Huawei typical)", func(t *testing.T) {
+		cfg := config.ProxyConfig{
+			ID:                "test-id",
+			Name:              "Test Proxy",
+			ListenAddr:        ":5020",
+			TargetAddr:        "192.168.1.100:502",
+			ConnectionTimeout: 10,
+			ReadTimeout:       30,
+			ConnectDelayMs:    300,
+		}
+
+		err := v.ValidateProxyConfig(cfg)
+		if err != nil {
+			t.Errorf("Valid connect delay failed validation: %v", err)
+		}
+	})
+
 	t.Run("Invalid address format", func(t *testing.T) {
 		cfg := config.ProxyConfig{
 			ID:         "test-id",

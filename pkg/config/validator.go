@@ -254,6 +254,14 @@ func (v *Validator) validateProxyConfig(cfg *ProxyConfig, index int) {
 		v.AddError(prefix+".max_read_size", "must not exceed 65535", strconv.Itoa(cfg.MaxReadSize))
 	}
 
+	// Validate connect delay (ms). 0 = disabled. Needed for slow devices
+	// (e.g. Huawei inverters/sDongles) that need a pause after TCP connect.
+	if cfg.ConnectDelayMs < 0 {
+		v.AddError(prefix+".connect_delay_ms", "must be non-negative", strconv.Itoa(cfg.ConnectDelayMs))
+	} else if cfg.ConnectDelayMs > 60000 {
+		v.AddError(prefix+".connect_delay_ms", "must not exceed 60000 ms", strconv.Itoa(cfg.ConnectDelayMs))
+	}
+
 	// Validate description length
 	if len(cfg.Description) > 500 {
 		v.AddError(prefix+".description", "must not exceed 500 characters", strconv.Itoa(len(cfg.Description)))
