@@ -36,9 +36,10 @@ run_bench_and_extract_ns() {
   )" || true
   echo "$output" >&2
 
-  # Keep the last ns/op token from the benchmark output.
+  # Keep the last ns/op token from the benchmark output. The value may be a
+  # decimal (e.g. "57.81 ns/op"), so the pattern allows an optional fraction.
   # shellcheck disable=SC2001
-  result="$(echo "$output" | sed -nE 's/.*[[:space:]]([0-9]+)[[:space:]]ns\/op.*/\1/p' | tail -n1)"
+  result="$(echo "$output" | sed -nE 's/.*[[:space:]]([0-9]+(\.[0-9]+)?)[[:space:]]ns\/op.*/\1/p' | tail -n1)"
   echo "$result"
 }
 
@@ -52,12 +53,13 @@ assert_threshold() {
     exit 1
   fi
 
-  if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+  if [[ ! "$value" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
     echo "ERROR: ${name} benchmark produced invalid result: '${value}'"
     exit 1
   fi
 
-  if (( value > max )); then
+  # bash arithmetic cannot handle decimals, so compare via awk.
+  if awk -v v="$value" -v m="$max" 'BEGIN { exit !(v > m) }'; then
     echo "ERROR: ${name} regression detected (${value} ns/op > ${max} ns/op)"
     exit 1
   fi
