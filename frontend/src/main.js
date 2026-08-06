@@ -18,6 +18,7 @@ const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 app.use(PrimeVue, {
+    license: import.meta.env.VITE_PRIMEVUE_LICENSE || undefined,
     theme: {
         preset: Aura,
         options: {
