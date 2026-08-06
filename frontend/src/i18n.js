@@ -91,7 +91,28 @@ const de = {
     currentPassword: 'Aktuelles Passwort',
     newPassword: 'Neues Passwort',
     changePassword: 'Passwort ändern',
-    passwordChanged: 'Passwort erfolgreich geändert'
+    passwordChanged: 'Passwort erfolgreich geändert',
+    forgotCredentials: 'Zugangsdaten vergessen?'
+  },
+
+  accountRecovery: {
+    title: 'Zugang wiederherstellen',
+    subtitle: 'Neuen Benutzernamen und neues Passwort vergeben',
+    checking: 'Wiederherstellung wird geprüft …',
+    notEnabled: 'Die sichere Wiederherstellung muss einmalig direkt am ModBridge-System freigeschaltet werden.',
+    commandHint: 'ModBridge vorher stoppen, den Befehl im Installationsverzeichnis ausführen und danach normal starten. Der ausgegebene Code ist 15 Minuten gültig.',
+    checkAgain: 'Erneut prüfen',
+    enabled: 'Die lokale Wiederherstellung ist freigeschaltet. Gib den am System ausgegebenen Code ein.',
+    code: 'Wiederherstellungscode',
+    newUsername: 'Neuer Benutzername',
+    newPassword: 'Neues Passwort',
+    confirmPassword: 'Passwort bestätigen',
+    submit: 'Zugangsdaten neu vergeben',
+    mismatch: 'Die Passwörter stimmen nicht überein.',
+    error: 'Die Wiederherstellung ist fehlgeschlagen.',
+    success: 'Benutzername und Passwort wurden geändert. Du kannst dich jetzt anmelden.',
+    toLogin: 'Zur Anmeldung',
+    back: 'Zurück'
   },
 
   // Change password (forced on first login)
@@ -481,7 +502,28 @@ const en = {
     currentPassword: 'Current Password',
     newPassword: 'New Password',
     changePassword: 'Change Password',
-    passwordChanged: 'Password changed successfully'
+    passwordChanged: 'Password changed successfully',
+    forgotCredentials: 'Forgot login details?'
+  },
+
+  accountRecovery: {
+    title: 'Recover access',
+    subtitle: 'Choose a new username and password',
+    checking: 'Checking account recovery …',
+    notEnabled: 'Secure recovery must first be enabled directly on the ModBridge system.',
+    commandHint: 'Stop ModBridge, run the command in its installation directory, then start it normally. The displayed code is valid for 15 minutes.',
+    checkAgain: 'Check again',
+    enabled: 'Local recovery is enabled. Enter the code shown on the system.',
+    code: 'Recovery code',
+    newUsername: 'New username',
+    newPassword: 'New password',
+    confirmPassword: 'Confirm password',
+    submit: 'Replace login details',
+    mismatch: 'The passwords do not match.',
+    error: 'Account recovery failed.',
+    success: 'Username and password changed. You can now sign in.',
+    toLogin: 'Go to login',
+    back: 'Back'
   },
 
   // Change password (forced on first login)

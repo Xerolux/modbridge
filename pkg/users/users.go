@@ -10,11 +10,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"modbridge/pkg/auth"
 	"modbridge/pkg/database"
 	"modbridge/pkg/rbac"
-	"strings"
-	"time"
 )
 
 type Manager struct {
@@ -373,6 +374,39 @@ func (m *Manager) AdminResetPassword(userID, newPassword string, mustChange bool
 		return err
 	}
 	return m.db.AdminResetUserPassword(userID, hash, mustChange)
+}
+
+// CreateAccountRecovery enables one short-lived WebUI recovery for an admin.
+func (m *Manager) CreateAccountRecovery(userID, token string, expiresAt time.Time) error {
+	user, err := m.db.GetUser(userID)
+	if err != nil {
+		return err
+	}
+	if user == nil || user.Role != string(rbac.RoleAdmin) {
+		return errors.New("administrator account not found")
+	}
+	return m.db.CreateAccountRecovery(userID, auth.HashRecoveryToken(token), expiresAt)
+}
+
+// AccountRecoveryAvailable reports whether the WebUI may accept a recovery code.
+func (m *Manager) AccountRecoveryAvailable() (bool, error) {
+	return m.db.AccountRecoveryAvailable()
+}
+
+// RecoverAdminAccount consumes a local recovery code and assigns a new login.
+func (m *Manager) RecoverAdminAccount(token, username, password string) (string, error) {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return "", errors.New("username is required")
+	}
+	if strings.TrimSpace(token) == "" {
+		return "", errors.New("recovery code is required")
+	}
+	hash, err := auth.HashPassword(password)
+	if err != nil {
+		return "", err
+	}
+	return m.db.RecoverAdminAccount(auth.HashRecoveryToken(token), username, hash)
 }
 
 // EnsureDefaultAdmin creates the initial administrator account when the user

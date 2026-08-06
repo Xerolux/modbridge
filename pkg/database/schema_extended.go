@@ -61,9 +61,18 @@ func (db *DB) initExtendedSchema() error {
 		FOREIGN KEY (created_by) REFERENCES users(id)
 	);
 
+	CREATE TABLE IF NOT EXISTS account_recovery (
+		token_hash TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		expires_at DATETIME NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp DESC);
 	CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id);
 	CREATE INDEX IF NOT EXISTS idx_config_versions_version ON config_versions(version DESC);
+	CREATE INDEX IF NOT EXISTS idx_account_recovery_expiry ON account_recovery(expires_at);
 	`
 
 	_, err := db.conn.Exec(schema)

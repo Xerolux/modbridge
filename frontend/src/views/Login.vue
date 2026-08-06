@@ -108,6 +108,11 @@ const handleLogin = async () => {
           @click="handleLogin"
           class="w-full"
         />
+
+        <RouterLink to="/account-recovery" class="recovery-link">
+          <i class="pi pi-key"></i>
+          {{ t('login.forgotCredentials') }}
+        </RouterLink>
       </div>
     </div>
   </div>
@@ -162,5 +167,22 @@ const handleLogin = async () => {
   border: 1px solid rgba(251, 113, 133, 0.22);
   color: var(--danger);
   font-size: 0.875rem;
+}
+
+.recovery-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.recovery-link:hover,
+.recovery-link:focus-visible {
+  color: var(--primary);
+  text-decoration: underline;
 }
 </style>

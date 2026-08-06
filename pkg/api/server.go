@@ -275,6 +275,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/status", publicMW(s.handleStatus))
 	mux.HandleFunc("/api/metrics", s.cors.Middleware(s.handleMetrics))
 	mux.HandleFunc("/api/login", s.cors.Middleware(s.security.Middleware(s.loginRateLimiter.Middleware(s.handleLogin))))
+	mux.HandleFunc("/api/account-recovery", s.cors.Middleware(s.security.Middleware(s.loginRateLimiter.Middleware(s.handleAccountRecovery))))
 	mux.HandleFunc("/api/logout", csrfMW(s.handleLogout))
 	mux.HandleFunc("/api/setup", s.cors.Middleware(s.security.Middleware(s.handleSetup)))
 
