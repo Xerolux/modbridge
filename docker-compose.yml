@@ -1,0 +1,62 @@
+services:
+  modbridge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: modbridge
+    hostname: modbridge
+
+    ports:
+      - "8080:8080"            # Web UI & API
+      - "5020-5030:5020-5030"  # Modbus proxy ports
+
+    volumes:
+      - ./config.json:/app/config.json:rw
+      - modbridge-data:/app/data
+      - modbridge-logs:/app/logs
+
+    environment:
+      - WEB_PORT=0.0.0.0:8080
+      - LOG_LEVEL=INFO
+      - TZ=UTC
+      - MODBRIDGE_MAX_CONNECTIONS=10000
+      - MODBRIDGE_CIRCUIT_BREAKER_ENABLED=true
+      - MODBRIDGE_CACHE_ENABLED=true
+      - MODBRIDGE_CACHE_TTL=5s
+      - MODBRIDGE_HEALTH_CHECK_INTERVAL=30s
+      - MODBRIDGE_ALERTING_ENABLED=true
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          memory: 256M
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  modbridge-data:
+  modbridge-logs:
