@@ -25,18 +25,15 @@ nc -zv 192.168.1.100 502
 
 ## Admin-Passwort vergessen
 
-Das Passwort-Hash steht in `config.json` unter `admin_pass_hash`. Löschen Sie den Wert, um beim nächsten Start ein neues zufälliges Passwort zu generieren:
+Stoppen Sie ModBridge und erzeugen Sie lokal ein neues einmaliges Passwort für den Admin-Benutzer:
 
 ```bash
-# Wert leeren (ModBridge muss gestoppt sein)
-# In config.json: "admin_pass_hash": ""
-
-# Wenn systemd-Service verwendet wird:
-sudo bash scripts/modbridge.sh restart
-
-# Neues Passwort erscheint in den Logs
-sudo bash scripts/modbridge.sh logs
+sudo systemctl stop modbridge.service
+sudo -u modbridge ./modbridge --reset-password admin
+sudo systemctl start modbridge.service
 ```
+
+Der Befehl gibt ein zufälliges Einmalpasswort aus. Nach dem Login muss es sofort geändert werden. Führen Sie den Befehl nur lokal auf dem ModBridge-Host aus.
 
 ## Docker Container startet nicht
 

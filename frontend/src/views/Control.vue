@@ -127,10 +127,16 @@
                         <VueDraggable
                             :list="group.proxies"
                             :disabled="!editMode"
-                            group="proxies"
+                            :group="{ name: 'proxy-order', pull: false, put: false }"
                             handle=".drag-handle"
                             ghost-class="drag-ghost"
                             drag-class="drag-active"
+                            :animation="180"
+                            :delay="180"
+                            :delay-on-touch-only="true"
+                            :touch-start-threshold="4"
+                            :fallback-tolerance="5"
+                            @end="onProxyReorder(group.proxies)"
                             class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
                         >
                             <div
@@ -143,12 +149,15 @@
                                     <!-- Card header -->
                                     <div class="flex items-start justify-between gap-3">
                                         <div class="flex items-center gap-2.5 min-w-0">
-                                            <div
+                                            <button
+                                                type="button"
                                                 v-if="editMode"
-                                                class="drag-handle shrink-0 cursor-grab active:cursor-grabbing flex items-center justify-center w-8 h-8 rounded-lg hover:bg-[var(--bg-soft)] transition-colors"
+                                                class="drag-handle shrink-0 cursor-grab active:cursor-grabbing flex items-center justify-center w-11 h-11 rounded-xl border-0 bg-transparent hover:bg-[var(--bg-soft)] transition-colors"
+                                                :aria-label="$t('control.drag')"
+                                                :title="$t('control.drag')"
                                             >
                                                 <i class="pi pi-bars text-[var(--text-muted)] text-sm"></i>
-                                            </div>
+                                            </button>
                                             <div class="min-w-0">
                                                 <span class="block text-base font-semibold text-[var(--text-primary)] truncate" :title="proxy.name">{{ proxy.name }}</span>
                                                 <span class="block text-xs text-[var(--text-muted)] mt-0.5 truncate">{{ proxy.description || '—' }}</span>
@@ -317,7 +326,7 @@ import Menu from 'primevue/menu';
 import InputText from 'primevue/inputtext';
 import InputNumber from 'primevue/inputnumber';
 import Checkbox from 'primevue/checkbox';
-import Chips from 'primevue/chips';
+import Chips from 'primevue/inputtags';
 import Toast from 'primevue/toast';
 import ConfirmDialog from 'primevue/confirmdialog';
 import Tabs from 'primevue/tabs';
@@ -459,6 +468,25 @@ const applyProxyOrder = (data) => {
     } catch {
         return data;
     }
+};
+
+const persistProxyOrder = () => {
+    localStorage.setItem('proxy_order', JSON.stringify(proxies.value.map(proxy => proxy.id)));
+};
+
+// Group/search lists are derived arrays. Merge their new order back into the
+// canonical proxy list so the order survives the next SSE event or refresh.
+const onProxyReorder = (orderedGroup) => {
+    const orderedIds = orderedGroup.map(proxy => proxy.id);
+    const groupedIds = new Set(orderedIds);
+    let nextIndex = 0;
+
+    proxies.value = proxies.value.map(proxy => (
+        groupedIds.has(proxy.id)
+            ? orderedGroup[nextIndex++]
+            : proxy
+    ));
+    persistProxyOrder();
 };
 
 const fetchProxies = async () => {

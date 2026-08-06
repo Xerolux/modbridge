@@ -508,7 +508,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		proxies = s.mgr.GetProxies()
 	}
 	status := map[string]interface{}{
-		"setup_required": cfg.AdminPassHash == "",
+		"setup_required": false,
 		"multi_user":     s.multiUserEnabled(),
 		"proxies":        proxies,
 	}
@@ -524,45 +524,15 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := s.cfgMgr.Get()
-	if cfg.AdminPassHash != "" {
-		// Setup is deprecated: the default admin is auto-created on first run
-		// (single-user hash) or via the user store (multi-user). The endpoint
-		// is no longer reachable in normal operation; return 410 Gone so any
-		// legacy caller gets an explicit signal.
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusGone)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "setup is deprecated; default admin is auto-created on first run",
-		})
-		return
-	}
-
-	var req struct {
-		Password string `json:"password"`
-	}
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeJSONDecodeError(w, err)
-		return
-	}
-
-	hash, err := auth.HashPassword(req.Password)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	err = s.cfgMgr.Update(func(c *config.Config) error {
-		c.AdminPassHash = hash
-		return nil
+	// Initial credentials are created locally during bootstrap. Keeping this
+	// unauthenticated legacy endpoint writable would allow remote account setup
+	// when a configuration or database is temporarily unavailable.
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusGone)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": false,
+		"error":   "setup is deprecated; initial credentials are created locally",
 	})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {

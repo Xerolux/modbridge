@@ -78,8 +78,6 @@ onMounted(() => {
 </template>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap');
-
  :root {
    --bg-canvas: #09111f;
    --bg-surface: rgba(14, 22, 39, 0.72);
@@ -288,7 +286,7 @@ body,
 
 body {
   margin: 0;
-  font-family: 'Manrope', sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background:
     radial-gradient(circle at top left, rgba(125, 211, 252, 0.14), transparent 32%),
     radial-gradient(circle at top right, rgba(192, 132, 252, 0.16), transparent 28%),
@@ -312,7 +310,7 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   letter-spacing: -0.03em;
   margin: 0;
 }

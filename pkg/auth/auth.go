@@ -10,6 +10,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"math/big"
 	"net/http"
 	"strings"
 	"sync"
@@ -18,6 +19,8 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+const generatedPasswordLength = 24
 
 type Session struct {
 	Token              string
@@ -48,12 +51,60 @@ func HashPassword(password string) (string, error) {
 }
 
 // HashPasswordUnchecked hashes a password with bcrypt WITHOUT enforcing the
-// password-strength policy. Use ONLY for seeding a known default password
-// (e.g. admin/admin on first run); all user-driven password changes must go
-// through HashPassword, which enforces ValidatePasswordStrength.
+// password-strength policy. Use only for already-generated bootstrap secrets;
+// all user-driven password changes must go through HashPassword.
 func HashPasswordUnchecked(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	return string(bytes), err
+}
+
+// GenerateSecurePassword returns a cryptographically random password that
+// satisfies the application's strength policy. It is intended for one-time
+// bootstrap and offline recovery credentials.
+func GenerateSecurePassword() (string, error) {
+	const (
+		upper   = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+		lower   = "abcdefghijkmnopqrstuvwxyz"
+		digits  = "23456789"
+		special = "!@#$%&*-_=+"
+	)
+
+	password := make([]byte, generatedPasswordLength)
+	classes := []string{upper, lower, digits, special}
+	for i, class := range classes {
+		char, err := randomCharacter(class)
+		if err != nil {
+			return "", err
+		}
+		password[i] = char
+	}
+
+	all := upper + lower + digits + special
+	for i := len(classes); i < len(password); i++ {
+		char, err := randomCharacter(all)
+		if err != nil {
+			return "", err
+		}
+		password[i] = char
+	}
+
+	for i := len(password) - 1; i > 0; i-- {
+		j, err := rand.Int(rand.Reader, big.NewInt(int64(i+1)))
+		if err != nil {
+			return "", err
+		}
+		password[i], password[j.Int64()] = password[j.Int64()], password[i]
+	}
+
+	return string(password), nil
+}
+
+func randomCharacter(charset string) (byte, error) {
+	index, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+	if err != nil {
+		return 0, err
+	}
+	return charset[index.Int64()], nil
 }
 
 func ValidatePasswordStrength(password string) error {
@@ -201,7 +252,26 @@ func (a *Authenticator) Middleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		session := a.GetSession(c.Value)
+		if session == nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if session.MustChangePassword && !passwordChangeRouteAllowed(r.URL.Path) {
+			http.Error(w, "Password change required", http.StatusForbidden)
+			return
+		}
+
 		next(w, r)
+	}
+}
+
+func passwordChangeRouteAllowed(path string) bool {
+	switch path {
+	case "/api/me", "/api/logout", "/api/config/password":
+		return true
+	default:
+		return false
 	}
 }
 

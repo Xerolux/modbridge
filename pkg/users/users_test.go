@@ -168,9 +168,25 @@ func TestUpdateUser_AdminSetPasswordForcesChange(t *testing.T) {
 	if !updated.MustChangePassword {
 		t.Fatal("expected must_change_password=true after admin password reset")
 	}
+	if _, err := m.AuthenticateUser("viewer", newPwd); err != nil {
+		t.Fatalf("new admin-set password was not persisted: %v", err)
+	}
+	if _, err := m.AuthenticateUser("viewer", strongPassword); err == nil {
+		t.Fatal("old password still authenticates after admin reset")
+	}
+
+	// A reset request cannot bypass the forced-change requirement.
+	off := false
+	thirdPwd := "Third!StrongPass3"
+	if err := m.UpdateUser(user.ID, &UpdateUserRequest{Password: &thirdPwd, MustChangePassword: &off}); err != nil {
+		t.Fatalf("UpdateUser second password reset failed: %v", err)
+	}
+	updated, _ = m.db.GetUserByUsername("viewer")
+	if !updated.MustChangePassword {
+		t.Fatal("admin reset must force password change even when request tries to clear it")
+	}
 
 	// Explicitly clearing the flag must be honored.
-	off := false
 	if err := m.UpdateUser(user.ID, &UpdateUserRequest{MustChangePassword: &off}); err != nil {
 		t.Fatalf("UpdateUser clear flag failed: %v", err)
 	}

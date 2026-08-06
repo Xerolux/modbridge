@@ -275,7 +275,7 @@ import Button from 'primevue/button';
 import Dialog from 'primevue/dialog';
 import InputText from 'primevue/inputtext';
 import InputNumber from 'primevue/inputnumber';
-import Dropdown from 'primevue/dropdown';
+import Dropdown from 'primevue/select';
 import Password from 'primevue/password';
 import Checkbox from 'primevue/checkbox';
 import Tag from 'primevue/tag';
@@ -407,6 +407,10 @@ const saveUser = async () => {
       const updateData = { ...formData.value };
       if (!updateData.password) {
         delete updateData.password;
+	  } else {
+		// Administrator-issued passwords are temporary credentials. Always
+		// require the user to replace them after the next login.
+		updateData.must_change_password = true;
       }
       await axios.put(`/api/users/${formData.value.id}`, updateData);
       toast.add({ severity: 'success', summary: 'Success', detail: 'User updated', life: 3000 });

@@ -209,10 +209,10 @@ func (db *DB) GetAllUsers() ([]*User, error) {
 // UpdateUser updates a user
 func (db *DB) UpdateUser(user *User) error {
 	query := `
-		UPDATE users SET username = ?, full_name = ?, email = ?, role = ?, enabled = ?, description = ?, auto_deactivate_days = ?, expires_at = ?, must_change_password = ?
+		UPDATE users SET username = ?, full_name = ?, email = ?, password_hash = ?, role = ?, enabled = ?, description = ?, auto_deactivate_days = ?, expires_at = ?, must_change_password = ?
 		WHERE id = ?
 	`
-	_, err := db.conn.Exec(query, user.Username, user.FullName, user.Email, user.Role, user.Enabled, user.Description, user.AutoDeactivateDays, user.ExpiresAt, user.MustChangePassword, user.ID)
+	_, err := db.conn.Exec(query, user.Username, user.FullName, user.Email, user.PasswordHash, user.Role, user.Enabled, user.Description, user.AutoDeactivateDays, user.ExpiresAt, user.MustChangePassword, user.ID)
 	return err
 }
 

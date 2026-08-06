@@ -178,7 +178,7 @@ import 'gridstack/dist/gridstack.min.css';
 import axios from '../axios.js';
 import Button from 'primevue/button';
 import Dialog from 'primevue/dialog';
-import Dropdown from 'primevue/dropdown';
+import Dropdown from 'primevue/select';
 import DashboardWidget from '../components/DashboardWidget.vue';
 import ProxyConfigPanel from '../components/ProxyConfigPanel.vue';
 import { useEventSource } from '../utils/eventSource';

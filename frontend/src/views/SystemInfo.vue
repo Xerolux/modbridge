@@ -225,7 +225,7 @@
         <ConfirmDialog />
 
         <!-- ── Update Section ──────────────────────────────────── -->
-        <Card class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
+        <Card v-if="auth.hasPermission('system:restart')" class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
             <template #title>
               <div class="text-lg sm:text-xl flex items-center justify-between">
                 <span class="flex items-center gap-2"><i class="pi pi-cloud-download"></i> {{ t('update.title') }}</span>
@@ -353,6 +353,7 @@
   const checkError = ref(false);
   const showUpdateDialog = ref(false);
   let statusPollTimer = null;
+  let restartProbeTimer = null;
 
   const formatReleaseDate = (iso) => {
     try {
@@ -390,6 +391,26 @@
     }
   };
 
+  const reloadWhenServiceIsReady = (attempt = 0) => {
+    restartProbeTimer = setTimeout(async () => {
+      try {
+        const response = await fetch('/api/health', { cache: 'no-store', credentials: 'same-origin' });
+        if (response.ok) {
+          window.location.reload();
+          return;
+        }
+      } catch {
+        // The short outage is expected while the new binary starts.
+      }
+
+      if (attempt < 40) {
+        reloadWhenServiceIsReady(attempt + 1);
+      } else {
+        updating.value = false;
+      }
+    }, attempt === 0 ? 2500 : 1500);
+  };
+
   const pollStatus = async () => {
     try {
       const res = await axios.get('/api/update/status');
@@ -398,7 +419,7 @@
         clearInterval(statusPollTimer);
         statusPollTimer = null;
         toast.add({ severity: 'success', summary: t('update.title'), detail: t('update.installSuccess'), life: 3000 });
-        setTimeout(() => window.location.reload(), 4000);
+        reloadWhenServiceIsReady();
       } else if (res.data.state === 'error') {
         clearInterval(statusPollTimer);
         statusPollTimer = null;
@@ -588,11 +609,14 @@ const releasePort = (portInfo) => {
       await fetchInfo();
       loading.value = false;
       timeAgoTimer = setInterval(updateTimeAgo, 5000);
-      checkUpdate(); // auto-check for updates in background
+      if (auth.hasPermission('system:restart')) {
+        checkUpdate(); // auto-check only when the current role may install it
+      }
   });
 
   onUnmounted(() => {
       if (timeAgoTimer) clearInterval(timeAgoTimer);
       if (statusPollTimer) clearInterval(statusPollTimer);
+      if (restartProbeTimer) clearTimeout(restartProbeTimer);
   });
   </script>

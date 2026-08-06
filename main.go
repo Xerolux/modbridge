@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	_ "expvar"
+	"flag"
 	"fmt"
 	"log"
 	"modbridge/pkg/api"
@@ -30,8 +31,8 @@ var (
 )
 
 // bootstrapUsers ensures a usable admin account exists in multi-user mode.
-//   - Fresh install (no users, no prior AdminPassHash): creates admin/admin with
-//     MustChangePassword=true (change forced on first login).
+//   - Fresh install (no users, no prior AdminPassHash): creates an admin with a
+//     cryptographically random one-time password and forces a password change.
 //   - Migration (no users, but a prior single-user AdminPassHash): creates the
 //     admin from the EXISTING bcrypt hash so the operator's old password stays
 //     valid; MustChangePassword mirrors the prior ForcePasswordChange flag.
@@ -53,13 +54,16 @@ func bootstrapUsers(userMgr *users.Manager, cfg config.Config, l *logger.Logger)
 	}
 
 	if strings.TrimSpace(cfg.AdminPassHash) == "" {
-		// Fresh install: default admin/admin.
-		if _, err := userMgr.EnsureDefaultAdmin("admin", "admin", "system"); err != nil {
+		password, err := auth.GenerateSecurePassword()
+		if err != nil {
+			l.Error("SYSTEM", fmt.Sprintf("bootstrap: failed to generate initial password: %v", err))
+			return
+		}
+		if _, err := userMgr.EnsureDefaultAdmin("admin", password, "system"); err != nil {
 			l.Error("SYSTEM", fmt.Sprintf("bootstrap: failed to create default admin: %v", err))
 			return
 		}
-		l.Info("SYSTEM", "Default-Login erstellt — Benutzername: admin / Passwort: admin — BITTE beim ersten Login ändern.")
-		log.Println("SYSTEM: Default admin created (username: admin, password: admin). Change it on first login.")
+		log.Printf("SYSTEM: Initial admin password: %s (username: admin; change required on first login)", password)
 		return
 	}
 
@@ -80,6 +84,9 @@ func bootstrapUsers(userMgr *users.Manager, cfg config.Config, l *logger.Logger)
 }
 
 func main() {
+	resetPasswordUser := flag.String("reset-password", "", "generate a new one-time password for the named local user, then exit")
+	flag.Parse()
+
 	// 1. Database
 	db, err := database.NewDB("modbridge.db")
 	if err != nil {
@@ -88,6 +95,36 @@ func main() {
 	} else {
 		defer db.Close()
 		log.Println("Database initialized successfully")
+	}
+
+	if strings.TrimSpace(*resetPasswordUser) != "" {
+		if db == nil {
+			log.Fatal("Password reset requires an available database")
+		}
+		userMgr := users.NewManager(db)
+		allUsers, err := userMgr.GetAllUsers()
+		if err != nil {
+			log.Fatalf("Password reset failed: %v", err)
+		}
+		var target *database.User
+		for _, user := range allUsers {
+			if strings.EqualFold(user.Username, strings.TrimSpace(*resetPasswordUser)) {
+				target = user
+				break
+			}
+		}
+		if target == nil {
+			log.Fatalf("Password reset failed: user %q not found", strings.TrimSpace(*resetPasswordUser))
+		}
+		password, err := auth.GenerateSecurePassword()
+		if err != nil {
+			log.Fatalf("Password reset failed: %v", err)
+		}
+		if err := userMgr.AdminResetPassword(target.ID, password, true); err != nil {
+			log.Fatalf("Password reset failed: %v", err)
+		}
+		log.Printf("One-time password for %s: %s", target.Username, password)
+		return
 	}
 
 	// 2. Config
@@ -127,7 +164,7 @@ func main() {
 		userMgr := users.NewManager(db)
 
 		// Bootstrap the initial admin account. Multi-user is the default mode:
-		//   - Fresh install -> admin/admin (MustChangePassword forced)
+		//   - Fresh install -> random one-time password (change forced)
 		//   - Migration from single-user -> existing password hash reused
 		//   - Already populated -> no-op
 		bootstrapUsers(userMgr, cfgMgr.Get(), l)
