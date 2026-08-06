@@ -646,6 +646,9 @@ const goToLogs = () => {
   font-size: 1.2rem;
   font-weight: 800;
   color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .loading-spinner {

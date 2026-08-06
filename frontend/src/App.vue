@@ -608,4 +608,65 @@ textarea,
 .p-tag {
   border-radius: 999px !important;
 }
+
+/* ── Global usability fixes ──────────────────────────────────────────
+   Address: text truncation, table overflow, inconsistent card spacing,
+   panel delineation, and mobile responsiveness across ALL views.      */
+
+/* Tables: prevent content from being cut off invisibly — allow wrapping */
+.p-datatable td,
+.p-datatable th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.p-datatable .p-datatable-tbody > tr > td {
+  white-space: normal !important;
+  word-break: break-word;
+}
+
+/* Long text in dropdowns / selects must not overflow */
+.p-dropdown-label,
+.p-multiselect-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Dialogs: scrollable body, never cut off content */
+.p-dialog-content {
+  overflow-y: auto !important;
+  max-height: 70vh !important;
+}
+
+/* Cards / panels: consistent padding and clear borders */
+.glass-panel,
+.glass-card {
+  padding: 1.25rem !important;
+}
+
+/* Truncation utility for tight spaces */
+.truncate-safe {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Responsive font scaling: prevent text from being cut on small screens */
+@media (max-width: 640px) {
+  .text-2xl { font-size: 1.25rem !important; }
+  .text-3xl { font-size: 1.5rem !important; }
+  .text-xl  { font-size: 1.1rem !important; }
+}
+
+/* InputNumber: full width, no cut-off */
+.p-inputnumber-input,
+.p-inputnumber {
+  width: 100%;
+}
+
+/* Toast: wider on desktop so messages aren't truncated */
+.p-toast-message-text {
+  max-width: 420px;
+}
 </style>
