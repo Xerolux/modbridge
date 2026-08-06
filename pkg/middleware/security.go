@@ -37,13 +37,13 @@ func (m *SecurityMiddleware) Middleware(next http.HandlerFunc) http.HandlerFunc 
 		// X-Frame-Options
 		w.Header().Set("X-Frame-Options", "DENY")
 
-		// X-XSS-Protection
-		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		// Disable the obsolete browser XSS auditor; CSP is the active protection.
+		w.Header().Set("X-XSS-Protection", "0")
 
 		// Content-Security-Policy
 		// unsafe-eval removed from script-src; a pre-built Vue 3/Vite SPA does not need it.
 		// unsafe-inline is kept for style-src only (PrimeVue/TailwindCSS inject inline styles).
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws: wss:;")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws: wss:; manifest-src 'self'")
 
 		// Referrer-Policy
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
@@ -53,6 +53,7 @@ func (m *SecurityMiddleware) Middleware(next http.HandlerFunc) http.HandlerFunc 
 
 		// Cross-Origin-Opener-Policy helps prevent cross-origin attacks
 		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
+		w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
 
 		// Disable DNS prefetching to reduce information leakage
 		w.Header().Set("X-DNS-Prefetch-Control", "off")

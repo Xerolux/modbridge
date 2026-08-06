@@ -193,7 +193,7 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
-import Dropdown from 'primevue/dropdown';
+import Dropdown from 'primevue/select';
 import Badge from 'primevue/badge';
 import Dialog from 'primevue/dialog';
 import Toast from 'primevue/toast';

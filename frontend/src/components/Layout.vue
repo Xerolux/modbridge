@@ -1,454 +1,267 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from "vue";
-import { RouterLink, useRouter, useRoute } from 'vue-router';
-import { useAuthStore } from "../stores/auth";
-import { useAppStore } from "../stores/appStore";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
+import { useAuthStore } from '../stores/auth';
+import { useAppStore } from '../stores/appStore';
+import BrandMark from './BrandMark.vue';
 import LanguageSelector from './LanguageSelector.vue';
 import ThemeSettings from './ThemeSettings.vue';
 
 const { t } = useI18n();
-
 const router = useRouter();
 const route = useRoute();
 const auth = useAuthStore();
 const app = useAppStore();
-
 const mobileMenuOpen = ref(false);
+const mobileMenuButton = ref(null);
+const mobileDrawer = ref(null);
+const mobileCloseButton = ref(null);
+let previousBodyOverflow = '';
 
-// Navigation is structured into collapsible groups (SLZB-style) so the top bar
-// stays compact even with many destinations. Each group toggles open/closed;
-// the first group defaults open.
 const item = (labelKey, icon, path, permission) => ({ labelKey, icon, path, permission });
 const navGroups = [
   {
     labelKey: 'nav.groupProxies',
-    icon: 'pi pi-sitemap',
-    open: ref(true),
     items: [
-      item('nav.dashboard', 'pi pi-home',      '/',        null),
-      item('nav.control',   'pi pi-sliders-h', '/control', 'proxy:view'),
-    ],
-  },
-  {
-    labelKey: 'nav.devices',
-    icon: 'pi pi-desktop',
-    flat: true, // single-item group renders as a direct link
-    items: [ item('nav.devices', 'pi pi-desktop', '/devices', 'device:view') ],
+      item('nav.dashboard', 'pi pi-home', '/', null),
+      item('nav.control', 'pi pi-sliders-h', '/control', 'proxy:view'),
+      item('nav.devices', 'pi pi-desktop', '/devices', 'device:view')
+    ]
   },
   {
     labelKey: 'nav.groupSecurity',
-    icon: 'pi pi-shield',
-    open: ref(false),
     items: [
-      item('nav.users', 'pi pi-users',   '/users', 'user:view'),
-      item('nav.audit', 'pi pi-history', '/audit', 'audit:view'),
-    ],
+      item('nav.users', 'pi pi-users', '/users', 'user:view'),
+      item('nav.audit', 'pi pi-history', '/audit', 'audit:view')
+    ]
   },
   {
     labelKey: 'nav.groupSystem',
-    icon: 'pi pi-cog',
-    open: ref(false),
     items: [
-      item('nav.settings', 'pi pi-cog',          '/config', 'config:view'),
-      item('nav.system',   'pi pi-info-circle',  '/system', 'system:view'),
-      item('nav.logs',     'pi pi-list',         '/logs',   'logs:view'),
-    ],
-  },
+      item('nav.settings', 'pi pi-cog', '/config', 'config:view'),
+      item('nav.system', 'pi pi-info-circle', '/system', 'system:view'),
+      item('nav.logs', 'pi pi-list', '/logs', 'logs:view')
+    ]
+  }
 ];
 
-// Flatten for permission filtering + active-group detection
-const groupVisible = (g) => g.items.some(i => !i.permission || auth.isAdmin || auth.hasPermission(i.permission));
-const visibleGroups = computed(() => navGroups.filter(groupVisible));
-const itemVisible = (i) => !i.permission || auth.isAdmin || auth.hasPermission(i.permission);
-
+const itemVisible = (entry) => !entry.permission || auth.isAdmin || auth.hasPermission(entry.permission);
+const visibleGroups = computed(() => navGroups
+  .map(group => ({ ...group, items: group.items.filter(itemVisible) }))
+  .filter(group => group.items.length));
+const allVisibleItems = computed(() => visibleGroups.value.flatMap(group => group.items));
+const currentItem = computed(() => allVisibleItems.value.find(entry => isActiveRoute(entry.path)) || allVisibleItems.value[0]);
 const proxyCount = computed(() => app.proxies?.length ?? 0);
+const runningProxyCount = computed(() => app.proxies?.filter(proxy => proxy.status === 'Running').length ?? 0);
 
-const toggleGroup = (g) => { g.open.value = !g.open.value; };
+const isActiveRoute = (path) => path === '/' ? route.path === '/' : route.path.startsWith(path);
 
 const logout = async () => {
   await auth.logout();
   router.push('/login');
 };
 
-const isActiveRoute = (path) => {
-  if (path === '/') return route.path === '/';
-  return route.path.startsWith(path);
-};
+const closeMobileMenu = () => { mobileMenuOpen.value = false; };
+const handleKeydown = (event) => {
+  if (event.key === 'Escape') closeMobileMenu();
+  if (event.key !== 'Tab' || !mobileMenuOpen.value || !mobileDrawer.value) return;
 
-// Auto-expand a group when the active route is one of its children, so the
-// current location is always visible without the user having to hunt for it.
-watch(() => route.path, (p) => {
-  for (const g of navGroups) {
-    if (g.flat || !g.open) continue;
-    if (g.items.some(i => isActiveRoute(i.path))) g.open.value = true;
+  const focusable = [...mobileDrawer.value.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )];
+  if (!focusable.length) return;
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
   }
-}, { immediate: true });
-
-const handleKeydown = (e) => {
-  if (e.key === 'Escape') mobileMenuOpen.value = false;
 };
 
-onMounted(() => document.addEventListener('keydown', handleKeydown));
-onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
+watch(mobileMenuOpen, async (open) => {
+  if (open) {
+    previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    await nextTick();
+    mobileCloseButton.value?.focus();
+  } else {
+    document.body.style.overflow = previousBodyOverflow;
+    mobileMenuButton.value?.focus();
+  }
+});
+
+watch(() => route.path, closeMobileMenu);
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown);
+  app.fetchProxies();
+});
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown);
+  document.body.style.overflow = previousBodyOverflow;
+});
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col">
-    <!-- ── Top Navigation ─────────────────────────────────────────── -->
-    <header class="sticky top-0 z-50 px-3 py-2.5">
-      <nav class="glass-card rounded-2xl flex items-center px-3 py-1.5 gap-2">
+  <div class="app-layout">
+    <aside class="sidebar hidden lg:flex" aria-label="Hauptnavigation">
+      <button type="button" class="brand" @click="router.push('/')" aria-label="ModBridge Dashboard">
+        <BrandMark />
+        <span class="min-w-0 text-left">
+          <strong class="block truncate text-[0.95rem] tracking-tight">ModBridge</strong>
+          <small class="block truncate text-[0.64rem] uppercase tracking-[0.18em] text-[var(--text-muted)]">Proxy Manager</small>
+        </span>
+      </button>
 
-        <!-- Logo -->
-        <button
-          type="button"
-          class="nav-logo"
-          @click="router.push('/')"
-          aria-label="Dashboard"
-        >
-          <img src="../assets/logo.png" alt="ModBridge" class="w-8 h-8 object-contain" />
-          <span class="font-bold text-base tracking-tight hidden sm:block">ModBridge</span>
-        </button>
+      <div class="system-summary" aria-live="polite">
+        <span class="system-summary__icon"><i class="pi pi-bolt"></i></span>
+        <span class="min-w-0">
+          <strong>{{ runningProxyCount }} / {{ proxyCount }}</strong>
+          <small>{{ t('common.running') }}</small>
+        </span>
+        <span class="status-dot ml-auto" :class="runningProxyCount > 0 ? 'status-dot--running' : 'status-dot--unknown'"></span>
+      </div>
 
-        <div class="nav-divider hidden md:block"></div>
-
-        <!-- Status indicator (proxy count) -->
-        <div class="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs text-[var(--text-muted)]">
-          <span class="status-pill" :class="proxyCount > 0 ? 'status-pill--on' : 'status-pill--off'"></span>
-          <span>{{ proxyCount }} {{ t('nav.proxiesCount') }}</span>
-        </div>
-
-        <!-- Desktop nav: collapsible groups (SLZB-style) -->
-        <div class="hidden md:flex items-center gap-0.5 flex-1 overflow-x-auto">
-          <template v-for="g in visibleGroups" :key="g.labelKey">
-            <!-- Single-item group renders as a direct link -->
-            <RouterLink
-              v-if="g.flat"
-              v-for="i in g.items.filter(itemVisible)"
-              :key="i.path"
-              :to="i.path"
-              class="nav-link"
-              :class="{ 'nav-link--active': isActiveRoute(i.path) }"
-              active-class=""
-              exact-active-class=""
-              :aria-current="isActiveRoute(i.path) ? 'page' : undefined"
-            >
-              <i :class="i.icon" class="text-sm shrink-0"></i>
-              <span class="whitespace-nowrap">{{ t(g.labelKey) }}</span>
-            </RouterLink>
-
-            <!-- Multi-item group: hover dropdown -->
-            <div v-else class="nav-group">
-              <button
-                type="button"
-                class="nav-link"
-                :class="{ 'nav-link--active': g.items.some(i => isActiveRoute(i.path)) }"
-                @click="toggleGroup(g)"
-              >
-                <i :class="g.icon" class="text-sm shrink-0"></i>
-                <span class="whitespace-nowrap">{{ t(g.labelKey) }}</span>
-                <i class="pi pi-chevron-down text-[0.65rem] shrink-0 nav-group-caret" :class="{ 'nav-group-caret--open': g.open.value }"></i>
-              </button>
-              <Transition name="dropdown">
-                <div v-if="g.open.value" class="nav-group-menu">
-                  <RouterLink
-                    v-for="i in g.items.filter(itemVisible)"
-                    :key="i.path"
-                    :to="i.path"
-                    class="nav-group-item"
-                    :class="{ 'nav-group-item--active': isActiveRoute(i.path) }"
-                    active-class=""
-                    exact-active-class=""
-                    @click="g.open.value = false"
-                  >
-                    <i :class="i.icon" class="text-sm shrink-0"></i>
-                    <span class="whitespace-nowrap">{{ t(i.labelKey) }}</span>
-                  </RouterLink>
-                </div>
-              </Transition>
-            </div>
-          </template>
-        </div>
-
-        <!-- Right controls -->
-        <div class="flex items-center gap-1.5 ml-auto pl-1">
-          <ThemeSettings />
-
-          <LanguageSelector class="hidden sm:flex" />
-
-          <div
-            v-if="auth.user.username"
-            class="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel-item)] text-sm select-none"
+      <nav class="sidebar-nav">
+        <section v-for="group in visibleGroups" :key="group.labelKey" class="nav-section">
+          <h2>{{ t(group.labelKey) }}</h2>
+          <RouterLink
+            v-for="entry in group.items"
+            :key="entry.path"
+            :to="entry.path"
+            class="sidebar-link"
+            :class="{ 'sidebar-link--active': isActiveRoute(entry.path) }"
+            :aria-current="isActiveRoute(entry.path) ? 'page' : undefined"
           >
-            <i class="pi pi-user text-xs text-[var(--text-muted)]"></i>
-            <span class="text-[var(--text-secondary)] max-w-[12rem] truncate">{{ auth.user.username }}</span>
-            <span class="text-xs text-[var(--text-muted)] hidden xl:inline">({{ auth.user.role }})</span>
-          </div>
-
-          <button
-            type="button"
-            class="nav-icon-btn nav-icon-btn--danger hidden sm:flex"
-            @click="logout"
-            :title="t('nav.logout')"
-            :aria-label="t('nav.logout')"
-          >
-            <i class="pi pi-power-off text-sm"></i>
-          </button>
-
-          <!-- Mobile hamburger -->
-          <button
-            type="button"
-            class="nav-icon-btn md:hidden"
-            @click="mobileMenuOpen = true"
-            :aria-label="t('nav.openNavigation')"
-          >
-            <i class="pi pi-bars text-sm"></i>
-          </button>
-        </div>
+            <span class="sidebar-link__icon"><i :class="entry.icon"></i></span>
+            <span>{{ t(entry.labelKey) }}</span>
+            <i v-if="isActiveRoute(entry.path)" class="pi pi-chevron-right ml-auto text-[0.62rem]"></i>
+          </RouterLink>
+        </section>
       </nav>
-    </header>
 
-    <!-- ── Mobile backdrop ────────────────────────────────────────── -->
-    <Transition name="fade">
-      <div
-        v-if="mobileMenuOpen"
-        class="fixed inset-0 z-[9998] md:hidden bg-black/50 backdrop-blur-[2px]"
-        @click="mobileMenuOpen = false"
-        aria-hidden="true"
-      ></div>
-    </Transition>
-
-    <!-- ── Mobile drawer ──────────────────────────────────────────── -->
-    <Transition name="slide">
-      <div
-        v-if="mobileMenuOpen"
-        class="drawer fixed left-0 top-0 h-full z-[9999] md:hidden w-72 flex flex-col"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Navigation"
-      >
-        <!-- Header -->
-        <div class="flex items-center justify-between px-5 py-4 border-b border-[var(--border-soft)]">
-          <div class="flex items-center gap-2.5">
-            <img src="../assets/logo.png" alt="ModBridge" class="w-9 h-9 object-contain" />
-            <span class="font-bold text-[17px] tracking-tight">ModBridge</span>
-          </div>
-          <button type="button" class="nav-icon-btn" @click="mobileMenuOpen = false" :aria-label="t('nav.closeNavigation')">
-            <i class="pi pi-times text-sm"></i>
-          </button>
-        </div>
-
-        <!-- Links -->
-        <nav class="flex flex-col gap-1 p-4 flex-1 overflow-y-auto">
-          <template v-for="g in visibleGroups" :key="g.labelKey">
-            <template v-for="i in g.items.filter(itemVisible)" :key="i.path">
-              <RouterLink
-                :to="i.path"
-                class="mobile-nav-link"
-                :class="{ 'mobile-nav-link--active': isActiveRoute(i.path) }"
-                active-class=""
-                exact-active-class=""
-                @click="mobileMenuOpen = false"
-              >
-                <i :class="i.icon" class="text-base w-5 text-center shrink-0"></i>
-                <span>{{ t(g.flat ? g.labelKey : i.labelKey) }}</span>
-              </RouterLink>
-            </template>
-          </template>
-        </nav>
-
-        <!-- Footer -->
-        <div class="border-t border-[var(--border-soft)] p-4 flex flex-col gap-3">
-          <div
-            v-if="auth.user.username"
-            class="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--bg-panel-item)] border border-[var(--border-subtle)]"
-          >
-            <i class="pi pi-user text-sm text-[var(--text-muted)]"></i>
-            <span class="text-sm text-[var(--text-secondary)] truncate">{{ auth.user.username }}</span>
-            <span class="text-xs text-[var(--text-muted)] ml-auto shrink-0">({{ auth.user.role }})</span>
-          </div>
-
-          <div class="flex items-center justify-between px-1 py-1">
-            <span class="text-sm text-[var(--text-secondary)]">{{ t('nav.theme') }}</span>
-            <ThemeSettings />
-          </div>
-
+      <div class="sidebar-footer">
+        <div class="sidebar-tools">
+          <ThemeSettings />
           <LanguageSelector />
-
-          <button
-            type="button"
-            class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-[var(--danger)] hover:bg-[rgba(251,113,133,0.1)] transition-colors w-full"
-            @click="logout"
-          >
+        </div>
+        <div class="user-card">
+          <span class="user-avatar">{{ auth.user.username?.slice(0, 1).toUpperCase() || 'U' }}</span>
+          <span class="min-w-0 flex-1">
+            <strong class="block truncate text-xs">{{ auth.user.username }}</strong>
+            <small class="block truncate text-[0.68rem] text-[var(--text-muted)]">{{ auth.user.role }}</small>
+          </span>
+          <button type="button" class="icon-button icon-button--danger" @click="logout" :title="t('nav.logout')" :aria-label="t('nav.logout')">
             <i class="pi pi-power-off"></i>
-            <span>{{ t('nav.logout') }}</span>
           </button>
         </div>
       </div>
-    </Transition>
+    </aside>
 
-    <!-- ── Page content ───────────────────────────────────────────── -->
-    <main class="flex-grow w-full max-w-7xl mx-auto p-3 sm:p-4 pt-0">
-      <router-view />
-    </main>
+    <div class="main-column">
+      <header class="mobile-header flex lg:hidden">
+        <button type="button" class="brand" @click="router.push('/')" aria-label="ModBridge Dashboard">
+          <BrandMark />
+          <span class="font-bold tracking-tight">ModBridge</span>
+        </button>
+        <div class="flex items-center gap-2">
+          <span class="mobile-status"><span class="status-dot" :class="runningProxyCount > 0 ? 'status-dot--running' : 'status-dot--unknown'"></span>{{ runningProxyCount }}/{{ proxyCount }}</span>
+          <button ref="mobileMenuButton" type="button" class="icon-button" @click="mobileMenuOpen = true" :aria-label="t('nav.openNavigation')" :aria-expanded="mobileMenuOpen">
+            <i class="pi pi-bars"></i>
+          </button>
+        </div>
+      </header>
+
+      <div class="page-context hidden lg:flex">
+        <div>
+          <span class="page-context__eyebrow">ModBridge</span>
+          <strong>{{ currentItem ? t(currentItem.labelKey) : 'Dashboard' }}</strong>
+        </div>
+        <div class="page-context__state">
+          <span class="status-dot" :class="proxyCount > 0 ? 'status-dot--running' : 'status-dot--unknown'"></span>
+          {{ proxyCount }} {{ t('nav.proxiesCount') }}
+        </div>
+      </div>
+
+      <main class="page-content">
+        <router-view />
+      </main>
+    </div>
+
+    <Transition name="fade">
+      <button v-if="mobileMenuOpen" type="button" class="mobile-backdrop lg:hidden" aria-label="Navigation schließen" @click="closeMobileMenu"></button>
+    </Transition>
+    <Transition name="slide">
+      <aside ref="mobileDrawer" v-if="mobileMenuOpen" class="mobile-drawer lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
+        <div class="drawer-header">
+          <div class="brand"><BrandMark /><strong>ModBridge</strong></div>
+          <button ref="mobileCloseButton" type="button" class="icon-button" @click="closeMobileMenu" :aria-label="t('nav.closeNavigation')"><i class="pi pi-times"></i></button>
+        </div>
+        <nav class="sidebar-nav">
+          <section v-for="group in visibleGroups" :key="group.labelKey" class="nav-section">
+            <h2>{{ t(group.labelKey) }}</h2>
+            <RouterLink v-for="entry in group.items" :key="entry.path" :to="entry.path" class="sidebar-link" :class="{ 'sidebar-link--active': isActiveRoute(entry.path) }" @click="closeMobileMenu">
+              <span class="sidebar-link__icon"><i :class="entry.icon"></i></span>
+              <span>{{ t(entry.labelKey) }}</span>
+            </RouterLink>
+          </section>
+        </nav>
+        <div class="sidebar-footer mt-auto">
+          <div class="sidebar-tools"><ThemeSettings /><LanguageSelector /></div>
+          <button type="button" class="logout-button" @click="logout"><i class="pi pi-power-off"></i>{{ t('nav.logout') }}</button>
+        </div>
+      </aside>
+    </Transition>
   </div>
 </template>
 
 <style scoped>
-/* ── Nav base ──────────────────────────────────────────────────────── */
-.nav-logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 10px 4px 4px;
-  border-radius: 14px;
-  border: none;
-  cursor: pointer;
-  background: transparent;
-  color: var(--text-primary);
-  transition: background 0.15s;
-  flex-shrink: 0;
+.app-layout { display: flex; min-height: 100vh; }
+.sidebar {
+  position: sticky; top: 0; width: 16.5rem; height: 100vh; flex: 0 0 16.5rem; flex-direction: column;
+  padding: 1rem; border-right: 1px solid var(--border-subtle); background: color-mix(in srgb, var(--bg-surface-strong) 88%, transparent);
+  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); z-index: 40;
 }
-.nav-logo:hover { background: var(--bg-soft); }
-
-.nav-divider {
-  width: 1px;
-  height: 1.4rem;
-  background: var(--border-subtle);
-  margin: 0 8px;
-  flex-shrink: 0;
-}
-
-.nav-link {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border-radius: 12px;
-  font-size: 0.8rem;
-  cursor: pointer;
-  color: var(--text-muted);
-  text-decoration: none;
-  transition: background 0.15s ease, color 0.15s ease;
-  flex-shrink: 0;
-}
-.nav-link:hover { background: var(--bg-soft); color: var(--text-primary); }
-.nav-link--active {
-  background: var(--accent-tint);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-/* ── Collapsible nav groups ────────────────────────────────────────── */
-.nav-group {
-  position: relative;
-}
-.nav-group-caret {
-  transition: transform 0.15s ease;
-  opacity: 0.7;
-}
-.nav-group-caret--open { transform: rotate(180deg); }
-
-.nav-group-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  min-width: 200px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px;
-  border-radius: 14px;
-  background: var(--bg-surface-strong);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--border-soft);
-  box-shadow: var(--shadow-strong);
-  z-index: 60;
-}
-.nav-group-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  text-decoration: none;
-  transition: background 0.15s, color 0.15s;
-}
-.nav-group-item:hover { background: var(--bg-soft); color: var(--text-primary); }
-.nav-group-item--active { background: var(--accent-tint); color: var(--accent); font-weight: 600; }
-
-.dropdown-enter-active { transition: opacity 0.15s ease, transform 0.15s ease; }
-.dropdown-leave-active { transition: opacity 0.12s ease, transform 0.12s ease; }
-.dropdown-enter-from, .dropdown-leave-to { opacity: 0; transform: translateY(-4px); }
-
-/* ── Status pill (proxy count) ─────────────────────────────────────── */
-.status-pill {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  display: inline-block;
-}
-.status-pill--on { background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.18); }
-.status-pill--off { background: var(--text-muted); opacity: 0.5; }
-
-.nav-icon-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.1rem;
-  height: 2.1rem;
-  border-radius: 12px;
-  border: none;
-  cursor: pointer;
-  background: transparent;
-  color: var(--text-secondary);
-  transition: background 0.15s, color 0.15s;
-  flex-shrink: 0;
-}
-.nav-icon-btn:hover { background: var(--bg-soft); color: var(--text-primary); }
-.nav-icon-btn--danger:hover {
-  background: rgba(251, 113, 133, 0.15);
-  color: var(--danger);
-}
-
-/* ── Mobile nav ────────────────────────────────────────────────────── */
-.mobile-nav-link {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 14px;
-  font-size: 0.9rem;
-  cursor: pointer;
-  color: var(--text-secondary);
-  text-decoration: none;
-  transition: background 0.15s, color 0.15s;
-}
-.mobile-nav-link:hover { background: var(--bg-soft); color: var(--text-primary); }
-.mobile-nav-link--active {
-  background: var(--accent-tint);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-/* ── Drawer ────────────────────────────────────────────────────────── */
-.drawer {
-  background: var(--bg-surface-strong);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border-right: 1px solid var(--border-soft);
-  box-shadow: var(--shadow-strong);
-}
-
-/* Backdrop transition */
-.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+.brand { display: flex; align-items: center; gap: .7rem; min-width: 0; color: var(--text-primary); background: transparent; border: 0; cursor: pointer; }
+.system-summary { display: flex; align-items: center; gap: .7rem; margin: 1rem 0 1.1rem; padding: .75rem; border: 1px solid var(--border-subtle); border-radius: 1rem; background: var(--bg-panel-item); }
+.system-summary__icon { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .7rem; color: var(--accent); background: var(--accent-tint); }
+.system-summary strong, .system-summary small { display: block; }
+.system-summary strong { font-size: .82rem; color: var(--text-primary); }
+.system-summary small { margin-top: .08rem; font-size: .66rem; color: var(--text-muted); }
+.sidebar-nav { min-height: 0; flex: 1; overflow-y: auto; }
+.nav-section + .nav-section { margin-top: 1.15rem; }
+.nav-section h2 { margin: 0 0 .35rem .65rem; font: 700 .62rem/1.4 ui-sans-serif, system-ui, sans-serif; letter-spacing: .16em; text-transform: uppercase; color: var(--text-muted); }
+.sidebar-link { position: relative; display: flex; align-items: center; gap: .7rem; min-height: 2.55rem; padding: .42rem .55rem; border-radius: .85rem; color: var(--text-secondary); text-decoration: none; font-size: .82rem; font-weight: 550; transition: background .16s ease, color .16s ease, transform .16s ease; }
+.sidebar-link:hover { color: var(--text-primary); background: var(--bg-soft); transform: translateX(2px); }
+.sidebar-link--active { color: var(--accent); background: var(--accent-tint); }
+.sidebar-link--active::before { content: ''; position: absolute; left: -.35rem; width: 3px; height: 1.15rem; border-radius: 9px; background: var(--accent); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent); }
+.sidebar-link__icon { display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border-radius: .65rem; background: var(--bg-panel-item); }
+.sidebar-footer { padding-top: .85rem; border-top: 1px solid var(--border-subtle); }
+.sidebar-tools { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: 0 .25rem .75rem; }
+.user-card { display: flex; align-items: center; gap: .65rem; padding: .65rem; border: 1px solid var(--border-subtle); border-radius: 1rem; background: var(--bg-panel-item); }
+.user-avatar { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .7rem; color: var(--accent); background: var(--accent-tint); font-size: .75rem; font-weight: 800; }
+.icon-button { display: grid; place-items: center; width: 2.35rem; height: 2.35rem; flex: 0 0 auto; border: 0; border-radius: .8rem; color: var(--text-secondary); background: var(--bg-panel-item); cursor: pointer; transition: background .16s, color .16s; }
+.icon-button:hover { color: var(--text-primary); background: var(--bg-soft); }
+.icon-button--danger:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.main-column { min-width: 0; flex: 1; }
+.page-context { align-items: center; justify-content: space-between; min-height: 4.4rem; padding: .75rem 1.5rem; border-bottom: 1px solid var(--border-subtle); }
+.page-context__eyebrow { display: block; margin-bottom: .18rem; font-size: .62rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--text-muted); }
+.page-context strong { font-size: .95rem; color: var(--text-primary); }
+.page-context__state, .mobile-status { display: flex; align-items: center; gap: .5rem; padding: .45rem .7rem; border: 1px solid var(--border-subtle); border-radius: 999px; background: var(--bg-panel-item); color: var(--text-muted); font-size: .72rem; }
+.page-content { width: 100%; max-width: 100rem; margin: 0 auto; padding: .75rem 1rem 1.5rem; }
+.mobile-header { position: sticky; top: 0; z-index: 50; align-items: center; justify-content: space-between; padding: calc(.65rem + env(safe-area-inset-top)) calc(.8rem + env(safe-area-inset-right)) .65rem calc(.8rem + env(safe-area-inset-left)); border-bottom: 1px solid var(--border-subtle); background: color-mix(in srgb, var(--bg-surface-strong) 88%, transparent); backdrop-filter: var(--glass-blur); }
+.mobile-backdrop { position: fixed; inset: 0; z-index: 80; border: 0; background: rgba(2, 6, 23, .56); backdrop-filter: blur(3px); }
+.mobile-drawer { position: fixed; inset: 0 auto 0 0; z-index: 90; display: flex; width: min(20rem, 88vw); flex-direction: column; padding: calc(1rem + env(safe-area-inset-top)) 1rem calc(1rem + env(safe-area-inset-bottom)) calc(1rem + env(safe-area-inset-left)); border-right: 1px solid var(--border-soft); background: var(--bg-surface-strong); box-shadow: var(--shadow-strong); }
+.drawer-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-subtle); }
+.logout-button { display: flex; align-items: center; justify-content: center; gap: .55rem; width: 100%; min-height: 2.6rem; border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--border-subtle)); border-radius: .85rem; color: var(--danger); background: transparent; cursor: pointer; }
+.fade-enter-active, .fade-leave-active, .slide-enter-active, .slide-leave-active { transition: opacity .2s ease, transform .2s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
-
-/* Drawer slide transition */
-.slide-enter-active { transition: transform 0.26s cubic-bezier(0.4, 0, 0.2, 1); }
-.slide-leave-active { transition: transform 0.2s ease; }
 .slide-enter-from, .slide-leave-to { transform: translateX(-100%); }
+@media (max-width: 640px) { .page-content { padding: .5rem max(.35rem, env(safe-area-inset-right)) calc(1rem + env(safe-area-inset-bottom)) max(.35rem, env(safe-area-inset-left)); } .mobile-status { padding-inline: .55rem; } }
+@media (min-width: 1024px) { .mobile-drawer { display: none !important; } }
 </style>

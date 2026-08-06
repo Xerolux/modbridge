@@ -246,11 +246,11 @@
                                 <div class="grid grid-cols-1 gap-4">
                                     <div>
                                         <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ $t('login.currentPassword') }}</label>
-                                        <Password v-model="passwordForm.currentPassword" :feedback="false" toggleMask class="w-full" />
+                                        <Password v-model="passwordForm.current_password" :feedback="false" toggleMask class="w-full" />
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ $t('login.newPassword') }}</label>
-                                        <Password v-model="passwordForm.newPassword" toggleMask class="w-full" />
+                                        <Password v-model="passwordForm.new_password" toggleMask class="w-full" />
                                         <div class="mt-2 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
                                             <p class="text-xs text-blue-600 dark:text-blue-300 font-medium mb-1">{{ $t('login.passwordRequirements') }}:</p>
                                             <ul class="text-xs text-gray-500 dark:text-gray-400 space-y-1 ml-4 list-disc">
@@ -294,6 +294,7 @@
 
 <script setup>
   import { ref, onMounted } from 'vue';
+  import { useRouter } from 'vue-router';
   import axios from '../axios.js';
   import Button from 'primevue/button';
   import Password from 'primevue/password';
@@ -302,11 +303,11 @@
   import Tab from 'primevue/tab';
   import TabPanels from 'primevue/tabpanels';
   import TabPanel from 'primevue/tabpanel';
-  import Dropdown from 'primevue/dropdown';
+  import Dropdown from 'primevue/select';
   import InputNumber from 'primevue/inputnumber';
   import InputText from 'primevue/inputtext';
   import ToggleSwitch from 'primevue/toggleswitch';
-  import Chips from 'primevue/chips';
+  import Chips from 'primevue/inputtags';
   import Toast from 'primevue/toast';
   import ConfirmDialog from 'primevue/confirmdialog';
   import { useToast } from 'primevue/usetoast';
@@ -316,6 +317,7 @@
   import { useAuthStore } from '../stores/auth';
 
   const auth = useAuthStore();
+  const router = useRouter();
 
  const loading = ref(true);
  const toast = useToast();
@@ -323,8 +325,8 @@
  const store = useAppStore();
 
  const passwordForm = ref({
-     currentPassword: '',
-     newPassword: ''
+     current_password: '',
+     new_password: ''
  });
 
  const config = ref({
@@ -413,7 +415,9 @@
      try {
          await axios.post('/api/config/password', passwordForm.value);
          toast.add({ severity: 'success', summary: 'Success', detail: 'Password changed successfully', life: 3000 });
-         passwordForm.value = { currentPassword: '', newPassword: '' };
+         passwordForm.value = { current_password: '', new_password: '' };
+         await auth.logout();
+         await router.replace('/login');
      } catch (e) {
          let errorMsg = e.response?.data || e.message;
          // Provide user-friendly error messages for common password validation errors

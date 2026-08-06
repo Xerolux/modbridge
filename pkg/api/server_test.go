@@ -68,8 +68,8 @@ func TestHandleStatus(t *testing.T) {
 		t.Fatalf("Failed to unmarshal response: %v", err)
 	}
 
-	if response["setup_required"] != true {
-		t.Error("Expected setup_required true")
+	if response["setup_required"] != false {
+		t.Error("Expected setup_required false")
 	}
 
 	proxies, ok := response["proxies"].([]interface{})
@@ -79,6 +79,24 @@ func TestHandleStatus(t *testing.T) {
 
 	if len(proxies) != 0 {
 		t.Errorf("Expected 0 proxies, got %d", len(proxies))
+	}
+}
+
+func TestHandleSetupIsPermanentlyDisabled(t *testing.T) {
+	log, err := logger.NewLogger("test.log", 100)
+	if err != nil {
+		t.Fatalf("Failed to create logger: %v", err)
+	}
+	defer log.Close()
+
+	server := NewServer(config.NewManager("test.json"), nil, nil, log, nil, "test", "unknown")
+	req := httptest.NewRequest(http.MethodPost, "/api/setup", strings.NewReader(`{"password":"AttackerPass1!"}`))
+	w := httptest.NewRecorder()
+
+	server.handleSetup(w, req)
+
+	if w.Code != http.StatusGone {
+		t.Fatalf("setup returned %d, want 410 Gone", w.Code)
 	}
 }
 

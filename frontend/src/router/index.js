@@ -13,19 +13,7 @@ const Audit = () => import(/* webpackChunkName: "audit" */ '../views/Audit/Audit
 const ChangePassword = () => import(/* webpackChunkName: "change-password" */ '../views/ChangePassword.vue')
 const Layout = () => import(/* webpackChunkName: "layout" */ '../components/Layout.vue')
 
-const prefetchMainRoutes = () => {
-  Dashboard()
-  Layout()
-  Control()
-  Config()
-  Logs()
-  Devices()
-  SystemInfo()
-  Users()
-  Audit()
-}
-
- const routes = [
+const routes = [
   {
     path: '/login',
     name: 'Login',
@@ -105,10 +93,6 @@ router.beforeEach(async (to) => {
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
 
   if (!requiresAuth) {
-    // Prefetch main app chunks while user is on the login screen
-    if (to.name === 'Login') {
-      setTimeout(prefetchMainRoutes, 300)
-    }
     return true
   }
 

@@ -6,6 +6,7 @@ import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import { useI18n } from 'vue-i18n';
 import axios from '../axios.js';
+import BrandMark from '../components/BrandMark.vue';
 
 const { t } = useI18n();
 
@@ -56,7 +57,7 @@ const handleLogin = async () => {
       <!-- Brand mark -->
       <div class="flex flex-col items-center gap-4">
         <div class="brand-ring">
-          <img src="../assets/logo.png" alt="ModBridge" class="w-12 h-12 object-contain" />
+          <BrandMark />
         </div>
         <div class="text-center">
           <h1 class="text-2xl font-bold tracking-tight text-[var(--text-primary)]">ModBridge</h1>

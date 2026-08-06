@@ -8,9 +8,63 @@ package auth
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestGenerateSecurePassword(t *testing.T) {
+	first, err := GenerateSecurePassword()
+	if err != nil {
+		t.Fatalf("GenerateSecurePassword: %v", err)
+	}
+	second, err := GenerateSecurePassword()
+	if err != nil {
+		t.Fatalf("GenerateSecurePassword second call: %v", err)
+	}
+	if first == second {
+		t.Fatal("expected independently generated passwords")
+	}
+	if len(first) != generatedPasswordLength {
+		t.Fatalf("generated password length = %d, want %d", len(first), generatedPasswordLength)
+	}
+	if err := ValidatePasswordStrength(first); err != nil {
+		t.Fatalf("generated password violates strength policy: %v", err)
+	}
+}
+
+func TestMiddlewareRequiresPasswordChangeBeforeOtherAPIAccess(t *testing.T) {
+	a := NewAuthenticator()
+	token, err := a.CreateSession("u1", "admin", "admin", time.Hour, true)
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	handler := a.Middleware(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	for _, path := range []string{"/api/me", "/api/logout", "/api/config/password"} {
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+		req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
+		w := httptest.NewRecorder()
+		handler(w, req)
+		if w.Code != http.StatusNoContent {
+			t.Errorf("allowed path %s returned %d", path, w.Code)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/config/system", nil)
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
+	w := httptest.NewRecorder()
+	handler(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("protected API returned %d, want 403", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "Password change required") {
+		t.Fatalf("unexpected response body: %q", w.Body.String())
+	}
+}
 
 func TestHashPassword(t *testing.T) {
 	password := "S7r0ngP@ssw0rd!2024"
@@ -96,8 +150,7 @@ func TestValidateSession(t *testing.T) {
 }
 
 func TestHashPasswordUncheckedAllowsWeak(t *testing.T) {
-	// "admin" violates ValidatePasswordStrength, but the unchecked variant must
-	// accept it so we can seed the default admin/admin login on first run.
+	// The unchecked variant remains available for generated bootstrap secrets.
 	hash, err := HashPasswordUnchecked("admin")
 	if err != nil {
 		t.Fatalf("HashPasswordUnchecked returned error: %v", err)

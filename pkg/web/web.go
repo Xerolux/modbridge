@@ -58,6 +58,15 @@ func Handler() (http.Handler, error) {
 				w.Header().Set("Content-Type", ctype)
 			}
 
+			// Vite fingerprints production assets, so browsers can safely retain
+			// them for a year. Entry documents remain revalidated to discover a
+			// newly deployed asset graph immediately after an update.
+			if strings.HasPrefix(path, "assets/") {
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			} else {
+				w.Header().Set("Cache-Control", "no-cache")
+			}
+
 			content, err := fs.ReadFile(distRoot, path)
 			if err != nil {
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -76,6 +85,7 @@ func Handler() (http.Handler, error) {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("Cache-Control", "no-cache")
 		_, _ = w.Write(content) // Ignore write error (already committed response)
 	})
 
