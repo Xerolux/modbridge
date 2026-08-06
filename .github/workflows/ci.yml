@@ -110,6 +110,8 @@ jobs:
 
       - name: Install & build
         working-directory: ./frontend
+        env:
+          VITE_PRIMEVUE_LICENSE: ${{ secrets.VITE_PRIMEVUE_LICENSE }}
         run: npm ci && npm run build
 
       - uses: actions/upload-artifact@v7
