@@ -38,7 +38,7 @@ func TestAccountRecoveryChangesLoginAndConsumesToken(t *testing.T) {
 		t.Fatalf("AccountRecoveryAvailable = %v, %v", available, err)
 	}
 
-	newHash, err := auth.HashPassword("NewSecurePassword42!")
+	newHash, err := auth.HashPassword("Br1dgeT0wer!2026")
 	if err != nil {
 		t.Fatalf("HashPassword: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestAccountRecoveryChangesLoginAndConsumesToken(t *testing.T) {
 	if !recovered.Enabled || recovered.MustChangePassword || recovered.ExpiresAt != nil {
 		t.Fatalf("recovered account state is incorrect: %+v", recovered)
 	}
-	if !auth.CheckPasswordHash("NewSecurePassword42!", recovered.PasswordHash) {
+	if !auth.CheckPasswordHash("Br1dgeT0wer!2026", recovered.PasswordHash) {
 		t.Fatal("new password was not stored")
 	}
 
