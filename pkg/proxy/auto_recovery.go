@@ -184,15 +184,28 @@ func (rm *RecoveryManager) executeTask(task *RecoveryTask) {
 		rm.mu.Unlock()
 	}()
 
-	for task.Attempts < task.MaxAttempts {
+	for {
+		// All task field accesses go through rm.mu so they stay consistent
+		// with getNextTask/CancelTask/GetStats which read them under the lock.
+		rm.mu.Lock()
+		attemptsExhausted := task.Attempts >= task.MaxAttempts
+		rm.mu.Unlock()
+		if attemptsExhausted {
+			break
+		}
+
+		rm.mu.Lock()
+		task.Attempts++
+		rm.mu.Unlock()
+
 		select {
 		case <-rm.ctx.Done():
+			rm.mu.Lock()
 			task.Status = StatusCancelled
+			rm.mu.Unlock()
 			return
 		default:
 		}
-
-		task.Attempts++
 
 		// Create timeout context
 		ctx, cancel := context.WithTimeout(rm.ctx, rm.config.TaskTimeout)
@@ -203,18 +216,25 @@ func (rm *RecoveryManager) executeTask(task *RecoveryTask) {
 		cancel()
 
 		if err == nil {
+			rm.mu.Lock()
 			task.Status = StatusCompleted
 			task.CompletedAt = time.Now()
+			rm.mu.Unlock()
 			return
 		}
 
+		rm.mu.Lock()
 		task.Error = err
+		attempts := task.Attempts
+		rm.mu.Unlock()
 
 		// Wait before retry
-		if task.Attempts < task.MaxAttempts {
+		if attempts < task.MaxAttempts {
 			select {
 			case <-rm.ctx.Done():
+				rm.mu.Lock()
 				task.Status = StatusCancelled
+				rm.mu.Unlock()
 				return
 			case <-time.After(rm.config.RetryInterval):
 				// Continue to next attempt
@@ -222,8 +242,10 @@ func (rm *RecoveryManager) executeTask(task *RecoveryTask) {
 		}
 	}
 
+	rm.mu.Lock()
 	task.Status = StatusFailed
 	task.CompletedAt = time.Now()
+	rm.mu.Unlock()
 }
 
 // attemptRecovery attempts to recover a target
