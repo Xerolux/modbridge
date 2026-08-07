@@ -103,6 +103,19 @@ func main() {
 	} else {
 		defer db.Close()
 		log.Println("Database initialized successfully")
+
+		// Periodically purge old connection-history rows so the database
+		// cannot grow unbounded (a busy proxy can generate millions of
+		// rows in a few months). Keep 7 days, run every 6 hours.
+		go func() {
+			const retention = 7 * 24 * time.Hour
+			db.CleanOldHistory(retention) // immediate clean on startup
+			ticker := time.NewTicker(6 * time.Hour)
+			defer ticker.Stop()
+			for range ticker.C {
+				db.CleanOldHistory(retention)
+			}
+		}()
 	}
 
 	if strings.TrimSpace(*resetPasswordUser) != "" {
