@@ -9,7 +9,6 @@ import (
 	"modbridge/pkg/modbus"
 	"net"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -18,15 +17,32 @@ import (
 // minGap after the previous one, and refuses to serve more than maxSessions
 // connections at a time — the two behaviours calibration is meant to find.
 type pickyTarget struct {
-	listener    net.Listener
-	minGap      time.Duration
-	maxSessions int32
-	latency     time.Duration
+	listener net.Listener
+	minGap   time.Duration
+	latency  time.Duration
+
+	// Session slots, one per connection the device is willing to serve.
+	slots chan struct{}
 
 	mu       sync.Mutex
 	lastSeen time.Time
-	sessions atomic.Int32
 }
+
+// sessionHandover is how long a new connection waits for a slot before the
+// device treats it as one session too many.
+//
+// A slot is returned when the previous connection's handler notices the close,
+// which happens some scheduling delay after the peer actually closed. Deciding
+// at the instant of accept makes the first connection of a phase look like a
+// second session whenever that delay lands in between — a real failure on a
+// loaded machine, and one that says nothing about the code under test.
+//
+// The window has to sit between the two intervals it separates: longer than
+// reaping a closed connection, shorter than a step in which two connections are
+// genuinely open at once. Reaping is a runnable goroutine away; a step holds its
+// connections for at least twice this long by construction (see the request
+// counts below), so there is room on both sides.
+const sessionHandover = 150 * time.Millisecond
 
 func newPickyTarget(t *testing.T, minGap time.Duration, maxSessions int, latency time.Duration) *pickyTarget {
 	t.Helper()
@@ -37,10 +53,10 @@ func newPickyTarget(t *testing.T, minGap time.Duration, maxSessions int, latency
 	}
 
 	target := &pickyTarget{
-		listener:    listener,
-		minGap:      minGap,
-		maxSessions: int32(maxSessions),
-		latency:     latency,
+		listener: listener,
+		minGap:   minGap,
+		latency:  latency,
+		slots:    make(chan struct{}, maxSessions),
 	}
 
 	go func() {
@@ -60,8 +76,13 @@ func newPickyTarget(t *testing.T, minGap time.Duration, maxSessions int, latency
 func (pt *pickyTarget) serve(conn net.Conn) {
 	defer conn.Close()
 
-	over := pt.sessions.Add(1) > pt.maxSessions
-	defer pt.sessions.Add(-1)
+	var over bool
+	select {
+	case pt.slots <- struct{}{}:
+		defer func() { <-pt.slots }()
+	case <-time.After(sessionHandover):
+		over = true
+	}
 
 	for {
 		frame, err := modbus.ReadFrame(conn)
@@ -153,9 +174,13 @@ func TestCalibrationFindsSessionLimit(t *testing.T) {
 	target := newPickyTarget(t, 0, 1, 5*time.Millisecond)
 	p := calibrationProxy(t, target.addr())
 
+	// Eight requests split across two connections means each of them holds its
+	// session for three gaps — 300 ms against the recommended 100 ms spacing —
+	// so the second connection is still waiting when its grace runs out and is
+	// correctly seen as one session too many.
 	result, err := p.Calibrate(t.Context(), CalibrationConfig{
 		Probe:            ProbeSpec{UnitID: 1, Function: 3, Address: 0, Quantity: 2},
-		RequestsPerStep:  4,
+		RequestsPerStep:  8,
 		GapStepsMs:       []int{50},
 		ConnectionLevels: []int{1, 2},
 	})
