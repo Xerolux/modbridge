@@ -109,6 +109,23 @@ func (p *ProxyInstance) StaleResponses() int64 {
 	return atomic.LoadInt64(&p.staleResponses)
 }
 
+// CacheStats returns cache counters, or zeroes when no cache is configured.
+func (p *ProxyInstance) CacheStats() CacheStatsWithHitRate {
+	if p.cache == nil {
+		return CacheStatsWithHitRate{}
+	}
+	return p.cache.GetStatsWithHitRate()
+}
+
+// PollerStats returns how many requests the background poller keeps warm and
+// how its refreshes have gone.
+func (p *ProxyInstance) PollerStats() (tracked int, refreshes, failures int64) {
+	if p.poller == nil {
+		return 0, 0, 0
+	}
+	return p.poller.Stats()
+}
+
 // readMatchingResponse reads frames from conn until one carries the expected
 // transaction ID, discarding late responses to earlier transactions. It
 // returns an error once the deadline passes or too many stale frames arrive,

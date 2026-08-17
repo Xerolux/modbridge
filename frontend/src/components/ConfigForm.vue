@@ -241,6 +241,21 @@
                     <input v-model.number="proxy.request_timeout_ms" type="number" min="0" max="600000" @input="markDirty(proxy, index)" />
                     <small v-if="getFieldError(proxy, index, 'request_timeout_ms')" class="field-error">{{ getFieldError(proxy, index, 'request_timeout_ms') }}</small>
                   </div>
+                  <div class="field-group">
+                    <label>Cache Responses</label>
+                    <input v-model="proxy.cache_enabled" type="checkbox" @change="markDirty(proxy, index)" />
+                    <small v-if="getFieldError(proxy, index, 'cache_enabled')" class="field-error">{{ getFieldError(proxy, index, 'cache_enabled') }}</small>
+                  </div>
+                  <div class="field-group">
+                    <label>Cache TTL (ms)</label>
+                    <input v-model.number="proxy.cache_ttl_ms" type="number" min="0" max="3600000" :disabled="!proxy.cache_enabled" @input="markDirty(proxy, index)" />
+                    <small v-if="getFieldError(proxy, index, 'cache_ttl_ms')" class="field-error">{{ getFieldError(proxy, index, 'cache_ttl_ms') }}</small>
+                  </div>
+                  <div class="field-group">
+                    <label>Background Poll (ms)</label>
+                    <input v-model.number="proxy.poll_interval_ms" type="number" min="0" max="3600000" :disabled="!proxy.cache_enabled" @input="markDirty(proxy, index)" />
+                    <small v-if="getFieldError(proxy, index, 'poll_interval_ms')" class="field-error">{{ getFieldError(proxy, index, 'poll_interval_ms') }}</small>
+                  </div>
                 </div>
               </div>
             </article>
@@ -369,6 +384,9 @@ const addProxy = () => {
     max_target_conns: 0,
     min_request_gap_ms: 0,
     request_timeout_ms: 0,
+    cache_enabled: false,
+    cache_ttl_ms: 0,
+    poll_interval_ms: 0,
     description: '',
     tags: '',
     _isNew: true,

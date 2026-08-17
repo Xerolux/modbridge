@@ -95,12 +95,17 @@ type ProxyInstance struct {
 	MaxTargetConns    int           // Maximum simultaneous connections to the target (0 = default). Set to 1 for devices that accept a single Modbus session (SolarEdge/SunSpec inverters).
 	MinRequestGap     time.Duration // Minimum spacing between two requests to the target (0 = none)
 	RequestTimeout    time.Duration // Hard cap for one client request including retries (0 = derived from read timeout and retries)
+	CacheEnabled      bool          // Serve repeated reads from a cache instead of asking the target every time
+	CacheTTL          time.Duration // How long a cached read stays valid (0 = 5s default)
+	PollInterval      time.Duration // Refresh cached reads in the background at this interval (0 = passive cache only)
 
 	listener net.Listener
 	connPool *pool.Pool
 	connSem  chan struct{} // Semaphore for limiting concurrent connections
 	startMu  sync.Mutex    // Protects Start/Stop lifecycle
 	pacer    *requestPacer // Enforces MinRequestGap towards the target
+	cache    *ResponseCache
+	poller   *RegisterPoller
 
 	log           *logger.Logger
 	deviceTracker *devices.Tracker
@@ -317,6 +322,28 @@ func (p *ProxyInstance) Start() error {
 	p.adaptiveTimeout = NewAdaptiveTimeout(p.ReadTimeout, p.ConnectionTimeout)
 
 	p.ctx, p.cancel = context.WithCancel(context.Background())
+
+	// Read cache and background poller. Both are opt-in: a cached register is
+	// by definition not the live value, which is right for dashboards and
+	// wrong for control loops, so the operator decides.
+	if p.CacheEnabled {
+		cacheCfg := DefaultResponseCacheConfig()
+		if p.CacheTTL > 0 {
+			cacheCfg.TTL = p.CacheTTL
+		}
+		p.cache = NewResponseCache(cacheCfg)
+		p.poller = NewRegisterPoller(
+			p.PollInterval,
+			10*cacheCfg.TTL,
+			512,
+			p.forwardClientRequest,
+			func(key uint64, unitID uint8, resp []byte) { p.cache.SetForUnit(key, unitID, resp) },
+			func(msg string) { p.log.Debug(p.ID, msg) },
+		)
+		p.poller.Start(p.ctx)
+		p.log.Info(p.ID, fmt.Sprintf("Response cache enabled (ttl %v, background poll %v)", cacheCfg.TTL, p.PollInterval))
+	}
+
 	p.Stats.setStatus("Running")
 	p.Stats.SetLastStart(time.Now())
 
@@ -348,6 +375,10 @@ func (p *ProxyInstance) Stop() {
 
 	if p.connPool != nil {
 		p.connPool.Close()
+	}
+
+	if p.poller != nil {
+		p.poller.Stop()
 	}
 
 	if p.healthChecker != nil {
@@ -482,6 +513,27 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 			p.log.Debug(p.ID, fmt.Sprintf("Received Modbus request: %X (%d bytes)", reqFrame, len(reqFrame)))
 		}
 
+		// Serve reads from the cache when one is enabled. This runs before the
+		// circuit breaker on purpose: when the target is unreachable, recent
+		// data is more useful to the client than an exception, and the TTL
+		// bounds how long that can go on.
+		cacheKey, cacheUnit, cacheable := modbus.RequestCacheKey(reqFrame)
+		if p.cache != nil && cacheable {
+			if p.poller != nil {
+				p.poller.Track(cacheKey, cacheUnit, reqFrame)
+			}
+			if cached, hit := p.cache.Get(cacheKey); hit {
+				clientTxID, _ := modbus.FrameTxID(reqFrame)
+				modbus.SetFrameTxID(cached, clientTxID)
+				p.Stats.Requests.Add(1)
+				if _, err := clientConn.Write(cached); err != nil {
+					p.log.Error(p.ID, fmt.Sprintf("Write cached response error: %v", err))
+					return
+				}
+				continue
+			}
+		}
+
 		// Check circuit breaker BEFORE forwarding
 		if !p.circuitBreaker.AllowRequest() {
 			p.log.Error(p.ID, "Circuit breaker is OPEN, rejecting request")
@@ -506,13 +558,7 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 		forwardStart := time.Now()
 
 		// Route to the appropriate forwarding function based on protocol.
-		if p.Protocol == "rtu-tcp" {
-			respFrame, errFwd = p.forwardRequestRTU(reqFrame)
-		} else if p.MaxReadSize > 0 && modbus.IsReadRequest(reqFrame) {
-			respFrame, errFwd = p.handleSplitRead(reqFrame)
-		} else {
-			respFrame, errFwd = p.forwardRequest(reqFrame)
-		}
+		respFrame, errFwd = p.forwardClientRequest(reqFrame)
 
 		// Record completion
 		bytesRead := len(reqFrame)
@@ -531,6 +577,18 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 		}
 		p.Stats.Requests.Add(1)
 		p.circuitBreaker.RecordSuccess()
+		if p.cache != nil {
+			if cacheable {
+				// Never cache an exception: it describes a moment, not a value.
+				if !modbus.IsExceptionResponse(respFrame) {
+					p.cache.SetForUnit(cacheKey, cacheUnit, respFrame)
+				}
+			} else if unitID, fc, ok := modbus.FrameUnitAndFunction(reqFrame); ok && modbus.IsWriteFunction(fc) {
+				// A write may have changed any register of that unit, and the
+				// frame does not say which cached reads it touches.
+				p.cache.InvalidateUnit(unitID)
+			}
+		}
 		bytesWritten = len(respFrame)
 		p.enhancedStats.RecordRequestComplete(reqID, bytesRead, bytesWritten, nil)
 		if p.adaptiveTimeout != nil {
@@ -546,6 +604,21 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 			p.log.Error(p.ID, fmt.Sprintf("Write response error: %v", err))
 			return
 		}
+	}
+}
+
+// forwardClientRequest routes a client request to the right forwarding path.
+// The background poller uses it too, so a refreshed register goes over exactly
+// the same wire path — pacing, retries and split reads included — as a live
+// client read.
+func (p *ProxyInstance) forwardClientRequest(reqFrame []byte) ([]byte, error) {
+	switch {
+	case p.Protocol == "rtu-tcp":
+		return p.forwardRequestRTU(reqFrame)
+	case p.MaxReadSize > 0 && modbus.IsReadRequest(reqFrame):
+		return p.handleSplitRead(reqFrame)
+	default:
+		return p.forwardRequest(reqFrame)
 	}
 }
 
