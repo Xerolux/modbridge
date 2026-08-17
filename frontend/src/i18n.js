@@ -275,6 +275,10 @@ const de = {
       deviceProfile: 'Geräte-Profil',
       deviceProfilePlaceholder: 'Profil wählen (optional)',
       deviceProfileHint: 'Füllt die Felder unten mit Werten, die für diese Geräteklasse funktionieren',
+      protocol: 'Protokoll',
+      protocolTcp: 'Modbus TCP (Standard)',
+      protocolRtuTcp: 'Modbus RTU über TCP',
+      protocolHint: 'RTU über TCP nur für serielle Adapter, die rohe RTU-Frames ohne MBAP-Header erwarten',
       maxTargetConns: 'Max. Ziel-Verbindungen (0=Standard)',
       maxTargetConnsHint: '1 für Geräte mit nur einer Modbus-Sitzung (z. B. SolarEdge/SunSpec)',
       minRequestGap: 'Mindestabstand zwischen Anfragen (ms)',
@@ -298,6 +302,34 @@ const de = {
       huawei: {
         label: 'Huawei Wechselrichter / sDongle',
         hint: '3 s Pause nach dem Verbindungsaufbau, eine Verbindung, 200 ms Abstand zwischen Anfragen'
+      },
+      sma: {
+        label: 'SMA (Speedwire / Modbus)',
+        hint: 'Bedient nur sehr wenige Clients: eine Verbindung, 50 ms Abstand, 5 s Lese-Timeout'
+      },
+      fronius: {
+        label: 'Fronius (Symo / GEN24)',
+        hint: 'Verträgt zwei parallele Sitzungen, wird bei mehr langsam: 50 ms Abstand, 5 s Lese-Timeout'
+      },
+      kostal: {
+        label: 'Kostal (Plenticore / PIKO)',
+        hint: 'Antwortet langsam und nur auf einer Sitzung: eine Verbindung, 100 ms Abstand'
+      },
+      victron: {
+        label: 'Victron GX / Venus OS',
+        hint: 'Schneller TCP-Server für viele Clients: keine Begrenzung, kein Abstand, 5 s Lese-Timeout'
+      },
+      rtuGateway: {
+        label: 'Modbus-TCP-Gateway zu RTU',
+        hint: 'Alle Anfragen teilen sich eine serielle Leitung: eine Verbindung, 50 ms Abstand, Reads auf 125 Register aufgeteilt'
+      },
+      rtuOverTcp: {
+        label: 'Serieller Adapter (RTU über TCP)',
+        hint: 'Für Waveshare/USR/Elfin & Co., die rohe RTU-Frames erwarten: Protokoll RTU über TCP, eine Verbindung, 50 ms Abstand'
+      },
+      plc: {
+        label: 'SPS / Automatisierung',
+        hint: 'Schnelle Steuerungen mit vielen Client-Verbindungen: keine Begrenzung, kein Abstand, kurze Timeouts'
       }
     }
   },
@@ -710,6 +742,10 @@ const en = {
       deviceProfile: 'Device Profile',
       deviceProfilePlaceholder: 'Choose a profile (optional)',
       deviceProfileHint: 'Fills the fields below with settings known to work for this device class',
+      protocol: 'Protocol',
+      protocolTcp: 'Modbus TCP (standard)',
+      protocolRtuTcp: 'Modbus RTU over TCP',
+      protocolHint: 'RTU over TCP only for serial adapters expecting raw RTU frames without an MBAP header',
       maxTargetConns: 'Max Target Connections (0=default)',
       maxTargetConnsHint: 'Use 1 for devices serving a single Modbus session (e.g. SolarEdge/SunSpec)',
       minRequestGap: 'Min Request Gap (ms)',
@@ -733,6 +769,34 @@ const en = {
       huawei: {
         label: 'Huawei inverter / sDongle',
         hint: '3 s pause after connecting, one connection, 200 ms between requests'
+      },
+      sma: {
+        label: 'SMA (Speedwire / Modbus)',
+        hint: 'Serves very few clients: one connection, 50 ms spacing, 5 s read timeout'
+      },
+      fronius: {
+        label: 'Fronius (Symo / GEN24)',
+        hint: 'Handles two parallel sessions, slows down beyond that: 50 ms spacing, 5 s read timeout'
+      },
+      kostal: {
+        label: 'Kostal (Plenticore / PIKO)',
+        hint: 'Answers slowly and on one session only: one connection, 100 ms spacing'
+      },
+      victron: {
+        label: 'Victron GX / Venus OS',
+        hint: 'Fast TCP server built for many clients: no cap, no spacing, 5 s read timeout'
+      },
+      rtuGateway: {
+        label: 'Modbus TCP-to-RTU gateway',
+        hint: 'All requests share one serial line: one connection, 50 ms spacing, reads split at 125 registers'
+      },
+      rtuOverTcp: {
+        label: 'Serial adapter (RTU over TCP)',
+        hint: 'For Waveshare/USR/Elfin and similar expecting raw RTU frames: RTU-over-TCP protocol, one connection, 50 ms spacing'
+      },
+      plc: {
+        label: 'PLC / automation controller',
+        hint: 'Fast controllers with many client connections: no cap, no spacing, short timeouts'
       }
     }
   },

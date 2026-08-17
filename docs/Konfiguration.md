@@ -146,9 +146,34 @@ sudo journalctl -u modbridge -f
 | `max_target_conns` | int | Max. gleichzeitige Verbindungen zum Zielgerät (0 = Standard 10). `1` für Geräte mit nur einer Modbus-Sitzung, z.B. SolarEdge/SunSpec |
 | `min_request_gap_ms` | int | Mindestabstand zwischen zwei Anfragen an das Zielgerät (ms, 0 = aus) |
 | `request_timeout_ms` | int | Hartes Zeitbudget für eine Client-Anfrage inkl. Wiederholungen (ms, 0 = automatisch aus `read_timeout` und `max_retries`) |
+| `protocol` | string | `tcp` (Standard) oder `rtu-tcp` für serielle Adapter, die rohe RTU-Frames erwarten |
 | `description` | string | Optionale Beschreibung |
 | `tags` | array | Optionale Tags zur Kategorisierung |
 
+
+### Geräte-Profile
+
+Im Proxy-Dialog des Web-Interface füllt ein Geräte-Profil die Felder oben mit
+Werten, die für eine Geräteklasse funktionieren. Die Profile beschreiben
+Verhalten, keine Hersteller-Spezifikation: wie viele Modbus-Sitzungen ein Gerät
+bedient, wie viel Luft es zwischen Anfragen braucht und wie lange eine Antwort
+dauern darf. Als Startpunkt gedacht — Feintuning bleibt möglich.
+
+| Profil | Zielgeräte | Kern-Einstellung |
+|--------|-----------|------------------|
+| Standard | Gateways und Geräte ohne bekannte Eigenheiten | ModBridge-Voreinstellungen |
+| SolarEdge / SunSpec | SolarEdge und andere SunSpec-Wechselrichter | 1 Verbindung, 100 ms Abstand, Budget 2,5 s |
+| Huawei Wechselrichter / sDongle | SUN2000 und sDongle | 3 s Connect-Delay, 1 Verbindung, 200 ms Abstand |
+| SMA (Speedwire / Modbus) | SMA-Wechselrichter | 1 Verbindung, 50 ms Abstand |
+| Fronius (Symo / GEN24) | Fronius Datamanager / GEN24 | 2 Verbindungen, 50 ms Abstand |
+| Kostal (Plenticore / PIKO) | Kostal-Wechselrichter | 1 Verbindung, 100 ms Abstand |
+| Victron GX / Venus OS | Cerbo GX und Venus OS | keine Begrenzung, kein Abstand |
+| Modbus-TCP-Gateway zu RTU | Wago, Moxa, USR und ähnliche | 1 Verbindung, 50 ms Abstand, Reads auf 125 Register |
+| Serieller Adapter (RTU über TCP) | Waveshare, USR, Elfin | Protokoll `rtu-tcp`, 1 Verbindung, 50 ms Abstand |
+| SPS / Automatisierung | Siemens, Beckhoff, WAGO PFC | keine Begrenzung, kurze Timeouts |
+
+Neue Profile lassen sich in `frontend/src/deviceProfiles.js` ergänzen; Label und
+Hinweistext kommen aus `frontend/src/i18n.js` unter `control.profiles.<id>`.
 
 ### Vollständige config.json (Beispiel mit allen Optionen)
 

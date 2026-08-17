@@ -264,6 +264,17 @@
                      />
                      <small class="text-xs text-[var(--text-muted)]">{{ selectedProfileHint || $t('control.form.deviceProfileHint') }}</small>
                  </div>
+                 <div>
+                     <label class="block text-sm font-medium mb-1">{{ $t('control.form.protocol') }}</label>
+                     <Select
+                         v-model="proxyForm.protocol"
+                         :options="protocolOptions"
+                         optionLabel="label"
+                         optionValue="value"
+                         class="w-full"
+                     />
+                     <small class="text-xs text-[var(--text-muted)]">{{ $t('control.form.protocolHint') }}</small>
+                 </div>
                  <div class="flex flex-col sm:flex-row gap-4">
                      <div class="flex-1">
                          <label class="block text-sm font-medium mb-1">{{ $t('control.form.connectionTimeout') }}</label>
@@ -425,6 +436,7 @@ const defaultProxyForm = () => ({
     max_retries: 3,
     max_read_size: 0,
     connect_delay_ms: 0,
+    protocol: 'tcp',
     max_target_conns: 0,
     min_request_gap_ms: 0,
     request_timeout_ms: 0,
@@ -448,6 +460,10 @@ const deviceProfileOptions = computed(() =>
         hint: t(`control.profiles.${profile.id}.hint`)
     }))
 );
+const protocolOptions = computed(() => [
+    { value: 'tcp', label: t('control.form.protocolTcp') },
+    { value: 'rtu-tcp', label: t('control.form.protocolRtuTcp') }
+]);
 const selectedProfileHint = computed(
     () => deviceProfileOptions.value.find((option) => option.id === deviceProfile.value)?.hint || ''
 );
@@ -662,7 +678,7 @@ const openAddProxyDialog = () => {
 
 const openEditProxyDialog = (proxy) => {
     isEditMode.value = true;
-    proxyForm.value = { ...proxy };
+    proxyForm.value = { ...proxy, protocol: proxy.protocol || 'tcp' };
     deviceProfile.value = null;
     showProxyDialog.value = true;
 };
