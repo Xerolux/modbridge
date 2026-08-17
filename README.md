@@ -256,8 +256,17 @@ Das Admin-Passwort wird beim ersten Start automatisch generiert und in den Logs 
 modbridge logs | grep -i password
 ```
 
-Ansichten der Oberfläche — Dashboard, Steuerung, Proxy-Dialog, Messbericht,
-Geräte und Logs — im [Wiki](https://github.com/Xerolux/modbridge/wiki/Images).
+### So sieht das aus
+
+| | |
+|---|---|
+| ![Dashboard](./docs/assets/screenshots/dashboard.png) | ![Proxy-Steuerung](./docs/assets/screenshots/proxies.png) |
+| **Dashboard** — Zustand aller Proxys auf einen Blick | **Steuerung** — Proxys anlegen, starten, gruppieren |
+| ![Proxy bearbeiten](./docs/assets/screenshots/proxy-dialog.png) | ![Gerät vermessen](./docs/assets/screenshots/calibration-panel.png) |
+| **Proxy-Dialog** — Profil, Abstand, Cache, Protokoll | **Vermessen** — misst das Gerät, statt Werte zu raten |
+
+Weitere Ansichten — Geräte, Logs, dunkles Design und Handy-Format — im
+[Wiki](https://github.com/Xerolux/modbridge/wiki/Images).
 
 ---
 
