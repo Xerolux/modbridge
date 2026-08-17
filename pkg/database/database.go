@@ -43,6 +43,22 @@ func NewDB(path string) (*DB, error) {
 	}
 
 	// Enable foreign keys
+	// synchronous=NORMAL together with WAL is the setting that matters for
+	// installations on SD cards and cheap SSDs. The default (FULL) forces an
+	// fsync on every commit, and this database records a row per client
+	// connection — on a reconnecting client that is a flush per reconnect.
+	// NORMAL keeps the write-ahead log crash-safe; the exposure is that the
+	// last few committed transactions can be lost on a power cut. For
+	// connection history and audit trails that is the right trade.
+	if _, err := conn.Exec("PRAGMA synchronous=NORMAL"); err != nil {
+		return nil, fmt.Errorf("failed to set synchronous mode: %w", err)
+	}
+
+	// Wait rather than fail when another writer holds the lock.
+	if _, err := conn.Exec("PRAGMA busy_timeout=5000"); err != nil {
+		return nil, fmt.Errorf("failed to set busy timeout: %w", err)
+	}
+
 	if _, err := conn.Exec("PRAGMA foreign_keys=ON"); err != nil {
 		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 	}

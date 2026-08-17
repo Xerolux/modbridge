@@ -177,6 +177,13 @@ Dafür gibt es zwei zusammengehörige Optionen:
 "poll_interval_ms": 5000
 ```
 
+Der Poller **bündelt** dabei benachbarte Register: Fragt ein Client zwanzig
+kleine Bereiche ab, die dicht beieinander liegen, liest ModBridge sie als einen
+Block und verteilt die Antwort anschließend auf die einzelnen Einträge. Das
+reduziert genau die Größe, die auf trägen Geräten dominiert — die Anzahl der
+Round-Trips. Client-Anfragen selbst werden nie zusammengefasst; ein Proxy, der
+umschreibt, was ein Client gefragt hat, ist nicht mehr nachvollziehbar.
+
 **TTL und Intervall gehören zusammen.** `cache_ttl_ms` ist eine Obergrenze für
 das Alter eines Werts, kein Aktualisierungsplan — der Poller hält die Einträge
 deutlich frischer. Ist die Gültigkeit nicht **mehrfach so groß** wie das
@@ -365,3 +372,40 @@ und Klasse; Kategorien, Klassen-Hinweise und Notizen liegen in
   "max_connections": 1000
 }
 ```
+
+## Schreibzugriffe und Flash-Verschleiß
+
+Auf SD-Karte oder günstiger SSD ist die Frage berechtigt, was ModBridge
+eigentlich auf die Platte schreibt.
+
+**Nicht auf die Platte gehen:** Response-Cache, Hintergrund-Poller, Statistiken,
+Latenz-Perzentile und die Kalibrierung. Das liegt vollständig im RAM und
+verschwindet beim Neustart. Wer den Cache aktiviert, erzeugt damit **keinen**
+zusätzlichen Schreibzugriff.
+
+**Auf die Platte gehen:**
+
+| Was | Wann |
+|-----|------|
+| `connection_history` | eine Zeile pro Client-Verbindung |
+| `devices` | Aktualisierung pro Verbindung |
+| `audit_log` | pro Benutzeraktion (selten) |
+| Logdateien | pro Logzeile, mit Rotation |
+| `config.json` | nur bei Konfigurationsänderungen |
+
+Der relevante Posten ist die Verbindungshistorie. Ein Client mit einer
+dauerhaften Verbindung erzeugt fast nichts; ein Client in einer
+Reconnect-Schleife dagegen eine Zeile pro Versuch.
+
+Dagegen wirken:
+
+- **WAL-Modus und `synchronous=NORMAL`** sind gesetzt. Damit entfällt der
+  fsync bei jedem Commit — der Unterschied auf Flash-Speicher ist erheblich.
+  Der Preis: Bei einem Stromausfall können die letzten Transaktionen fehlen.
+  Die Datenbank wird dabei nicht beschädigt.
+- Die Verbindungshistorie wird automatisch nach 7 Tagen aufgeräumt.
+- `log_level` auf `WARN` reduziert das Logvolumen deutlich.
+
+Wer ganz sichergehen will, legt Datenbank und Logs auf ein anderes Medium
+(USB-SSD, tmpfs für Logs) — das ist eine Frage der Installation, nicht der
+Konfiguration.
