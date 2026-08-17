@@ -61,27 +61,35 @@ func (ft FlexibleTags) MarshalJSON() ([]byte, error) {
 
 // ProxyConfig defines the configuration for a single proxy instance.
 type ProxyConfig struct {
-	ID                string       `json:"id"`
-	Name              string       `json:"name"`
-	ListenAddr        string       `json:"listen_addr"`
-	TargetAddr        string       `json:"target_addr"`
-	Enabled           bool         `json:"enabled"`
-	Paused            bool         `json:"paused"`             // Paused state (different from Enabled)
-	ConnectionTimeout int          `json:"connection_timeout"` // Connection timeout in seconds (default: 10)
-	ReadTimeout       int          `json:"read_timeout"`       // Read timeout in seconds (default: 30)
-	MaxRetries        int          `json:"max_retries"`        // Max retry attempts (default: 3)
-	Description       string       `json:"description"`        // User description
-	MaxReadSize       int          `json:"max_read_size"`
-	ConnectDelayMs    int          `json:"connect_delay_ms"`   // Delay after TCP connect before first request (ms). For slow devices like Huawei inverters/sDongles.
-	MaxTargetConns    int          `json:"max_target_conns"`   // Max simultaneous connections to the target (0 = default 10). Set to 1 for single-session devices like SolarEdge/SunSpec inverters.
-	MinRequestGapMs   int          `json:"min_request_gap_ms"` // Minimum pause between two requests to the target (ms). For devices that drop back-to-back requests.
-	RequestTimeoutMs  int          `json:"request_timeout_ms"` // Hard cap for one client request incl. retries (ms, 0 = derived). Keep below the client's own timeout.
-	CacheEnabled      bool         `json:"cache_enabled"`      // Serve repeated reads from a cache instead of asking the target every time
-	CacheTTLMs        int          `json:"cache_ttl_ms"`       // Lifetime of a cached read (ms, 0 = 5000). A cached value is not the live value.
-	PollIntervalMs    int          `json:"poll_interval_ms"`   // Refresh cached reads in the background at this interval (ms, 0 = passive cache only)
-	CalibratedAt      string       `json:"calibrated_at"`      // When this proxy was last measured (RFC3339). Informational: tells you how old the tuned values are.
-	DeviceProfile     string       `json:"device_profile"`     // Device profile last applied in the UI. Purely informational: it records which preset the settings came from, the proxy behaviour follows the individual fields.
-	Tags              FlexibleTags `json:"tags"`
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	ListenAddr        string `json:"listen_addr"`
+	TargetAddr        string `json:"target_addr"`
+	Enabled           bool   `json:"enabled"`
+	Paused            bool   `json:"paused"`             // Paused state (different from Enabled)
+	ConnectionTimeout int    `json:"connection_timeout"` // Connection timeout in seconds (default: 10)
+	ReadTimeout       int    `json:"read_timeout"`       // Read timeout in seconds (default: 30)
+	MaxRetries        int    `json:"max_retries"`        // Max retry attempts (default: 3)
+	Description       string `json:"description"`        // User description
+	MaxReadSize       int    `json:"max_read_size"`
+	ConnectDelayMs    int    `json:"connect_delay_ms"`   // Delay after TCP connect before first request (ms). For slow devices like Huawei inverters/sDongles.
+	MaxTargetConns    int    `json:"max_target_conns"`   // Max simultaneous connections to the target (0 = default 10). Set to 1 for single-session devices like SolarEdge/SunSpec inverters.
+	MinRequestGapMs   int    `json:"min_request_gap_ms"` // Minimum pause between two requests to the target (ms). For devices that drop back-to-back requests.
+	RequestTimeoutMs  int    `json:"request_timeout_ms"` // Hard cap for one client request incl. retries (ms, 0 = derived). Keep below the client's own timeout.
+	CacheEnabled      bool   `json:"cache_enabled"`      // Serve repeated reads from a cache instead of asking the target every time
+	CacheTTLMs        int    `json:"cache_ttl_ms"`       // Lifetime of a cached read (ms, 0 = 5000). A cached value is not the live value.
+	PollIntervalMs    int    `json:"poll_interval_ms"`   // Refresh cached reads in the background at this interval (ms, 0 = passive cache only)
+	CalibratedAt      string `json:"calibrated_at"`      // When this proxy was last measured (RFC3339). Informational: tells you how old the tuned values are.
+	DeviceProfile     string `json:"device_profile"`     // Device profile last applied in the UI. Purely informational: it records which preset the settings came from, the proxy behaviour follows the individual fields.
+	// LastCalibration is the full report of the most recent measurement, kept
+	// verbatim so it can be read again later — a run takes up to 90 seconds and
+	// locks out every client, so nobody should have to repeat one just to see
+	// what it said. Held as raw JSON: the shape belongs to pkg/proxy, and
+	// copying the type here would only create a second one to keep in step.
+	// Recording a measurement is not applying it; the tuning fields above are
+	// only ever changed by a deliberate act.
+	LastCalibration json.RawMessage `json:"last_calibration,omitempty"`
+	Tags            FlexibleTags    `json:"tags"`
 	// Protocol controls the wire format used when talking to the target.
 	// "tcp"     – standard Modbus TCP (MBAP header, default)
 	// "rtu-tcp" – Modbus RTU over TCP: client sends TCP frames, proxy strips

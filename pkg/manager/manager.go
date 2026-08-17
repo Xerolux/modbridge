@@ -7,6 +7,7 @@ package manager
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"modbridge/pkg/config"
@@ -397,6 +398,18 @@ func (m *Manager) GetProxyInstance(id string) (*proxy.ProxyInstance, bool) {
 	return p, ok
 }
 
+// RecordCalibration stores a finished measurement against its proxy: when it
+// ran and what it found. It touches nothing the proxy behaves by, so the run
+// stays a report — applying the recommendation remains a separate, deliberate
+// act. The proxy is not restarted; only its stored configuration changes.
+func (m *Manager) RecordCalibration(id, at string, report json.RawMessage) error {
+	return m.cfgMgr.UpdateProxy(id, func(p *config.ProxyConfig) error {
+		p.CalibratedAt = at
+		p.LastCalibration = report
+		return nil
+	})
+}
+
 func (m *Manager) GetProxies() []map[string]interface{} {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -456,6 +469,7 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 			"stale_responses":    p.StaleResponses(),
 			"device_profile":     pCfg.DeviceProfile,
 			"calibrated_at":      pCfg.CalibratedAt,
+			"last_calibration":   pCfg.LastCalibration,
 			"cache_enabled":      pCfg.CacheEnabled,
 			"cache_ttl_ms":       pCfg.CacheTTLMs,
 			"poll_interval_ms":   pCfg.PollIntervalMs,
@@ -684,6 +698,7 @@ func (m *Manager) getProxyStatusLocked(id string) map[string]interface{} {
 		"stale_responses":    p.StaleResponses(),
 		"device_profile":     pCfg.DeviceProfile,
 		"calibrated_at":      pCfg.CalibratedAt,
+		"last_calibration":   pCfg.LastCalibration,
 		"cache_enabled":      pCfg.CacheEnabled,
 		"cache_ttl_ms":       pCfg.CacheTTLMs,
 		"poll_interval_ms":   pCfg.PollIntervalMs,

@@ -336,51 +336,46 @@
                      </div>
                  </div>
                  <div v-if="isEditMode" class="rounded-xl border border-[var(--border-subtle)] p-3">
-                     <div class="flex items-center justify-between gap-3">
-                         <div>
+                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                         <div class="min-w-0">
                              <div class="text-sm font-medium">{{ $t('control.form.calibrate') }}</div>
                              <small class="block text-xs text-[var(--text-muted)]">{{ $t('control.form.calibrateHint') }}</small>
                              <small v-if="proxyForm.calibrated_at" class="block text-xs text-[var(--text-muted)]">
                                  {{ $t('control.form.calibratedAt', { when: new Date(proxyForm.calibrated_at).toLocaleString() }) }}
                              </small>
+                             <Button
+                                 v-if="proxyForm.last_calibration"
+                                 :label="$t('control.form.calibrateShowLast')"
+                                 icon="pi pi-history"
+                                 severity="secondary"
+                                 text
+                                 size="small"
+                                 class="px-0 mt-1"
+                                 @click="showLastCalibration = true"
+                             />
                          </div>
                          <Button
                              :label="$t('control.form.calibrateStart')"
                              icon="pi pi-gauge"
                              severity="secondary"
                              size="small"
+                             class="w-full sm:w-auto shrink-0"
                              :loading="calibrating"
+                             :disabled="calibrating"
                              @click="runCalibration"
                          />
                      </div>
-                     <div v-if="calibrationResult" class="mt-3 space-y-2">
-                         <table class="w-full text-xs">
-                             <thead>
-                                 <tr class="text-[var(--text-muted)]">
-                                     <th class="text-left font-normal">{{ $t('control.form.calibrateGap') }}</th>
-                                     <th class="text-right font-normal">{{ $t('control.form.calibrateErrors') }}</th>
-                                     <th class="text-right font-normal">p50</th>
-                                     <th class="text-right font-normal">p95</th>
-                                 </tr>
-                             </thead>
-                             <tbody>
-                                 <tr v-for="step in calibrationResult.gap_steps" :key="step.gap_ms">
-                                     <td>{{ step.gap_ms }} ms</td>
-                                     <td class="text-right" :class="step.errors ? 'text-[var(--danger)]' : ''">{{ step.errors }}/{{ step.requests }}</td>
-                                     <td class="text-right">{{ step.p50_ms }} ms</td>
-                                     <td class="text-right">{{ step.p95_ms }} ms</td>
-                                 </tr>
-                             </tbody>
-                         </table>
-                         <p v-for="(note, i) in calibrationResult.notes" :key="i" class="text-xs text-[var(--text-muted)]">{{ note }}</p>
-                         <div class="flex items-center justify-between gap-3 pt-1">
-                             <span class="text-xs">
-                                 {{ calibrationResult.recommended.min_request_gap_ms }} ms ·
-                                 {{ calibrationResult.recommended.max_target_conns }} ·
-                                 {{ calibrationResult.recommended.read_timeout }} s
-                             </span>
-                             <Button :label="$t('control.form.calibrateApply')" size="small" @click="applyCalibration" />
-                         </div>
+                     <!-- A run takes tens of seconds and blocks every client for its
+                          duration. Saying so, and counting, is the difference between
+                          waiting and wondering whether the click registered at all. -->
+                     <div v-if="calibrating" class="mt-3 space-y-2">
+                         <ProgressBar :value="calibrationProgress" :show-value="false" style="height: 6px" />
+                         <p class="text-xs text-[var(--text-muted)]">
+                             {{ $t('control.form.calibrateRunning', { elapsed: calibrationElapsed, max: calibrationMaxSeconds }) }}
+                         </p>
+                     </div>
+                     <div v-if="calibrationResult" ref="calibrationResultPanel" class="mt-3">
+                         <CalibrationReport :report="calibrationResult" show-apply @apply="applyCalibration" />
                      </div>
                  </div>
                  <div class="flex items-center gap-4">
@@ -423,6 +418,17 @@
                  </div>
              </div>
          </Dialog>
+         <Dialog
+             v-model:visible="showLastCalibration"
+             :header="$t('control.form.calibrateLastTitle')"
+             modal
+             class="w-full max-w-lg"
+         >
+             <p v-if="proxyForm.calibrated_at" class="text-xs text-[var(--text-muted)] mb-3">
+                 {{ $t('control.form.calibratedAt', { when: new Date(proxyForm.calibrated_at).toLocaleString() }) }}
+             </p>
+             <CalibrationReport :report="lastCalibrationReport" show-apply @apply="applyStoredCalibration" />
+         </Dialog>
          <Menu ref="actionMenu" id="overlay_menu" :model="menuItems" :popup="true" />
          <Toast />
          <ConfirmDialog />
@@ -430,7 +436,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue';
+import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue';
 import axios from '../axios.js';
 import Button from 'primevue/button';
 import Dialog from 'primevue/dialog';
@@ -438,6 +444,8 @@ import Menu from 'primevue/menu';
 import InputText from 'primevue/inputtext';
 import InputNumber from 'primevue/inputnumber';
 import Checkbox from 'primevue/checkbox';
+import ProgressBar from 'primevue/progressbar';
+import CalibrationReport from '../components/CalibrationReport.vue';
 import Select from 'primevue/select';
 import Chips from 'primevue/inputtags';
 import Toast from 'primevue/toast';
@@ -553,10 +561,27 @@ const selectedProfileHint = computed(() => {
 // into the form when the operator says so.
 const calibrating = ref(false);
 const calibrationResult = ref(null);
+const calibrationResultPanel = ref(null);
+const calibrationElapsed = ref(0);
+let calibrationTimer = null;
+
+// The server bounds a run at 90 seconds, so the bar is an honest fraction of
+// that ceiling rather than an invented percentage. It stops just short of full:
+// a run that finishes early should be announced by its result, not by a bar
+// that sat at 100% for the last twenty seconds.
+const calibrationMaxSeconds = 90;
+const calibrationProgress = computed(() =>
+    Math.min(97, Math.round((calibrationElapsed.value / calibrationMaxSeconds) * 100))
+);
 
 const runCalibration = async () => {
     calibrating.value = true;
     calibrationResult.value = null;
+    calibrationElapsed.value = 0;
+    clearInterval(calibrationTimer);
+    calibrationTimer = setInterval(() => {
+        calibrationElapsed.value += 1;
+    }, 1000);
     try {
         const res = await axios.post(
             '/api/proxies/calibrate',
@@ -564,7 +589,17 @@ const runCalibration = async () => {
             { timeout: 300000 }
         );
         calibrationResult.value = res.data;
-        proxyForm.value = { ...proxyForm.value, calibrated_at: new Date().toISOString() };
+        // The server files the report against the proxy; mirroring it here keeps
+        // "show the last measurement" correct without a reload.
+        proxyForm.value = {
+            ...proxyForm.value,
+            calibrated_at: new Date().toISOString(),
+            last_calibration: res.data
+        };
+        // On a phone the result lands below the fold, which reads as nothing
+        // having happened at all.
+        await nextTick();
+        calibrationResultPanel.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (e) {
         toast.add({
             severity: 'error',
@@ -573,12 +608,14 @@ const runCalibration = async () => {
             life: 8000
         });
     } finally {
+        clearInterval(calibrationTimer);
+        calibrationTimer = null;
         calibrating.value = false;
     }
 };
 
-const applyCalibration = () => {
-    const recommended = calibrationResult.value?.recommended;
+const applyCalibration = (report) => {
+    const recommended = (report || calibrationResult.value)?.recommended;
     if (!recommended) return;
     proxyForm.value = {
         ...proxyForm.value,
@@ -587,6 +624,20 @@ const applyCalibration = () => {
         read_timeout: recommended.read_timeout
     };
     toast.add({ severity: 'info', summary: t('control.form.calibrateApplied'), life: 3000 });
+};
+
+// The last run is kept with the proxy, so it can be read again without paying
+// for another measurement. It is written by the server; a hand-edited config
+// should not be able to break the dialog, hence the shape check.
+const showLastCalibration = ref(false);
+const lastCalibrationReport = computed(() => {
+    const stored = proxyForm.value.last_calibration;
+    return stored && typeof stored === 'object' ? stored : null;
+});
+
+const applyStoredCalibration = (report) => {
+    applyCalibration(report);
+    showLastCalibration.value = false;
 };
 
 const onCacheToggle = () => {

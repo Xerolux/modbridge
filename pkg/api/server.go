@@ -1289,6 +1289,18 @@ func (s *Server) handleProxyCalibrate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Keep the report. A run costs up to 90 seconds during which no client is
+	// served, so nobody should have to repeat one just to read what it said.
+	// This records the measurement only — the proxy's own settings are
+	// untouched until someone applies the recommendation.
+	if report, err := json.Marshal(result); err != nil {
+		s.log.Error(req.ID, fmt.Sprintf("Failed to encode calibration report: %v", err))
+	} else if err := s.mgr.RecordCalibration(req.ID, time.Now().Format(time.RFC3339), report); err != nil {
+		// The measurement itself succeeded; failing to file it must not throw
+		// it away, so this is reported and the result still goes back.
+		s.log.Error(req.ID, fmt.Sprintf("Failed to store calibration report: %v", err))
+	}
+
 	if s.auditor != nil {
 		ip, ua := requestMeta(r)
 		s.auditor.LogAction("proxy.calibrate", "proxy", req.ID, session.UserID, session.Username,
