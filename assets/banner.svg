@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 360" width="1280" height="360" role="img" aria-labelledby="t d">
+  <title id="t">ModBridge — Modbus TCP Proxy Manager</title>
+  <desc id="d">ModBridge steht zwischen mehreren Clients und einem Modbus-Gerät: viele Clients, eine Sitzung, gemessene Einstellungen.</desc>
+
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#f0fdfa"/>
+      <stop offset="55%"  stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#eef2ff"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <marker id="ar" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#10b981"/>
+    </marker>
+    <marker id="ag" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <style>
+    .name  { font: 800 56px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #0f172a; }
+    .claim { font: 400 21px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #475569; }
+    .pill  { font: 600 14px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #0f766e; }
+    .node  { font: 600 14px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #0f172a; }
+    .small { font: 400 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #64748b; }
+    .cap   { font: 600 10.5px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #94a3b8; letter-spacing: 0.8px; }
+    .mono  { font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #0f766e; }
+    .big1  { font: 800 32px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #10b981; }
+    .big2  { font: 800 32px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #0ea5e9; }
+    .logo  { font: 800 28px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #ffffff; }
+    .box   { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.6; }
+    .core  { fill: #ffffff; stroke: #10b981; stroke-width: 2.6; }
+  </style>
+
+  <rect width="1280" height="360" rx="20" fill="url(#sky)"/>
+
+  <!-- Wordmark -->
+  <rect x="64" y="56" width="72" height="72" rx="19" fill="url(#mark)"/>
+  <text class="logo" x="100" y="102" text-anchor="middle">MB</text>
+
+  <text class="name"  x="156" y="106">ModBridge</text>
+  <text class="claim" x="158" y="140">Modbus TCP Proxy Manager mit Web-Oberfläche</text>
+
+  <!-- Pills -->
+  <rect x="158" y="166" width="228" height="32" rx="16" fill="#ecfdf5" stroke="#a7f3d0"/>
+  <text class="pill" x="272" y="187" text-anchor="middle">Viele Clients, ein Gerät</text>
+
+  <rect x="400" y="166" width="222" height="32" rx="16" fill="#ecfdf5" stroke="#a7f3d0"/>
+  <text class="pill" x="511" y="187" text-anchor="middle">Gemessen statt geraten</text>
+
+  <rect x="636" y="166" width="188" height="32" rx="16" fill="#ecfdf5" stroke="#a7f3d0"/>
+  <text class="pill" x="730" y="187" text-anchor="middle">x86 · ARM · Docker</text>
+
+  <!-- Flow -->
+  <rect class="box" x="158" y="244" width="172" height="56" rx="12"/>
+  <text class="node"  x="176" y="270">Home Assistant</text>
+  <text class="small" x="176" y="288">SCADA, Skripte …</text>
+
+  <path d="M330 272 H400" stroke="#94a3b8" stroke-width="2.4" fill="none" marker-end="url(#ag)"/>
+
+  <rect class="core" x="400" y="238" width="238" height="68" rx="14"/>
+  <text class="node" x="420" y="266">ModBridge</text>
+  <text class="mono" x="420" y="290">:5020  :5021  :5022</text>
+
+  <path d="M638 272 H744" stroke="#10b981" stroke-width="2.8" fill="none" marker-end="url(#ar)"/>
+  <text class="small" x="691" y="262" text-anchor="middle">eine Sitzung</text>
+
+  <rect class="box" x="744" y="244" width="180" height="56" rx="12"/>
+  <text class="node"  x="762" y="270">Wechselrichter</text>
+  <text class="small" x="762" y="288">Wärmepumpe, Zähler …</text>
+
+  <!-- Numbers, measured on the demo instance -->
+  <rect x="988" y="56" width="228" height="250" rx="16" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.6"/>
+  <text class="cap" x="1012" y="86">AN EINEM GERÄT GEMESSEN</text>
+
+  <text class="big1"  x="1012" y="134">116</text>
+  <text class="small" x="1012" y="156">von 121 Anfragen kamen</text>
+  <text class="small" x="1012" y="174">aus dem Cache</text>
+
+  <line x1="1012" y1="196" x2="1192" y2="196" stroke="#e2e8f0" stroke-width="1.5"/>
+
+  <text class="big2"  x="1012" y="238">5</text>
+  <text class="small" x="1012" y="260">Abfragen erreichten im</text>
+  <text class="small" x="1012" y="278">selben Zeitraum wirklich</text>
+  <text class="small" x="1012" y="296">das Gerät</text>
+</svg>

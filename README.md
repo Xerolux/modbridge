@@ -14,7 +14,7 @@
 [![PayPal](https://img.shields.io/badge/PayPal-xerolux-blue?logo=paypal&style=for-the-badge)](https://paypal.me/xerolux)
 [![Tesla Referral](https://img.shields.io/badge/Tesla-Referral-red?logo=tesla&style=for-the-badge)](https://ts.la/sebastian564489)
 
-![ModBridge Logo](./assets/banner.png)
+![ModBridge — Modbus TCP Proxy Manager](./assets/banner.svg)
 
 **ModBridge** ist ein moderner, robuster Modbus TCP Proxy Manager mit einer eleganten Web-Oberfläche. Er ermöglicht das Multiplexing und Management von Modbus-Verbindungen und bietet detailliertes Monitoring, Logging und Sicherheit in einem kompakten, einfach bereitzustellenden Paket.
 
@@ -34,6 +34,8 @@ Alle ausführlichen Informationen zu Konfiguration (Web-UI & Headless) und Nutzu
 Ein Proxy ist kein Kabel. ModBridge sitzt zwischen deinem Client (Home
 Assistant, SCADA, eigenes Skript) und dem Modbus-Gerät und löst die Probleme,
 die dort entstehen:
+
+![Wie ModBridge zwischen Clients und Modbus-Geräten sitzt](./docs/assets/diagrams/uebersicht.svg)
 
 **Ohne Konfiguration, immer aktiv:**
 
@@ -66,6 +68,27 @@ die dort entstehen:
 Details dazu im [Wiki](https://github.com/Xerolux/modbridge/wiki):
 [Konfiguration](https://github.com/Xerolux/modbridge/wiki/Konfiguration) und
 [Troubleshooting](https://github.com/Xerolux/modbridge/wiki/Troubleshooting).
+
+### Cache und Hintergrund-Abfrage
+
+Ein träges Gerät lässt jeden Client warten. Der Cache hält die Register warm,
+die tatsächlich abgefragt werden, und die Hintergrund-Abfrage frischt sie im
+eigenen Takt auf — der Client bekommt seine Antwort sofort, das Gerät wird
+seltener gefragt.
+
+![Cache und Hintergrund-Abfrage im Zusammenspiel](./docs/assets/diagrams/cache-und-poller.svg)
+
+Beides ist standardmäßig aus, denn der Kompromiss will bewusst gewählt sein:
+**ein Wert aus dem Cache ist nicht der Live-Wert.** Schreibzugriffe laufen nie
+über den Cache und verwerfen den betroffenen Eintrag.
+
+### Gerät vermessen
+
+Statt Werte zu schätzen, misst ModBridge sie am Gerät vor dir: der Abstand
+zwischen Anfragen wird schrittweise verkürzt, bis das Gerät Anfragen verwirft,
+und der letzte saubere Schritt bekommt eine Reserve.
+
+![Wie die Kalibrierung misst](./docs/assets/diagrams/kalibrierung.svg)
 
 ## 🚀 Installation mit `modbridge` (empfohlen)
 
@@ -232,6 +255,9 @@ Das Admin-Passwort wird beim ersten Start automatisch generiert und in den Logs 
 ```bash
 modbridge logs | grep -i password
 ```
+
+Ansichten der Oberfläche — Dashboard, Steuerung, Proxy-Dialog, Messbericht,
+Geräte und Logs — im [Wiki](https://github.com/Xerolux/modbridge/wiki/Images).
 
 ---
 

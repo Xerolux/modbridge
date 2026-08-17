@@ -179,6 +179,16 @@ func (p *ProxyInstance) Calibrate(ctx context.Context, cfg CalibrationConfig) (*
 		p.healthChecker.SetPaused(true)
 		defer p.healthChecker.SetPaused(false)
 	}
+	// The background poller is the other thing that talks to the device without
+	// a client asking. Left running, it fires its own reads between the probes:
+	// on a device that wants a pause between requests, the probe that follows a
+	// poll is dropped and the run blames the spacing. Measured against a device
+	// with a 60 ms floor, a proxy with a 5 s poller reported 500 ms where the
+	// same device measured 100 ms once the poller was held.
+	if p.poller != nil {
+		p.poller.SetPaused(true)
+		defer p.poller.SetPaused(false)
+	}
 	if p.connPool != nil {
 		if drained := p.connPool.DrainIdle(); drained > 0 {
 			p.log.Info(p.ID, fmt.Sprintf("Calibration released %d pooled connection(s) so the target is idle", drained))
