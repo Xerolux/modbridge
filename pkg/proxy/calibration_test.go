@@ -9,6 +9,7 @@ import (
 	"modbridge/pkg/modbus"
 	"net"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -409,5 +410,71 @@ func TestCalibrationFallsBackWhenTheDeviceIsUnreliable(t *testing.T) {
 	}
 	if len(result.Notes) == 0 {
 		t.Error("a fallback must say that it is one")
+	}
+}
+
+// TestCalibrationHoldsTheBackgroundPoller covers the other thing that talks to
+// the device without a client asking. A poller left running fires its own reads
+// between the probes, and on a device that wants a pause between requests the
+// probe following a poll is dropped — so the run blames the spacing for traffic
+// it created itself. Found by measuring a proxy that had the cache enabled: it
+// reported 500 ms against a device that measured 100 ms once the poller was
+// held.
+func TestCalibrationHoldsTheBackgroundPoller(t *testing.T) {
+	target := newPickyTarget(t, 60*time.Millisecond, 4, 5*time.Millisecond)
+	p := calibrationProxy(t, target.addr())
+
+	// A poller that would otherwise hammer the target throughout the run.
+	var polls atomic.Int64
+	p.poller = NewRegisterPoller(20*time.Millisecond, time.Minute, 16,
+		func(req []byte) ([]byte, error) {
+			polls.Add(1)
+			return nil, nil
+		},
+		func(key uint64, unitID uint8, resp []byte) {},
+		func(msg string) {},
+	)
+	p.poller.Track(1, 1, modbus.CreateReadRequest(1, 1, 3, 0, 2))
+	p.poller.Start(t.Context())
+	defer p.poller.Stop()
+
+	// It has to be demonstrably alive, or the test proves nothing.
+	deadline := time.Now().Add(2 * time.Second)
+	for polls.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if polls.Load() == 0 {
+		t.Fatal("the poller never ran, so holding it cannot be observed")
+	}
+
+	before := polls.Load()
+	result, err := p.Calibrate(t.Context(), CalibrationConfig{
+		Probe:           ProbeSpec{UnitID: 1, Function: 3, Address: 0, Quantity: 2},
+		RequestsPerStep: 4,
+		GapStepsMs:      []int{200, 100},
+		MaxDuration:     30 * time.Second,
+	})
+	during := polls.Load() - before
+	if err != nil {
+		t.Fatalf("calibration failed: %v", err)
+	}
+	// A round already in flight may finish, but a 20 ms poller across a run of
+	// seconds would otherwise poll dozens of times.
+	if during > 1 {
+		t.Errorf("the poller ran %d times during the measurement, want it held", during)
+	}
+	if len(result.GapSteps) == 0 || result.GapSteps[0].Errors != 0 {
+		t.Errorf("undisturbed 200 ms spacing should be clean, got %+v", result.GapSteps)
+	}
+
+	// And it has to come back afterwards, or a measurement would silently cost
+	// the proxy its cache refreshes.
+	resumed := polls.Load()
+	deadline = time.Now().Add(2 * time.Second)
+	for polls.Load() <= resumed && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if polls.Load() <= resumed {
+		t.Error("the poller did not resume after the measurement")
 	}
 }

@@ -44,6 +44,11 @@ type RegisterPoller struct {
 	batched       atomic.Int64
 	batchedSaved  atomic.Int64
 
+	// paused suspends refresh rounds without tearing the poller down, so a
+	// measurement can have the device to itself and get its tracked registers
+	// back afterwards.
+	paused atomic.Bool
+
 	refreshes  atomic.Int64
 	failures   atomic.Int64
 	slowRounds atomic.Int64
@@ -89,6 +94,16 @@ func NewRegisterPoller(interval, idleAfter time.Duration, maxEntries int,
 		store:         store,
 		logf:          logf,
 	}
+}
+
+// SetPaused suspends or resumes refresh rounds. A round already in flight runs
+// to completion; the next one is skipped. Tracked registers are kept, so the
+// poller picks up exactly where it left off.
+func (rp *RegisterPoller) SetPaused(paused bool) {
+	if rp == nil {
+		return
+	}
+	rp.paused.Store(paused)
 }
 
 // Track records that a client asked this request, so the poller keeps it warm.
@@ -142,6 +157,9 @@ func (rp *RegisterPoller) loop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+		}
+		if rp.paused.Load() {
+			continue
 		}
 		started := time.Now()
 		rp.refreshAll(ctx)
