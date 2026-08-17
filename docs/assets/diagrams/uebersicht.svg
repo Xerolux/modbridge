@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 400" width="980" height="400" role="img" aria-labelledby="t d">
+  <title id="t">ModBridge zwischen Clients und Modbus-Geräten</title>
+  <desc id="d">Mehrere Clients wie Home Assistant sprechen mit ModBridge. ModBridge ordnet Transaktionen zu, hält Abstände ein und öffnet zum Gerät nur eine Sitzung.</desc>
+
+  <style>
+    .bg    { fill: #ffffff; }
+    .card  { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; }
+    .core  { fill: #ecfdf5; stroke: #10b981; stroke-width: 2; }
+    .dev   { fill: #f1f5f9; stroke: #94a3b8; stroke-width: 1.5; }
+    .title { font: 600 14px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #0f172a; }
+    .h     { font: 700 19px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #0f172a; }
+    .sub   { font: 400 11.5px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #64748b; }
+    .item  { font: 400 12.5px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #334155; }
+    .port  { font: 500 12px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #0f766e; }
+    .lbl   { font: 500 11px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #64748b; letter-spacing: 0.6px; }
+    .flow  { stroke: #94a3b8; stroke-width: 2; fill: none; }
+    .flow1 { stroke: #10b981; stroke-width: 2.5; fill: none; }
+  </style>
+
+  <rect class="bg" width="980" height="400" rx="14"/>
+
+  <!-- Clients -->
+  <text class="lbl" x="30" y="32">CLIENTS</text>
+  <rect class="card" x="26" y="46" width="182" height="56" rx="10"/>
+  <text class="title" x="42" y="70">Home Assistant</text>
+  <text class="sub"   x="42" y="89">SolarEdge Modbus Multi</text>
+
+  <rect class="card" x="26" y="118" width="182" height="56" rx="10"/>
+  <text class="title" x="42" y="142">Energiemanager</text>
+  <text class="sub"   x="42" y="161">Eigenverbrauchssteuerung</text>
+
+  <rect class="card" x="26" y="190" width="182" height="56" rx="10"/>
+  <text class="title" x="42" y="214">Skript / SCADA</text>
+  <text class="sub"   x="42" y="233">Auswertung, Logging</text>
+
+  <path class="flow" d="M208 74  H262" marker-end="url(#a)"/>
+  <path class="flow" d="M208 146 H262" marker-end="url(#a)"/>
+  <path class="flow" d="M208 218 H262" marker-end="url(#a)"/>
+
+  <!-- ModBridge -->
+  <rect class="core" x="262" y="46" width="374" height="318" rx="14"/>
+  <text class="h"   x="286" y="80">ModBridge</text>
+  <text class="sub" x="286" y="99">nimmt viele Clients an, fragt das Gerät sparsam</text>
+
+  <text class="port" x="286" y="128">:5020  :5021  :5022  :5023</text>
+  <line x1="286" y1="142" x2="612" y2="142" stroke="#a7f3d0" stroke-width="1.5"/>
+
+  <text class="item" x="286" y="170">✓  Eigene Transaktions-IDs zum Gerät</text>
+  <text class="sub"  x="302" y="188">verspätete Antworten werden verworfen</text>
+
+  <text class="item" x="286" y="218">✓  Zeitbudget pro Anfrage</text>
+  <text class="sub"  x="302" y="236">saubere Exception statt endlosem Warten</text>
+
+  <text class="item" x="286" y="266">✓  Abstand und Sitzungslimit</text>
+  <text class="sub"  x="302" y="284">gemessen, nicht geraten</text>
+
+  <text class="item" x="286" y="314">✓  Cache und Hintergrund-Abfrage</text>
+  <text class="sub"  x="302" y="332">Register bleiben warm, der Client wartet nicht</text>
+
+  <path class="flow1" d="M640 205 H732" marker-end="url(#b)"/>
+  <text class="lbl" x="686" y="192" text-anchor="middle">eine Sitzung</text>
+
+  <!-- Devices -->
+  <text class="lbl" x="742" y="32">MODBUS-GERÄTE</text>
+  <rect class="dev" x="738" y="46" width="216" height="56" rx="10"/>
+  <text class="title" x="754" y="70">Wechselrichter</text>
+  <text class="sub"   x="754" y="89">eine Sitzung, braucht Pausen</text>
+
+  <rect class="dev" x="738" y="118" width="216" height="56" rx="10"/>
+  <text class="title" x="754" y="142">Wärmepumpe</text>
+  <text class="sub"   x="754" y="161">antwortet träge</text>
+
+  <rect class="dev" x="738" y="190" width="216" height="56" rx="10"/>
+  <text class="title" x="754" y="214">Stromzähler</text>
+  <text class="sub"   x="754" y="233">schnell, unkritisch</text>
+
+  <rect class="dev" x="738" y="262" width="216" height="56" rx="10"/>
+  <text class="title" x="754" y="286">Wallbox</text>
+  <text class="sub"   x="754" y="305">Lademanagement</text>
+
+  <defs>
+    <marker id="a" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0 0 L9 4.5 L0 9 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="b" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0 0 L9 4.5 L0 9 z" fill="#10b981"/>
+    </marker>
+  </defs>
+</svg>
