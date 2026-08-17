@@ -101,6 +101,48 @@ Unit-IDs, abgefragt aus Home Assistant (Client-Timeout dort: 3 s):
 }
 ```
 
+## Abfragen dauern zig Sekunden, obwohl das Netz gesund ist
+
+Typisches Bild: Ein Verbindungstest antwortet in unter einer Sekunde, eine
+vollständige Abfrage braucht aber 30 s. Das ist kein Widerspruch — der Test
+macht eine Handvoll Round-Trips, die Abfrage mehrere hundert.
+
+Rechne nach, statt zu raten. Im Proxy-Status stehen `latency_p50_ms` und
+`latency_p95_ms`; multipliziert mit der Anzahl der Anfragen pro Abfragezyklus
+ergibt das die erwartete Dauer. Kommt dabei ungefähr die beobachtete Zeit
+heraus, ist es schlichte Arithmetik und kein hängendes Gerät.
+
+Der größte einzelne Posten ist dabei oft `min_request_gap_ms`, denn der Wert
+kostet **pro Anfrage**:
+
+| Abstand | 50 Anfragen | 100 Anfragen | 300 Anfragen |
+|---------|------------|--------------|--------------|
+| 50 ms | 2,5 s | 5 s | 15 s |
+| 100 ms | 5 s | 10 s | 30 s |
+| 250 ms | 12,5 s | 25 s | 75 s |
+
+Vorgehen in dieser Reihenfolge:
+
+1. **Abstand prüfen und schrittweise senken** (250 → 100 → 50 ms). Dabei
+   `stale_responses` und die Fehlerzahl beobachten: Steigen sie, war der
+   Abstand nötig, und der letzte funktionierende Wert gilt.
+2. **Cache und Hintergrund-Poller aktivieren.** Damit wird die Abfragedauer
+   beim Client nahezu unabhängig vom Gerät, weil er aus dem Cache bedient
+   wird.
+3. **Abfrageintervall des Clients erhöhen.** Solange eine Abfrage länger
+   dauert als das Intervall, läuft permanent eine — das Gerät kommt nie zur
+   Ruhe und jede einzelne Anfrage wird langsamer. Das ist eine Rückkopplung,
+   die sich selbst verstärkt.
+4. **Prüfen, wer sonst auf den Proxy zugreift.** `active_connections` im
+   Proxy-Status zeigt es. Ein zweiter Client mit ähnlicher Frequenz addiert
+   seine Last auf dasselbe Gerät.
+
+Läuft der Hintergrund-Poller, protokolliert ModBridge außerdem, wenn eine
+Aktualisierungsrunde länger dauert als das eingestellte Intervall. Diese
+Meldung bedeutet dasselbe wie Punkt 3, nur auf der Proxy-Seite: Es wird
+durchgehend abgefragt und die Werte im Cache sind älter, als das Intervall
+vermuten lässt.
+
 ## Admin-Passwort vergessen
 
 ### Benutzername und Passwort über die WebUI neu vergeben

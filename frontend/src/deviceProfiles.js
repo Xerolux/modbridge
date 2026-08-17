@@ -102,6 +102,13 @@ export const profileClasses = {
     },
     // One session on a controller that takes its time — heating controllers and
     // inverter logger sticks.
+    //
+    // The gap is 100 ms, not the 250 ms this class used to carry. Slowness and
+    // fragility are two different properties and conflating them was a
+    // mistake: a device that answers slowly needs a longer read timeout, while
+    // the gap only guards devices that drop back-to-back frames. The gap costs
+    // its value on *every* request, so on a controller polled with a hundred
+    // register batches, 250 ms alone added 25 s to each cycle.
     singleSessionSlow: {
         protocol: 'tcp',
         connection_timeout: 15,
@@ -110,7 +117,7 @@ export const profileClasses = {
         max_read_size: 0,
         connect_delay_ms: 0,
         max_target_conns: 1,
-        min_request_gap_ms: 250,
+        min_request_gap_ms: 100,
         request_timeout_ms: 0,
         // The one class where caching earns its keep: these devices cannot be
         // made faster, so the poller reads them continuously in the background
