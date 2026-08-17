@@ -367,6 +367,14 @@ func (m *Manager) UpdateProxy(cfg config.ProxyConfig) error {
 }
 
 // GetProxies returns status of all proxies.
+// GetProxyInstance returns the running instance for a proxy ID.
+func (m *Manager) GetProxyInstance(id string) (*proxy.ProxyInstance, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	p, ok := m.proxies[id]
+	return p, ok
+}
+
 func (m *Manager) GetProxies() []map[string]interface{} {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

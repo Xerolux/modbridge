@@ -99,13 +99,15 @@ type ProxyInstance struct {
 	CacheTTL          time.Duration // How long a cached read stays valid (0 = 5s default)
 	PollInterval      time.Duration // Refresh cached reads in the background at this interval (0 = passive cache only)
 
-	listener net.Listener
-	connPool *pool.Pool
-	connSem  chan struct{} // Semaphore for limiting concurrent connections
-	startMu  sync.Mutex    // Protects Start/Stop lifecycle
-	pacer    *requestPacer // Enforces MinRequestGap towards the target
-	cache    *ResponseCache
-	poller   *RegisterPoller
+	listener    net.Listener
+	connPool    *pool.Pool
+	connSem     chan struct{} // Semaphore for limiting concurrent connections
+	startMu     sync.Mutex    // Protects Start/Stop lifecycle
+	pacer       *requestPacer // Enforces MinRequestGap towards the target
+	cache       *ResponseCache
+	poller      *RegisterPoller
+	lastRead    atomic.Value // Last read a client asked for, replayed as a calibration probe
+	calibrating atomic.Bool  // A measurement owns the target: hold clients off for its duration
 
 	log           *logger.Logger
 	deviceTracker *devices.Tracker
@@ -438,6 +440,15 @@ acceptLoop:
 
 		configureTCPConn(conn)
 
+		// A calibration run needs the target to itself: a client arriving mid-run
+		// would both distort the measurement and be distorted by it. Runs are
+		// short and explicitly started, and the client reconnects afterwards.
+		if p.calibrating.Load() {
+			conn.Close()
+			p.log.Info(p.ID, "Refusing client connection while calibration is running")
+			continue
+		}
+
 		// Check GLOBAL connection limit first (system-wide across all proxies).
 		if !globalLimiter.acquire() {
 			conn.Close()
@@ -523,6 +534,11 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 		// data is more useful to the client than an exception, and the TTL
 		// bounds how long that can go on.
 		cacheKey, cacheUnit, cacheable := modbus.RequestCacheKey(reqFrame)
+		if cacheable {
+			// Remember it so calibration can probe with a register the client
+			// already asks for, instead of touching something new.
+			p.recordObservedRead(reqFrame)
+		}
 		if p.cache != nil && cacheable {
 			if p.poller != nil {
 				p.poller.Track(cacheKey, cacheUnit, reqFrame)

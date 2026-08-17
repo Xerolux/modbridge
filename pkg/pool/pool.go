@@ -253,6 +253,36 @@ func (p *Pool) put(pc *poolConn) {
 	}
 }
 
+// DrainIdle closes every idle connection and returns how many were released.
+// The pool stays usable: the next Get dials again. Used when something else
+// needs the target's attention — a device that serves a single Modbus session
+// cannot be measured while the pool is holding that session.
+func (p *Pool) DrainIdle() int {
+	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return 0
+	}
+	p.mu.Unlock()
+
+	drained := 0
+	for {
+		select {
+		case pc, ok := <-p.conns:
+			if !ok {
+				return drained
+			}
+			pc.conn.Close()
+			p.mu.Lock()
+			p.size--
+			p.mu.Unlock()
+			drained++
+		default:
+			return drained
+		}
+	}
+}
+
 // Close closes the pool and all connections.
 func (p *Pool) Close() error {
 	p.mu.Lock()
