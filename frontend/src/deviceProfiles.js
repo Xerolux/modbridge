@@ -122,8 +122,15 @@ export const profileClasses = {
         // The one class where caching earns its keep: these devices cannot be
         // made faster, so the poller reads them continuously in the background
         // and the client is served from the cache instead of waiting.
+        //
+        // The TTL is deliberately several times the poll interval. It is a
+        // staleness bound, not a refresh schedule — the poller keeps entries
+        // much fresher than this. Setting it equal to the interval means an
+        // entry expires exactly as the next round comes due, so the client
+        // falls through to the device in the gap and waits after all, which is
+        // the delay this pairing exists to remove.
         cache_enabled: true,
-        cache_ttl_ms: 5000,
+        cache_ttl_ms: 20000,
         poll_interval_ms: 5000
     },
     // Drops requests that arrive right after the TCP handshake.

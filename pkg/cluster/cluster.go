@@ -3,6 +3,10 @@
 // Created by Xerolux
 // https://github.com/Xerolux/modbridge
 
+// NOT WIRED UP: no code path reaches this package yet.
+//
+// High-availability coordination across instances. Kept as unfinished work;
+// nothing imports it today.
 package cluster
 
 import (

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -26,6 +27,7 @@ import (
 	"modbridge/pkg/manager"
 	"modbridge/pkg/metrics"
 	"modbridge/pkg/middleware"
+	"modbridge/pkg/proxy"
 	"modbridge/pkg/rbac"
 	"modbridge/pkg/updater"
 	"modbridge/pkg/users"
@@ -190,7 +192,7 @@ func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator,
 		auditorInstance = audit.NewAuditor(db)
 	}
 
-	return &Server{
+	srv := &Server{
 		cfgMgr:           cfg,
 		mgr:              mgr,
 		auth:             a,
@@ -213,6 +215,9 @@ func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator,
 			Arch:      runtime.GOARCH,
 		}),
 	}
+
+	srv.wireDiagnostics()
+	return srv
 }
 
 func buildCSRFSecret() (string, error) {
@@ -298,6 +303,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/proxies", csrfMW(s.handleProxies))
 	mux.HandleFunc("/api/proxies/stream", authMW(s.handleProxiesStream))
 	mux.HandleFunc("/api/proxies/control", csrfMW(s.handleProxyControl))
+	mux.HandleFunc("/api/proxies/calibrate", csrfMW(s.handleProxyCalibrate))
 	mux.HandleFunc("/api/devices", csrfMW(s.handleDevices))
 	mux.HandleFunc("/api/devices/history", authMW(s.handleDeviceHistory))
 	mux.HandleFunc("/api/logs", authMW(s.handleLogs))
@@ -389,6 +395,16 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		s.log.Error("API", fmt.Sprintf("Failed to encode ready response: %v", err))
 	}
+}
+
+// wireDiagnostics lets the metrics exporter read the per-proxy counters that
+// live on the proxies themselves, so stale responses and cache behaviour end up
+// in Prometheus alongside the request counts rather than only in the status API.
+func (s *Server) wireDiagnostics() {
+	if s.metrics == nil || s.mgr == nil {
+		return
+	}
+	s.metrics.SetDiagnosticsProvider(s.mgr.ProxyDiagnostics)
 }
 
 // handleMetrics returns Prometheus metrics.
@@ -1210,6 +1226,77 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+}
+
+// handleProxyCalibrate measures what a target device tolerates and reports the
+// result. It changes nothing: applying the recommendation stays a deliberate
+// act by whoever reads it.
+func (s *Server) handleProxyCalibrate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	session := s.requirePermission(w, r, rbac.PermProxyEdit)
+	if session == nil {
+		return
+	}
+
+	var req struct {
+		ID       string `json:"id"`
+		UnitID   uint8  `json:"unit_id"`
+		Function uint8  `json:"function"`
+		Address  uint16 `json:"address"`
+		Quantity uint16 `json:"quantity"`
+		Force    bool   `json:"force"`
+	}
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeJSONDecodeError(w, err)
+		return
+	}
+	if req.ID == "" {
+		http.Error(w, "proxy id is required", http.StatusBadRequest)
+		return
+	}
+
+	instance, ok := s.mgr.GetProxyInstance(req.ID)
+	if !ok {
+		http.Error(w, "proxy not found", http.StatusNotFound)
+		return
+	}
+
+	// Two runs against one device would measure each other.
+	if !proxy.TryLockCalibration(req.ID) {
+		http.Error(w, "a calibration run is already in progress for this proxy", http.StatusConflict)
+		return
+	}
+	defer proxy.UnlockCalibration(req.ID)
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+	defer cancel()
+
+	result, err := instance.Calibrate(ctx, proxy.CalibrationConfig{
+		Probe: proxy.ProbeSpec{
+			UnitID:   req.UnitID,
+			Function: req.Function,
+			Address:  req.Address,
+			Quantity: req.Quantity,
+		},
+		Force: req.Force,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if s.auditor != nil {
+		ip, ua := requestMeta(r)
+		s.auditor.LogAction("proxy.calibrate", "proxy", req.ID, session.UserID, session.Username,
+			fmt.Sprintf("gap %dms, %d connection(s), %ds read timeout",
+				result.Recommended.MinRequestGapMs, result.Recommended.MaxTargetConns, result.Recommended.ReadTimeoutS),
+			ip, ua, true, "")
+	}
+	s.writeJSON(w, result)
 }
 
 func (s *Server) handleProxyControl(w http.ResponseWriter, r *http.Request) {

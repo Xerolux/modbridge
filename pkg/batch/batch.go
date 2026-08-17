@@ -3,6 +3,12 @@
 // Created by Xerolux
 // https://github.com/Xerolux/modbridge
 
+// NOT WIRED UP: no code path reaches this package yet.
+//
+// Batching adjacent register reads into fewer device requests is a real answer
+// to the cost that dominates slow setups — the number of round trips, not the
+// speed of any single one. It is kept for that reason, but until something
+// imports it, it is unfinished work rather than a feature.
 package batch
 
 import (
@@ -49,7 +55,9 @@ type Response struct {
 
 // BatchConfig holds configuration for batching
 type BatchConfig struct {
-	// Maximum number of requests in a single batch
+	// Largest register span a merged read may cover. Despite the name this is
+	// compared against the combined address range, not the number of requests,
+	// so for Modbus reads it belongs at or below the 125-register limit.
 	MaxBatchSize int `json:"max_batch_size" yaml:"max_batch_size"`
 	// Maximum time to wait before flushing a partial batch
 	MaxBatchDelay time.Duration `json:"max_batch_delay" yaml:"max_batch_delay"`

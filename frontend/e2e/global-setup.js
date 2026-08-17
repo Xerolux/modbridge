@@ -42,7 +42,11 @@ export default async function globalSetup(config) {
   let initialPassword = null;
   const capture = (chunk) => {
     output += chunk.toString();
-    const match = output.match(/Initial admin password:\s*(\S+)/);
+    // Require the rest of the line before trusting the match. stdout arrives in
+    // chunks that can split mid-password, and a partial match here logs in with
+    // a truncated password — a failure that shows up much later as "still on
+    // the login page", with nothing pointing back at the cause.
+    const match = output.match(/Initial admin password:\s*(\S+)[^\n]*\n/);
     if (match) initialPassword = match[1];
   };
   server.stdout.on('data', capture);
@@ -75,24 +79,58 @@ export default async function globalSetup(config) {
     const browser = await chromium.launch(launchOptions);
     const page = await browser.newPage();
 
+    // Wait for the app to leave a route rather than for a fixed number of
+    // seconds. A loaded CI runner is slower than a developer's machine, and a
+    // sleep that is long enough locally is a coin flip there.
+    //
+    // The predicate must stay synchronous. A page function that returns a
+    // Promise hands back a truthy handle, so the wait succeeds on its first
+    // poll and the caller continues while the app has not moved at all.
+    const leaveRoute = (route) =>
+      page.waitForFunction(
+        (r) => !window.location.hash.includes(r),
+        route,
+        { timeout: 30000 }
+      );
+
+    // Wait for the round-trip, not just for the click. Verifying a password
+    // costs real time — bcrypt is deliberately slow, and on a busy runner the
+    // response can take seconds. Racing the router against a request that is
+    // still in flight is what made this suite flaky: the form was still
+    // spinning while the harness had already concluded the login had failed.
+    const submitAndAwait = async (buttonName, apiPath) => {
+      const responded = page.waitForResponse(
+        (res) => res.url().includes(apiPath) && res.request().method() === 'POST',
+        { timeout: 60000 }
+      );
+      await page.getByRole('button', { name: buttonName }).click();
+      const res = await responded;
+      if (!res.ok()) {
+        throw new Error(`POST ${apiPath} answered ${res.status()}: ${await res.text().catch(() => '')}`);
+      }
+    };
+
+    const login = async (password) => {
+      await page.fill('#login-username', 'admin');
+      await page.fill('#login-password', password);
+      await submitAndAwait(/anmelden|login|sign in/i, '/api/login');
+      await leaveRoute('/login');
+    };
+
     await page.goto(BASE_URL, { waitUntil: 'networkidle' });
-    await page.fill('#login-username', 'admin');
-    await page.fill('#login-password', initialPassword);
-    await page.getByRole('button', { name: /anmelden|login|sign in/i }).click();
-    await page.waitForTimeout(2000);
+    await login(initialPassword);
 
     if (page.url().includes('change-password')) {
       await page.fill('#cp-current', initialPassword);
       await page.fill('#cp-new', NEW_PASSWORD);
       await page.fill('#cp-confirm', NEW_PASSWORD);
-      await page.getByRole('button', { name: /change password|passwort ändern/i }).click();
-      await page.waitForTimeout(2500);
+      await submitAndAwait(/change password|passwort ändern/i, '/api/config/password');
+      await leaveRoute('/change-password');
 
-      if (page.url().includes('login')) {
-        await page.fill('#login-username', 'admin');
-        await page.fill('#login-password', NEW_PASSWORD);
-        await page.getByRole('button', { name: /anmelden|login|sign in/i }).click();
-        await page.waitForTimeout(2000);
+      // Changing the password invalidates the session, so the app lands back on
+      // the login form.
+      if (page.url().includes('/login')) {
+        await login(NEW_PASSWORD);
       }
     }
 

@@ -146,6 +146,7 @@ sudo journalctl -u modbridge -f
 | `max_target_conns` | int | Max. gleichzeitige Verbindungen zum Zielgerät (0 = Standard 10). `1` für Geräte mit nur einer Modbus-Sitzung, z.B. SolarEdge/SunSpec |
 | `min_request_gap_ms` | int | Mindestabstand zwischen zwei Anfragen an das Zielgerät (ms, 0 = aus) |
 | `request_timeout_ms` | int | Hartes Zeitbudget für eine Client-Anfrage inkl. Wiederholungen (ms, 0 = automatisch aus `read_timeout` und `max_retries`) |
+| `calibrated_at` | string | Zeitpunkt der letzten Messung (RFC3339). Informativ — zeigt, wie alt die eingestellten Werte sind |
 | `device_profile` | string | Zuletzt angewendetes Geräte-Profil. Rein informativ — merkt sich, aus welchem Preset die Werte stammen; das Verhalten richtet sich nach den Einzelfeldern |
 | `cache_enabled` | bool | Wiederholte Lesezugriffe aus einem Cache bedienen (Standard: aus) |
 | `cache_ttl_ms` | int | Gültigkeit eines Cache-Eintrags (ms, 0 = 5000) |
@@ -172,9 +173,23 @@ Dafür gibt es zwei zusammengehörige Optionen:
 
 ```json
 "cache_enabled": true,
-"cache_ttl_ms": 5000,
+"cache_ttl_ms": 20000,
 "poll_interval_ms": 5000
 ```
+
+Der Poller **bündelt** dabei benachbarte Register: Fragt ein Client zwanzig
+kleine Bereiche ab, die dicht beieinander liegen, liest ModBridge sie als einen
+Block und verteilt die Antwort anschließend auf die einzelnen Einträge. Das
+reduziert genau die Größe, die auf trägen Geräten dominiert — die Anzahl der
+Round-Trips. Client-Anfragen selbst werden nie zusammengefasst; ein Proxy, der
+umschreibt, was ein Client gefragt hat, ist nicht mehr nachvollziehbar.
+
+**TTL und Intervall gehören zusammen.** `cache_ttl_ms` ist eine Obergrenze für
+das Alter eines Werts, kein Aktualisierungsplan — der Poller hält die Einträge
+deutlich frischer. Ist die Gültigkeit nicht **mehrfach so groß** wie das
+Intervall, verfallen Einträge zwischen zwei Runden, der Client fällt in dieser
+Lücke wieder auf das Gerät durch und wartet doch. ModBridge protokolliert beim
+Start eine Warnung, wenn die beiden Werte in diesem Verhältnis stehen.
 
 **Was du dabei in Kauf nimmst:** Ein zwischengespeicherter Wert ist per
 Definition nicht der Live-Wert — er ist bis zu `cache_ttl_ms` alt. Für
@@ -193,6 +208,45 @@ Was der Cache **nicht** tut:
 
 Im Proxy-Status stehen `cache_hits`, `cache_misses`, `cache_entries` und
 `polled_requests` zum Nachprüfen.
+
+### Gerät vermessen (Kalibrierung)
+
+Profile sind begründete Schätzungen. Die Kalibrierung ersetzt sie durch
+Messwerte am echten Gerät: Sie senkt den Abstand stufenweise, bis das Gerät
+Anfragen verwirft, erhöht die Zahl paralleler Sitzungen, bis es nicht mehr
+antwortet, und leitet das Lese-Timeout aus der gemessenen Latenz ab.
+
+Zu finden im Proxy-Dialog unter **Gerät vermessen**, oder über
+`POST /api/proxies/calibrate` mit `{"id": "<proxy-id>"}`.
+
+**Was während der Messung passiert:** Der Proxy nimmt keine Client-Verbindungen
+an. In dieser Zeit wird über diesen Proxy nichts abgefragt und nichts geregelt.
+Deshalb ist ein Lauf hart auf **90 Sekunden** gedeckelt; läuft die Zeit ab,
+liefert er das bis dahin Gemessene statt weiterzumachen.
+
+Wogegen der Lauf abgesichert ist:
+
+- **Nur Lesezugriffe.** Nie ein Schreibzugriff.
+- Er wiederholt ein Register, das ein Client ohnehin abfragt — der Proxy merkt
+  sich den letzten Lesezugriff. Alternativ gibst du ein Register vor.
+- Er startet nicht, solange Clients verbunden sind, und hält neue für die Dauer
+  ab: deren Verkehr würde die Messung verfälschen und umgekehrt.
+- Er gibt vorher die Pool-Verbindung frei und pausiert den Health-Check — ein
+  Gerät mit nur einer Modbus-Sitzung lässt sich sonst nicht messen, weil der
+  Proxy selbst diese Sitzung hält.
+- Er ändert nichts. Übernehmen ist ein eigener Klick, und gespeichert wird erst
+  beim Speichern des Proxys.
+
+Ein einzelner Fehler ist keine Messung: Jede Stufe wird über eine Serie
+bewertet, und der übernommene Abstand behält 1,5-fachen Abstand zum schnellsten
+Wert, der noch sauber lief. Antwortet das Gerät selbst beim vorsichtigsten
+Abstand nicht zuverlässig, liefert der Lauf bewusst konservative Werte plus
+einen deutlichen Hinweis — statt eines Fehlers, mit dem niemand etwas anfangen
+kann.
+
+`calibrated_at` hält fest, wann zuletzt gemessen wurde. Steigen `stale_responses`
+oder die Fehlerzahl später deutlich, lohnt eine neue Messung — Geräte verhalten
+sich nach einem Firmware-Update anders.
 
 ### Geräte-Profile
 
@@ -318,3 +372,40 @@ und Klasse; Kategorien, Klassen-Hinweise und Notizen liegen in
   "max_connections": 1000
 }
 ```
+
+## Schreibzugriffe und Flash-Verschleiß
+
+Auf SD-Karte oder günstiger SSD ist die Frage berechtigt, was ModBridge
+eigentlich auf die Platte schreibt.
+
+**Nicht auf die Platte gehen:** Response-Cache, Hintergrund-Poller, Statistiken,
+Latenz-Perzentile und die Kalibrierung. Das liegt vollständig im RAM und
+verschwindet beim Neustart. Wer den Cache aktiviert, erzeugt damit **keinen**
+zusätzlichen Schreibzugriff.
+
+**Auf die Platte gehen:**
+
+| Was | Wann |
+|-----|------|
+| `connection_history` | eine Zeile pro Client-Verbindung |
+| `devices` | Aktualisierung pro Verbindung |
+| `audit_log` | pro Benutzeraktion (selten) |
+| Logdateien | pro Logzeile, mit Rotation |
+| `config.json` | nur bei Konfigurationsänderungen |
+
+Der relevante Posten ist die Verbindungshistorie. Ein Client mit einer
+dauerhaften Verbindung erzeugt fast nichts; ein Client in einer
+Reconnect-Schleife dagegen eine Zeile pro Versuch.
+
+Dagegen wirken:
+
+- **WAL-Modus und `synchronous=NORMAL`** sind gesetzt. Damit entfällt der
+  fsync bei jedem Commit — der Unterschied auf Flash-Speicher ist erheblich.
+  Der Preis: Bei einem Stromausfall können die letzten Transaktionen fehlen.
+  Die Datenbank wird dabei nicht beschädigt.
+- Die Verbindungshistorie wird automatisch nach 7 Tagen aufgeräumt.
+- `log_level` auf `WARN` reduziert das Logvolumen deutlich.
+
+Wer ganz sichergehen will, legt Datenbank und Logs auf ein anderes Medium
+(USB-SSD, tmpfs für Logs) — das ist eine Frage der Installation, nicht der
+Konfiguration.

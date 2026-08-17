@@ -17,6 +17,9 @@ import (
 type Metrics struct {
 	mu sync.RWMutex
 
+	// Source for per-proxy counters that live outside this package.
+	diagnostics func() map[string]ProxyDiagnostics
+
 	// Counters (atomic)
 	totalRequests    atomic.Int64
 	totalErrors      atomic.Int64
@@ -207,6 +210,36 @@ type ProxyStats struct {
 	LatencyP99  time.Duration
 }
 
+// ProxyDiagnostics are per-proxy counters that live on the proxy itself rather
+// than in this package: how often a late answer had to be discarded, and what
+// the response cache and background poller are doing. They matter because they
+// turn "it feels slow" into a number you can graph.
+type ProxyDiagnostics struct {
+	StaleResponses int64
+	CacheHits      int64
+	CacheMisses    int64
+	CacheEntries   int
+	PolledRequests int
+}
+
+// SetDiagnosticsProvider registers a source for those counters. Without one,
+// the diagnostics are simply omitted from the output.
+func (m *Metrics) SetDiagnosticsProvider(provider func() map[string]ProxyDiagnostics) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.diagnostics = provider
+}
+
+func (m *Metrics) currentDiagnostics() map[string]ProxyDiagnostics {
+	m.mu.RLock()
+	provider := m.diagnostics
+	m.mu.RUnlock()
+	if provider == nil {
+		return nil
+	}
+	return provider()
+}
+
 // GetPrometheusMetrics returns metrics in Prometheus format.
 func (m *Metrics) GetPrometheusMetrics() string {
 	stats := m.GetStats()
@@ -230,6 +263,8 @@ func (m *Metrics) GetPrometheusMetrics() string {
 	output.WriteString("# TYPE modbridge_uptime_seconds gauge\n")
 	output.WriteString(fmt.Sprintf("modbridge_uptime_seconds %f\n\n", stats.Uptime.Seconds()))
 
+	diagnostics := m.currentDiagnostics()
+
 	// Per-proxy metrics
 	for proxyID, proxyStats := range stats.ProxyStats {
 		output.WriteString("# HELP modbridge_proxy_requests_total Total requests for proxy\n")
@@ -243,6 +278,28 @@ func (m *Metrics) GetPrometheusMetrics() string {
 		output.WriteString("# HELP modbridge_proxy_active_connections Active connections for proxy\n")
 		output.WriteString("# TYPE modbridge_proxy_active_connections gauge\n")
 		output.WriteString(fmt.Sprintf("modbridge_proxy_active_connections{proxy_id=%q} %d\n\n", proxyID, proxyStats.ActiveConns))
+
+		if d, ok := diagnostics[proxyID]; ok {
+			output.WriteString("# HELP modbridge_proxy_stale_responses_total Target responses discarded because they belonged to an abandoned request\n")
+			output.WriteString("# TYPE modbridge_proxy_stale_responses_total counter\n")
+			output.WriteString(fmt.Sprintf("modbridge_proxy_stale_responses_total{proxy_id=%q} %d\n\n", proxyID, d.StaleResponses))
+
+			output.WriteString("# HELP modbridge_proxy_cache_hits_total Reads answered from the response cache\n")
+			output.WriteString("# TYPE modbridge_proxy_cache_hits_total counter\n")
+			output.WriteString(fmt.Sprintf("modbridge_proxy_cache_hits_total{proxy_id=%q} %d\n\n", proxyID, d.CacheHits))
+
+			output.WriteString("# HELP modbridge_proxy_cache_misses_total Reads that had to reach the target\n")
+			output.WriteString("# TYPE modbridge_proxy_cache_misses_total counter\n")
+			output.WriteString(fmt.Sprintf("modbridge_proxy_cache_misses_total{proxy_id=%q} %d\n\n", proxyID, d.CacheMisses))
+
+			output.WriteString("# HELP modbridge_proxy_cache_entries Registers currently held in the response cache\n")
+			output.WriteString("# TYPE modbridge_proxy_cache_entries gauge\n")
+			output.WriteString(fmt.Sprintf("modbridge_proxy_cache_entries{proxy_id=%q} %d\n\n", proxyID, d.CacheEntries))
+
+			output.WriteString("# HELP modbridge_proxy_polled_requests Requests the background poller keeps warm\n")
+			output.WriteString("# TYPE modbridge_proxy_polled_requests gauge\n")
+			output.WriteString(fmt.Sprintf("modbridge_proxy_polled_requests{proxy_id=%q} %d\n\n", proxyID, d.PolledRequests))
+		}
 
 		output.WriteString("# HELP modbridge_proxy_latency_seconds_avg Average latency for proxy\n")
 		output.WriteString("# TYPE modbridge_proxy_latency_seconds_avg gauge\n")

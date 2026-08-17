@@ -327,11 +327,60 @@
                      <div class="flex-1">
                          <label class="block text-sm font-medium mb-1">{{ $t('control.form.cacheTtl') }}</label>
                          <InputNumber v-model="proxyForm.cache_ttl_ms" :min="0" :max="3600000" :disabled="!proxyForm.cache_enabled" class="w-full" />
+                         <small class="text-xs text-[var(--text-muted)]">{{ $t('control.form.cacheTtlHint') }}</small>
                      </div>
                      <div class="flex-1">
                          <label class="block text-sm font-medium mb-1">{{ $t('control.form.pollInterval') }}</label>
                          <InputNumber v-model="proxyForm.poll_interval_ms" :min="0" :max="3600000" :disabled="!proxyForm.cache_enabled" class="w-full" />
                          <small class="text-xs text-[var(--text-muted)]">{{ $t('control.form.pollIntervalHint') }}</small>
+                     </div>
+                 </div>
+                 <div v-if="isEditMode" class="rounded-xl border border-[var(--border-subtle)] p-3">
+                     <div class="flex items-center justify-between gap-3">
+                         <div>
+                             <div class="text-sm font-medium">{{ $t('control.form.calibrate') }}</div>
+                             <small class="block text-xs text-[var(--text-muted)]">{{ $t('control.form.calibrateHint') }}</small>
+                             <small v-if="proxyForm.calibrated_at" class="block text-xs text-[var(--text-muted)]">
+                                 {{ $t('control.form.calibratedAt', { when: new Date(proxyForm.calibrated_at).toLocaleString() }) }}
+                             </small>
+                         </div>
+                         <Button
+                             :label="$t('control.form.calibrateStart')"
+                             icon="pi pi-gauge"
+                             severity="secondary"
+                             size="small"
+                             :loading="calibrating"
+                             @click="runCalibration"
+                         />
+                     </div>
+                     <div v-if="calibrationResult" class="mt-3 space-y-2">
+                         <table class="w-full text-xs">
+                             <thead>
+                                 <tr class="text-[var(--text-muted)]">
+                                     <th class="text-left font-normal">{{ $t('control.form.calibrateGap') }}</th>
+                                     <th class="text-right font-normal">{{ $t('control.form.calibrateErrors') }}</th>
+                                     <th class="text-right font-normal">p50</th>
+                                     <th class="text-right font-normal">p95</th>
+                                 </tr>
+                             </thead>
+                             <tbody>
+                                 <tr v-for="step in calibrationResult.gap_steps" :key="step.gap_ms">
+                                     <td>{{ step.gap_ms }} ms</td>
+                                     <td class="text-right" :class="step.errors ? 'text-[var(--danger)]' : ''">{{ step.errors }}/{{ step.requests }}</td>
+                                     <td class="text-right">{{ step.p50_ms }} ms</td>
+                                     <td class="text-right">{{ step.p95_ms }} ms</td>
+                                 </tr>
+                             </tbody>
+                         </table>
+                         <p v-for="(note, i) in calibrationResult.notes" :key="i" class="text-xs text-[var(--text-muted)]">{{ note }}</p>
+                         <div class="flex items-center justify-between gap-3 pt-1">
+                             <span class="text-xs">
+                                 {{ calibrationResult.recommended.min_request_gap_ms }} ms ·
+                                 {{ calibrationResult.recommended.max_target_conns }} ·
+                                 {{ calibrationResult.recommended.read_timeout }} s
+                             </span>
+                             <Button :label="$t('control.form.calibrateApply')" size="small" @click="applyCalibration" />
+                         </div>
                      </div>
                  </div>
                  <div class="flex items-center gap-4">
@@ -464,6 +513,7 @@ const defaultProxyForm = () => ({
     min_request_gap_ms: 0,
     request_timeout_ms: 0,
     device_profile: '',
+    calibrated_at: '',
     cache_enabled: false,
     cache_ttl_ms: 0,
     poll_interval_ms: 0,
@@ -498,6 +548,46 @@ const selectedProfileHint = computed(() => {
     const classHint = t(`control.profiles.classes.${profile.class}`);
     return profile.note ? `${classHint} — ${t(`control.profiles.notes.${profile.note}`)}` : classHint;
 });
+
+// Calibration measures the device and reports; the numbers are only written
+// into the form when the operator says so.
+const calibrating = ref(false);
+const calibrationResult = ref(null);
+
+const runCalibration = async () => {
+    calibrating.value = true;
+    calibrationResult.value = null;
+    try {
+        const res = await axios.post(
+            '/api/proxies/calibrate',
+            { id: proxyForm.value.id },
+            { timeout: 300000 }
+        );
+        calibrationResult.value = res.data;
+        proxyForm.value = { ...proxyForm.value, calibrated_at: new Date().toISOString() };
+    } catch (e) {
+        toast.add({
+            severity: 'error',
+            summary: t('common.error'),
+            detail: e.response?.data || e.message,
+            life: 8000
+        });
+    } finally {
+        calibrating.value = false;
+    }
+};
+
+const applyCalibration = () => {
+    const recommended = calibrationResult.value?.recommended;
+    if (!recommended) return;
+    proxyForm.value = {
+        ...proxyForm.value,
+        min_request_gap_ms: recommended.min_request_gap_ms,
+        max_target_conns: recommended.max_target_conns,
+        read_timeout: recommended.read_timeout
+    };
+    toast.add({ severity: 'info', summary: t('control.form.calibrateApplied'), life: 3000 });
+};
 
 const onCacheToggle = () => {
     if (!proxyForm.value.cache_enabled) {
@@ -709,12 +799,14 @@ onUnmounted(() => {
 const openAddProxyDialog = () => {
     isEditMode.value = false;
     proxyForm.value = defaultProxyForm();
+    calibrationResult.value = null;
     showProxyDialog.value = true;
 };
 
 const openEditProxyDialog = (proxy) => {
     isEditMode.value = true;
     proxyForm.value = { ...proxy, protocol: proxy.protocol || 'tcp', device_profile: proxy.device_profile || '' };
+    calibrationResult.value = null;
     showProxyDialog.value = true;
 };
 

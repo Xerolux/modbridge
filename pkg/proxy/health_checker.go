@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -23,7 +24,8 @@ type HealthChecker struct {
 	onUnhealthy func()
 	onRecovery  func()
 	running     bool
-	callbackMu  sync.Mutex // prevents overlapping callbacks
+	paused      atomic.Bool // suspends checks while something else needs the target
+	callbackMu  sync.Mutex  // prevents overlapping callbacks
 }
 
 type HealthStatus struct {
@@ -76,6 +78,13 @@ func (hc *HealthChecker) Start() {
 	go hc.loop()
 }
 
+// SetPaused suspends or resumes the periodic check. A paused checker keeps its
+// last verdict and opens no connections, which matters for targets that serve
+// only one Modbus session at a time.
+func (hc *HealthChecker) SetPaused(paused bool) {
+	hc.paused.Store(paused)
+}
+
 func (hc *HealthChecker) Stop() {
 	hc.mu.Lock()
 	if !hc.running {
@@ -100,6 +109,9 @@ func (hc *HealthChecker) loop() {
 		case <-hc.ctx.Done():
 			return
 		case <-ticker.C:
+			if hc.paused.Load() {
+				continue
+			}
 			hc.check()
 		}
 	}

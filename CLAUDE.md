@@ -41,17 +41,14 @@ modbridge/
 │   ├── rbac/                  # Role-based access control (Admin/Operator/Viewer/Auditor)
 │   ├── audit/                 # Async audit logging with CSV/JSON export
 │   ├── alerting/              # Webhook notifications (Slack, Teams, Discord)
-│   ├── ldap/                  # LDAP/Active Directory integration
 │   ├── users/                 # Multi-user management
-│   ├── mapping/               # Modbus register transformations
-│   ├── caching/               # TTL-based register caching
-│   ├── compression/           # Data compression utilities
 │   ├── openapi/               # OpenAPI/Swagger spec generation
 │   ├── tls/                   # mTLS certificate handling
-│   ├── cluster/               # High-availability clustering
 │   ├── devices/               # Device tracking
-│   ├── batch/                 # Batch Modbus operations
 │   ├── pool/                  # Connection pooling
+│   ├── mapping/               # Register transformations — NOT WIRED UP
+│   ├── cluster/               # HA coordination — NOT WIRED UP
+│   ├── batch/                 # Batched register reads — NOT WIRED UP
 │   ├── portmanager/           # Dynamic port allocation
 │   ├── web/                   # Embedded frontend assets (dist/ copied here at build time)
 │   └── testing/               # Test utilities: mockmodbus/, integration/, performance/

@@ -429,3 +429,29 @@ func TestCacheNotUsedWhenDisabled(t *testing.T) {
 		t.Errorf("target saw %d reads, want 3 — no caching without cache_enabled", got)
 	}
 }
+
+// TestCacheTTLTooTight guards the pairing rule between cache lifetime and poll
+// interval: a TTL no longer than the interval lets entries expire between
+// refresh rounds, so the client waits for the device after all.
+func TestCacheTTLTooTight(t *testing.T) {
+	tests := []struct {
+		name         string
+		ttl          time.Duration
+		pollInterval time.Duration
+		want         bool
+	}{
+		{"ttl equal to interval", 5 * time.Second, 5 * time.Second, true},
+		{"ttl shorter than interval", 2 * time.Second, 5 * time.Second, true},
+		{"ttl several times the interval", 20 * time.Second, 5 * time.Second, false},
+		{"no background polling", 5 * time.Second, 0, false},
+		{"no cache", 0, 5 * time.Second, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := cacheTTLTooTight(tt.ttl, tt.pollInterval); got != tt.want {
+				t.Errorf("cacheTTLTooTight(%v, %v) = %v, want %v", tt.ttl, tt.pollInterval, got, tt.want)
+			}
+		})
+	}
+}
