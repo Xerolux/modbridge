@@ -51,7 +51,7 @@
             </table>
         </div>
 
-        <p v-for="(note, i) in report.notes || []" :key="i" class="text-xs text-[var(--text-muted)]">{{ note }}</p>
+        <p v-for="(n, i) in report.notes || []" :key="i" class="text-xs text-[var(--text-muted)]">{{ noteText(n) }}</p>
 
         <p v-if="report.duration_ms" class="text-xs text-[var(--text-muted)]">
             {{ $t('control.form.calibrateDone', { seconds: Math.round(report.duration_ms / 1000) }) }}
@@ -76,10 +76,25 @@
 
 <script setup>
 import Button from 'primevue/button';
+import { useI18n } from 'vue-i18n';
 
 defineProps({
     report: { type: Object, default: null },
     showApply: { type: Boolean, default: false }
 });
 defineEmits(['apply']);
+
+const { t, te } = useI18n();
+
+// A note arrives as a code plus the numbers that belong to it, so the sentence
+// can be built in the language the operator is reading. Two fallbacks keep old
+// and new reports readable side by side: a report stored by an earlier version
+// holds plain strings, and a code newer than this interface still has the
+// server's English sentence to fall back on.
+const noteText = (n) => {
+    if (typeof n === 'string') return n;
+    if (!n) return '';
+    const key = `control.form.calibrateNotes.${n.code}`;
+    return te(key) ? t(key, n.args || {}) : n.text || '';
+};
 </script>
