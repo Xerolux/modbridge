@@ -154,26 +154,50 @@ sudo journalctl -u modbridge -f
 ### Geräte-Profile
 
 Im Proxy-Dialog des Web-Interface füllt ein Geräte-Profil die Felder oben mit
-Werten, die für eine Geräteklasse funktionieren. Die Profile beschreiben
-Verhalten, keine Hersteller-Spezifikation: wie viele Modbus-Sitzungen ein Gerät
-bedient, wie viel Luft es zwischen Anfragen braucht und wie lange eine Antwort
-dauern darf. Als Startpunkt gedacht — Feintuning bleibt möglich.
+Werten, die zum Verhalten des Zielgeräts passen. Die Auswahl ist nach
+Kategorien gruppiert und durchsuchbar.
 
-| Profil | Zielgeräte | Kern-Einstellung |
+**Wichtig zur Einordnung:** Die Profile beschreiben eine *Verhaltensklasse*,
+keine Hersteller-Spezifikation. Die Werte stecken in neun Klassen; die knapp 60
+Geräteeinträge bilden nur ab, in welche Klasse ein Gerät fällt — wie viele
+Modbus-Sitzungen es bedient, wie viel Luft es zwischen Anfragen braucht, wie
+lange eine Antwort dauern darf und ob es Modbus TCP oder rohes RTU spricht.
+Gemessene Timing-Werte pro Modell sind das ausdrücklich nicht. Ein Profil ist
+ein Startpunkt, der ein Gerät stabil hält — Feintuning bleibt deine Sache.
+
+#### Verhaltensklassen
+
+| Klasse | Verhalten | Kern-Einstellung |
 |--------|-----------|------------------|
-| Standard | Gateways und Geräte ohne bekannte Eigenheiten | ModBridge-Voreinstellungen |
-| SolarEdge / SunSpec | SolarEdge und andere SunSpec-Wechselrichter | 1 Verbindung, 100 ms Abstand, Budget 2,5 s |
-| Huawei Wechselrichter / sDongle | SUN2000 und sDongle | 3 s Connect-Delay, 1 Verbindung, 200 ms Abstand |
-| SMA (Speedwire / Modbus) | SMA-Wechselrichter | 1 Verbindung, 50 ms Abstand |
-| Fronius (Symo / GEN24) | Fronius Datamanager / GEN24 | 2 Verbindungen, 50 ms Abstand |
-| Kostal (Plenticore / PIKO) | Kostal-Wechselrichter | 1 Verbindung, 100 ms Abstand |
-| Victron GX / Venus OS | Cerbo GX und Venus OS | keine Begrenzung, kein Abstand |
-| Modbus-TCP-Gateway zu RTU | Wago, Moxa, USR und ähnliche | 1 Verbindung, 50 ms Abstand, Reads auf 125 Register |
-| Serieller Adapter (RTU über TCP) | Waveshare, USR, Elfin | Protokoll `rtu-tcp`, 1 Verbindung, 50 ms Abstand |
-| SPS / Automatisierung | Siemens, Beckhoff, WAGO PFC | keine Begrenzung, kurze Timeouts |
+| `standard` | ModBridge-Voreinstellungen | keine Begrenzung |
+| `multiSession` | schnell, viele Clients | keine Begrenzung, kein Abstand |
+| `fewSessions` | einige parallele Sitzungen | 2 Verbindungen, 50 ms Abstand |
+| `singleSession` | nur eine Modbus-Sitzung | 1 Verbindung, 100 ms Abstand |
+| `singleSessionFast` | eine Sitzung, Client mit kurzem Timeout | + Budget 2,5 s, Lese-Timeout 2 s |
+| `singleSessionSlow` | eine Sitzung, träge Steuerung | 250 ms Abstand, 10 s Lese-Timeout |
+| `connectDelay` | verwirft Anfragen direkt nach dem Connect | 3 s Pause, 1 Verbindung |
+| `serialGateway` | serielle Leitung hinter TCP | 1 Verbindung, 50 ms Abstand, Reads auf 125 Register |
+| `rtuOverTcp` | rohe RTU-Frames ohne MBAP-Header | Protokoll `rtu-tcp`, 1 Verbindung |
 
-Neue Profile lassen sich in `frontend/src/deviceProfiles.js` ergänzen; Label und
-Hinweistext kommen aus `frontend/src/i18n.js` unter `control.profiles.<id>`.
+#### Kategorien und Geräte
+
+| Kategorie | Geräte |
+|-----------|--------|
+| Allgemein | Standard, SPS/PLC, Modbus-TCP→RTU-Gateway, serieller Adapter |
+| Wechselrichter / PV | SolarEdge, SMA, Fronius, Kostal, Huawei, Sungrow, GoodWe, Growatt, SolaX, Deye/Sunsynk, Sofar, Delta, KACO, FIMER/ABB, E3/DC, Victron, SunSpec allgemein |
+| Wärmepumpen / Heizung | IDM, Stiebel Eltron ISG, Tecalor ISG, NIBE S-Serie, NIBE MODBUS 40, Lambda, Waterkotte, Ochsner, Nilan, Daikin Altherma, Panasonic Aquarea, LG Therma V, Mitsubishi Ecodan |
+| Lüftung / Klima | Helios KWL, Zehnder ComfoAir Q, Vallox, Pluggit, Wolf CWL |
+| Energiezähler | Eastron SDM, Carlo Gavazzi EM24/EM340, Janitza UMG, Schneider iEM3000, Siemens SENTRON PAC, ABB B23/B24, Finder 7M, Iskra WM3, Shelly Pro EM |
+| Batteriespeicher | BYD Battery-Box, Pylontech, VARTA |
+| Wallboxen / Ladeinfrastruktur | KEBA, Alfen Eve, go-e, Wallbox Pulsar Plus, MENNEKES AMTRON, Webasto, ABL eMH, Heidelberg Energy Control |
+
+Geräte, die Modbus nur über einen separaten Adapter erreichen (z.B. NIBE
+MODBUS 40, LG PI485, viele Zähler), sind im Hinweistext entsprechend
+gekennzeichnet — dort gelten die Werte für den Adapter, nicht für das Gerät.
+
+Ein neues Gerät ist ein Eintrag in `frontend/src/deviceProfiles.js` mit Label
+und Klasse; Kategorien, Klassen-Hinweise und Notizen liegen in
+`frontend/src/i18n.js` unter `control.profiles.*`.
 
 ### Vollständige config.json (Beispiel mit allen Optionen)
 

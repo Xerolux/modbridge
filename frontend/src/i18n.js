@@ -274,6 +274,7 @@ const de = {
       connectDelay: 'Verzögerung nach Connect (ms)',
       deviceProfile: 'Geräte-Profil',
       deviceProfilePlaceholder: 'Profil wählen (optional)',
+      deviceProfileFilter: 'Gerät suchen',
       deviceProfileHint: 'Füllt die Felder unten mit Werten, die für diese Geräteklasse funktionieren',
       protocol: 'Protokoll',
       protocolTcp: 'Modbus TCP (Standard)',
@@ -291,46 +292,38 @@ const de = {
     },
     profiles: {
       applied: 'Profil übernommen',
-      standard: {
-        label: 'Standard',
-        hint: 'Voreinstellungen von ModBridge — passend für Gateways und SPS, die mehrere Verbindungen bedienen'
+      categories: {
+        generic: 'Allgemein',
+        inverter: 'Wechselrichter / PV',
+        heatpump: 'Wärmepumpen / Heizung',
+        ventilation: 'Lüftung / Klima',
+        meter: 'Energiezähler',
+        battery: 'Batteriespeicher',
+        wallbox: 'Wallboxen / Ladeinfrastruktur'
       },
-      sunspec: {
-        label: 'SolarEdge / SunSpec',
-        hint: 'Eine Verbindung zum Wechselrichter, 100 ms Abstand zwischen Anfragen, Budget 2,5 s (unter dem 3-s-Timeout von Home Assistant)'
+      classes: {
+        standard: 'ModBridge-Voreinstellungen ohne Begrenzung',
+        multiSession: 'Schnell und für viele Client-Verbindungen gebaut: keine Begrenzung, kein Abstand',
+        fewSessions: 'Verträgt einige parallele Sitzungen: 2 Verbindungen, 50 ms Abstand',
+        singleSession: 'Bedient nur eine Modbus-Sitzung: 1 Verbindung, 100 ms Abstand',
+        singleSessionFast: 'Eine Sitzung, Budget 2,5 s — bleibt unter dem 3-s-Timeout von Home Assistant',
+        singleSessionSlow: 'Eine Sitzung, träge Steuerung: 250 ms Abstand, 10 s Lese-Timeout',
+        connectDelay: 'Verwirft Anfragen direkt nach dem Verbindungsaufbau: 3 s Pause, eine Sitzung',
+        serialGateway: 'Alle Anfragen teilen sich eine serielle Leitung: 1 Verbindung, 50 ms Abstand, Reads auf 125 Register',
+        rtuOverTcp: 'Rohe RTU-Frames ohne MBAP-Header: Protokoll RTU über TCP, 1 Verbindung'
       },
-      huawei: {
-        label: 'Huawei Wechselrichter / sDongle',
-        hint: '3 s Pause nach dem Verbindungsaufbau, eine Verbindung, 200 ms Abstand zwischen Anfragen'
+      notes: {
+        haBudget: 'passend für Home Assistant',
+        connectDelay: 'braucht die Pause nach dem Connect',
+        dongle: 'Werte gelten für den LAN-/WLAN-Stick, nicht für den Wechselrichter selbst',
+        enableFirst: 'Modbus muss am Gerät erst freigeschaltet werden',
+        pollSlowly: 'nicht zu häufig abfragen — der Regler ist langsam',
+        viaGateway: 'erreichbar über einen separaten Modbus-Adapter',
+        rawRtu: 'nur für Adapter, die rohe RTU-Frames erwarten',
+        singleClient: 'lässt dokumentiert nur einen Client zu',
+        rtuOnly: 'spricht ausschließlich Modbus RTU'
       },
-      sma: {
-        label: 'SMA (Speedwire / Modbus)',
-        hint: 'Bedient nur sehr wenige Clients: eine Verbindung, 50 ms Abstand, 5 s Lese-Timeout'
-      },
-      fronius: {
-        label: 'Fronius (Symo / GEN24)',
-        hint: 'Verträgt zwei parallele Sitzungen, wird bei mehr langsam: 50 ms Abstand, 5 s Lese-Timeout'
-      },
-      kostal: {
-        label: 'Kostal (Plenticore / PIKO)',
-        hint: 'Antwortet langsam und nur auf einer Sitzung: eine Verbindung, 100 ms Abstand'
-      },
-      victron: {
-        label: 'Victron GX / Venus OS',
-        hint: 'Schneller TCP-Server für viele Clients: keine Begrenzung, kein Abstand, 5 s Lese-Timeout'
-      },
-      rtuGateway: {
-        label: 'Modbus-TCP-Gateway zu RTU',
-        hint: 'Alle Anfragen teilen sich eine serielle Leitung: eine Verbindung, 50 ms Abstand, Reads auf 125 Register aufgeteilt'
-      },
-      rtuOverTcp: {
-        label: 'Serieller Adapter (RTU über TCP)',
-        hint: 'Für Waveshare/USR/Elfin & Co., die rohe RTU-Frames erwarten: Protokoll RTU über TCP, eine Verbindung, 50 ms Abstand'
-      },
-      plc: {
-        label: 'SPS / Automatisierung',
-        hint: 'Schnelle Steuerungen mit vielen Client-Verbindungen: keine Begrenzung, kein Abstand, kurze Timeouts'
-      }
+      disclaimer: 'Profile beschreiben eine Geräteklasse, keine Hersteller-Spezifikation — als Startwert gedacht'
     }
   },
 
@@ -741,6 +734,7 @@ const en = {
       connectDelay: 'Connect Delay (ms)',
       deviceProfile: 'Device Profile',
       deviceProfilePlaceholder: 'Choose a profile (optional)',
+      deviceProfileFilter: 'Search device',
       deviceProfileHint: 'Fills the fields below with settings known to work for this device class',
       protocol: 'Protocol',
       protocolTcp: 'Modbus TCP (standard)',
@@ -758,46 +752,38 @@ const en = {
     },
     profiles: {
       applied: 'Profile applied',
-      standard: {
-        label: 'Standard',
-        hint: 'ModBridge defaults — fits gateways and PLCs that serve several connections'
+      categories: {
+        generic: 'General',
+        inverter: 'Inverters / PV',
+        heatpump: 'Heat pumps / heating',
+        ventilation: 'Ventilation / HVAC',
+        meter: 'Energy meters',
+        battery: 'Battery storage',
+        wallbox: 'Wallboxes / charging'
       },
-      sunspec: {
-        label: 'SolarEdge / SunSpec',
-        hint: 'One connection to the inverter, 100 ms between requests, 2.5 s budget (below the 3 s timeout used by Home Assistant)'
+      classes: {
+        standard: 'ModBridge defaults, no limits applied',
+        multiSession: 'Fast and built for many client connections: no cap, no spacing',
+        fewSessions: 'Handles a few parallel sessions: 2 connections, 50 ms spacing',
+        singleSession: 'Serves a single Modbus session: 1 connection, 100 ms spacing',
+        singleSessionFast: 'One session, 2.5 s budget — stays below the 3 s Home Assistant timeout',
+        singleSessionSlow: 'One session on a slow controller: 250 ms spacing, 10 s read timeout',
+        connectDelay: 'Drops requests right after connecting: 3 s pause, one session',
+        serialGateway: 'All requests share one serial line: 1 connection, 50 ms spacing, reads split at 125 registers',
+        rtuOverTcp: 'Raw RTU frames without an MBAP header: RTU-over-TCP protocol, 1 connection'
       },
-      huawei: {
-        label: 'Huawei inverter / sDongle',
-        hint: '3 s pause after connecting, one connection, 200 ms between requests'
+      notes: {
+        haBudget: 'tuned for Home Assistant',
+        connectDelay: 'needs the pause after connecting',
+        dongle: 'values apply to the LAN/WiFi stick, not the inverter itself',
+        enableFirst: 'Modbus has to be enabled on the device first',
+        pollSlowly: 'do not poll too often — the controller is slow',
+        viaGateway: 'reached through a separate Modbus adapter',
+        rawRtu: 'only for adapters expecting raw RTU frames',
+        singleClient: 'documented to accept a single client only',
+        rtuOnly: 'speaks Modbus RTU only'
       },
-      sma: {
-        label: 'SMA (Speedwire / Modbus)',
-        hint: 'Serves very few clients: one connection, 50 ms spacing, 5 s read timeout'
-      },
-      fronius: {
-        label: 'Fronius (Symo / GEN24)',
-        hint: 'Handles two parallel sessions, slows down beyond that: 50 ms spacing, 5 s read timeout'
-      },
-      kostal: {
-        label: 'Kostal (Plenticore / PIKO)',
-        hint: 'Answers slowly and on one session only: one connection, 100 ms spacing'
-      },
-      victron: {
-        label: 'Victron GX / Venus OS',
-        hint: 'Fast TCP server built for many clients: no cap, no spacing, 5 s read timeout'
-      },
-      rtuGateway: {
-        label: 'Modbus TCP-to-RTU gateway',
-        hint: 'All requests share one serial line: one connection, 50 ms spacing, reads split at 125 registers'
-      },
-      rtuOverTcp: {
-        label: 'Serial adapter (RTU over TCP)',
-        hint: 'For Waveshare/USR/Elfin and similar expecting raw RTU frames: RTU-over-TCP protocol, one connection, 50 ms spacing'
-      },
-      plc: {
-        label: 'PLC / automation controller',
-        hint: 'Fast controllers with many client connections: no cap, no spacing, short timeouts'
-      }
+      disclaimer: 'Profiles describe a device class, not a vendor specification — treat them as a starting point'
     }
   },
 

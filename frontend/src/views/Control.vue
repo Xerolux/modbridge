@@ -258,11 +258,16 @@
                          :options="deviceProfileOptions"
                          optionLabel="label"
                          optionValue="id"
+                         optionGroupLabel="label"
+                         optionGroupChildren="items"
+                         filter
+                         :filterPlaceholder="$t('control.form.deviceProfileFilter')"
                          :placeholder="$t('control.form.deviceProfilePlaceholder')"
                          class="w-full"
                          @change="applyDeviceProfile($event.value)"
                      />
-                     <small class="text-xs text-[var(--text-muted)]">{{ selectedProfileHint || $t('control.form.deviceProfileHint') }}</small>
+                     <small class="block text-xs text-[var(--text-muted)]">{{ selectedProfileHint || $t('control.form.deviceProfileHint') }}</small>
+                     <small class="block text-xs text-[var(--text-muted)] opacity-70">{{ $t('control.profiles.disclaimer') }}</small>
                  </div>
                  <div>
                      <label class="block text-sm font-medium mb-1">{{ $t('control.form.protocol') }}</label>
@@ -382,7 +387,7 @@ import { VueDraggable } from 'vue-draggable-plus';
 import { useEventSource } from '../utils/eventSource';
 import { getLogLevelColor, formatTime } from '../utils/helpers';
 import { useAuthStore } from '../stores/auth';
-import { deviceProfiles, findDeviceProfile } from '../deviceProfiles';
+import { deviceCategories, findDeviceProfile } from '../deviceProfiles';
 
 const auth = useAuthStore();
 const { t } = useI18n();
@@ -454,19 +459,23 @@ const savingProxy = ref(false);
 // class. They are a starting point, not a stored property of the proxy.
 const deviceProfile = ref(null);
 const deviceProfileOptions = computed(() =>
-    deviceProfiles.map((profile) => ({
-        id: profile.id,
-        label: t(`control.profiles.${profile.id}.label`),
-        hint: t(`control.profiles.${profile.id}.hint`)
+    deviceCategories.map((category) => ({
+        label: t(`control.profiles.categories.${category.id}`),
+        items: category.devices.map((device) => ({ id: device.id, label: device.label }))
     }))
 );
 const protocolOptions = computed(() => [
     { value: 'tcp', label: t('control.form.protocolTcp') },
     { value: 'rtu-tcp', label: t('control.form.protocolRtuTcp') }
 ]);
-const selectedProfileHint = computed(
-    () => deviceProfileOptions.value.find((option) => option.id === deviceProfile.value)?.hint || ''
-);
+// The behaviour class carries the hint; a note is appended when the device has
+// a quirk worth calling out.
+const selectedProfileHint = computed(() => {
+    const profile = findDeviceProfile(deviceProfile.value);
+    if (!profile) return '';
+    const classHint = t(`control.profiles.classes.${profile.class}`);
+    return profile.note ? `${classHint} — ${t(`control.profiles.notes.${profile.note}`)}` : classHint;
+});
 
 const applyDeviceProfile = (id) => {
     const profile = findDeviceProfile(id);
@@ -475,7 +484,7 @@ const applyDeviceProfile = (id) => {
     toast.add({
         severity: 'info',
         summary: t('control.profiles.applied'),
-        detail: t(`control.profiles.${id}.label`),
+        detail: profile.label,
         life: 3000
     });
 };
