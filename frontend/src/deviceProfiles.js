@@ -174,7 +174,7 @@ export const deviceCategories = [
     {
         id: 'heatpump',
         devices: [
-            { id: 'idm', label: 'IDM (Navigator 1.0 / 2.0)', class: 'singleSessionSlow', note: 'pollSlowly' },
+            { id: 'idm', label: 'IDM (Navigator 2.0 / Navigator 10)', class: 'singleSessionSlow', note: 'pollSlowly' },
             { id: 'stiebel', label: 'Stiebel Eltron (ISG + Modbus)', class: 'singleSessionSlow', note: 'pollSlowly' },
             { id: 'tecalor', label: 'Tecalor (ISG + Modbus)', class: 'singleSessionSlow', note: 'pollSlowly' },
             { id: 'nibeS', label: 'NIBE S-Serie', class: 'singleSession' },
