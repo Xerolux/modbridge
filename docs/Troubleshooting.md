@@ -74,7 +74,7 @@ Hintergrund-Abfrage:
 "max_retries": 1,
 "request_timeout_ms": 0,
 "cache_enabled": true,
-"cache_ttl_ms": 5000,
+"cache_ttl_ms": 20000,
 "poll_interval_ms": 5000
 ```
 

@@ -109,6 +109,15 @@ func (p *ProxyInstance) StaleResponses() int64 {
 	return atomic.LoadInt64(&p.staleResponses)
 }
 
+// cacheTTLTooTight reports whether a cache lifetime is too short for the
+// background poller refreshing it. The TTL is a staleness bound, not a refresh
+// schedule: when it is no longer than the interval, entries expire before the
+// next round renews them and the client falls through to the device in the
+// gap — the exact wait the poller exists to remove.
+func cacheTTLTooTight(ttl, pollInterval time.Duration) bool {
+	return pollInterval > 0 && ttl > 0 && ttl <= pollInterval
+}
+
 // CacheStats returns cache counters, or zeroes when no cache is configured.
 func (p *ProxyInstance) CacheStats() CacheStatsWithHitRate {
 	if p.cache == nil {

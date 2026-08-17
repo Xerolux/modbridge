@@ -327,6 +327,7 @@
                      <div class="flex-1">
                          <label class="block text-sm font-medium mb-1">{{ $t('control.form.cacheTtl') }}</label>
                          <InputNumber v-model="proxyForm.cache_ttl_ms" :min="0" :max="3600000" :disabled="!proxyForm.cache_enabled" class="w-full" />
+                         <small class="text-xs text-[var(--text-muted)]">{{ $t('control.form.cacheTtlHint') }}</small>
                      </div>
                      <div class="flex-1">
                          <label class="block text-sm font-medium mb-1">{{ $t('control.form.pollInterval') }}</label>

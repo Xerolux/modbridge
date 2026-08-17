@@ -172,9 +172,16 @@ Dafür gibt es zwei zusammengehörige Optionen:
 
 ```json
 "cache_enabled": true,
-"cache_ttl_ms": 5000,
+"cache_ttl_ms": 20000,
 "poll_interval_ms": 5000
 ```
+
+**TTL und Intervall gehören zusammen.** `cache_ttl_ms` ist eine Obergrenze für
+das Alter eines Werts, kein Aktualisierungsplan — der Poller hält die Einträge
+deutlich frischer. Ist die Gültigkeit nicht **mehrfach so groß** wie das
+Intervall, verfallen Einträge zwischen zwei Runden, der Client fällt in dieser
+Lücke wieder auf das Gerät durch und wartet doch. ModBridge protokolliert beim
+Start eine Warnung, wenn die beiden Werte in diesem Verhältnis stehen.
 
 **Was du dabei in Kauf nimmst:** Ein zwischengespeicherter Wert ist per
 Definition nicht der Live-Wert — er ist bis zu `cache_ttl_ms` alt. Für

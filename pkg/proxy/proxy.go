@@ -342,6 +342,11 @@ func (p *ProxyInstance) Start() error {
 		)
 		p.poller.Start(p.ctx)
 		p.log.Info(p.ID, fmt.Sprintf("Response cache enabled (ttl %v, background poll %v)", cacheCfg.TTL, p.PollInterval))
+		if cacheTTLTooTight(cacheCfg.TTL, p.PollInterval) {
+			p.log.Warn(p.ID, fmt.Sprintf(
+				"Cache lifetime %v is not longer than the %v poll interval: entries expire between refresh rounds and clients will wait for the target anyway. Set it to several times the interval.",
+				cacheCfg.TTL, p.PollInterval))
+		}
 	}
 
 	p.Stats.setStatus("Running")
