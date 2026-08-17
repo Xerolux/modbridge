@@ -57,6 +57,11 @@ verwirft Antworten, die nicht zur laufenden Anfrage gehören. Wie oft das
 passiert, steht als `stale_responses` im Proxy-Status — dauerhaft steigende
 Werte bedeuten, dass das Gerät langsamer antwortet als die Timeouts erlauben.
 
+Im Proxy-Dialog des Web-Interface setzt das Geräte-Profil
+**SolarEdge / SunSpec** diese Werte mit einem Klick; für Huawei-Wechselrichter
+und sDongles gibt es ein eigenes Profil. Die Profile füllen nur das Formular —
+bestehende Proxys bleiben unverändert, bis dort ein Profil gewählt wird.
+
 Empfohlener Startpunkt für einen SolarEdge-Wechselrichter mit mehreren
 Unit-IDs, abgefragt aus Home Assistant (Client-Timeout dort: 3 s):
 

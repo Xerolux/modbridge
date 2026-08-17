@@ -251,6 +251,19 @@
                      <label class="block text-sm font-medium mb-1">{{ $t('control.form.description') }}</label>
                      <InputText v-model="proxyForm.description" class="w-full" />
                  </div>
+                 <div>
+                     <label class="block text-sm font-medium mb-1">{{ $t('control.form.deviceProfile') }}</label>
+                     <Select
+                         v-model="deviceProfile"
+                         :options="deviceProfileOptions"
+                         optionLabel="label"
+                         optionValue="id"
+                         :placeholder="$t('control.form.deviceProfilePlaceholder')"
+                         class="w-full"
+                         @change="applyDeviceProfile($event.value)"
+                     />
+                     <small class="text-xs text-[var(--text-muted)]">{{ selectedProfileHint || $t('control.form.deviceProfileHint') }}</small>
+                 </div>
                  <div class="flex flex-col sm:flex-row gap-4">
                      <div class="flex-1">
                          <label class="block text-sm font-medium mb-1">{{ $t('control.form.connectionTimeout') }}</label>
@@ -342,6 +355,7 @@ import Menu from 'primevue/menu';
 import InputText from 'primevue/inputtext';
 import InputNumber from 'primevue/inputnumber';
 import Checkbox from 'primevue/checkbox';
+import Select from 'primevue/select';
 import Chips from 'primevue/inputtags';
 import Toast from 'primevue/toast';
 import ConfirmDialog from 'primevue/confirmdialog';
@@ -357,6 +371,7 @@ import { VueDraggable } from 'vue-draggable-plus';
 import { useEventSource } from '../utils/eventSource';
 import { getLogLevelColor, formatTime } from '../utils/helpers';
 import { useAuthStore } from '../stores/auth';
+import { deviceProfiles, findDeviceProfile } from '../deviceProfiles';
 
 const auth = useAuthStore();
 const { t } = useI18n();
@@ -422,6 +437,32 @@ const showProxyDialog = ref(false);
 const isEditMode = ref(false);
 const proxyForm = ref(defaultProxyForm());
 const savingProxy = ref(false);
+
+// Device profiles fill the form with settings known to work for a device
+// class. They are a starting point, not a stored property of the proxy.
+const deviceProfile = ref(null);
+const deviceProfileOptions = computed(() =>
+    deviceProfiles.map((profile) => ({
+        id: profile.id,
+        label: t(`control.profiles.${profile.id}.label`),
+        hint: t(`control.profiles.${profile.id}.hint`)
+    }))
+);
+const selectedProfileHint = computed(
+    () => deviceProfileOptions.value.find((option) => option.id === deviceProfile.value)?.hint || ''
+);
+
+const applyDeviceProfile = (id) => {
+    const profile = findDeviceProfile(id);
+    if (!profile) return;
+    proxyForm.value = { ...proxyForm.value, ...profile.values };
+    toast.add({
+        severity: 'info',
+        summary: t('control.profiles.applied'),
+        detail: t(`control.profiles.${id}.label`),
+        life: 3000
+    });
+};
 
 const showLogsDialog = ref(false);
 const currentProxy = ref(null);
@@ -615,12 +656,14 @@ onUnmounted(() => {
 const openAddProxyDialog = () => {
     isEditMode.value = false;
     proxyForm.value = defaultProxyForm();
+    deviceProfile.value = null;
     showProxyDialog.value = true;
 };
 
 const openEditProxyDialog = (proxy) => {
     isEditMode.value = true;
     proxyForm.value = { ...proxy };
+    deviceProfile.value = null;
     showProxyDialog.value = true;
 };
 

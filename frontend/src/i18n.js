@@ -272,6 +272,9 @@ const de = {
       maxRetries: 'Max. Wiederholungen',
       maxReadSize: 'Max. Lese-Größe (0=unbegrenzt)',
       connectDelay: 'Verzögerung nach Connect (ms)',
+      deviceProfile: 'Geräte-Profil',
+      deviceProfilePlaceholder: 'Profil wählen (optional)',
+      deviceProfileHint: 'Füllt die Felder unten mit Werten, die für diese Geräteklasse funktionieren',
       maxTargetConns: 'Max. Ziel-Verbindungen (0=Standard)',
       maxTargetConnsHint: '1 für Geräte mit nur einer Modbus-Sitzung (z. B. SolarEdge/SunSpec)',
       minRequestGap: 'Mindestabstand zwischen Anfragen (ms)',
@@ -281,6 +284,21 @@ const de = {
       enabled: 'Aktiviert',
       paused: 'Pausiert',
       tags: 'Tags'
+    },
+    profiles: {
+      applied: 'Profil übernommen',
+      standard: {
+        label: 'Standard',
+        hint: 'Voreinstellungen von ModBridge — passend für Gateways und SPS, die mehrere Verbindungen bedienen'
+      },
+      sunspec: {
+        label: 'SolarEdge / SunSpec',
+        hint: 'Eine Verbindung zum Wechselrichter, 100 ms Abstand zwischen Anfragen, Budget 2,5 s (unter dem 3-s-Timeout von Home Assistant)'
+      },
+      huawei: {
+        label: 'Huawei Wechselrichter / sDongle',
+        hint: '3 s Pause nach dem Verbindungsaufbau, eine Verbindung, 200 ms Abstand zwischen Anfragen'
+      }
     }
   },
 
@@ -689,6 +707,9 @@ const en = {
       maxRetries: 'Max Retries',
       maxReadSize: 'Max Read Size (0=unlimited)',
       connectDelay: 'Connect Delay (ms)',
+      deviceProfile: 'Device Profile',
+      deviceProfilePlaceholder: 'Choose a profile (optional)',
+      deviceProfileHint: 'Fills the fields below with settings known to work for this device class',
       maxTargetConns: 'Max Target Connections (0=default)',
       maxTargetConnsHint: 'Use 1 for devices serving a single Modbus session (e.g. SolarEdge/SunSpec)',
       minRequestGap: 'Min Request Gap (ms)',
@@ -698,6 +719,21 @@ const en = {
       enabled: 'Enabled',
       paused: 'Paused',
       tags: 'Tags'
+    },
+    profiles: {
+      applied: 'Profile applied',
+      standard: {
+        label: 'Standard',
+        hint: 'ModBridge defaults — fits gateways and PLCs that serve several connections'
+      },
+      sunspec: {
+        label: 'SolarEdge / SunSpec',
+        hint: 'One connection to the inverter, 100 ms between requests, 2.5 s budget (below the 3 s timeout used by Home Assistant)'
+      },
+      huawei: {
+        label: 'Huawei inverter / sDongle',
+        hint: '3 s pause after connecting, one connection, 200 ms between requests'
+      }
     }
   },
 
