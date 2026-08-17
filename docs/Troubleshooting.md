@@ -23,6 +23,53 @@ ping 192.168.1.100
 nc -zv 192.168.1.100 502
 ```
 
+## Timeouts trotz erreichbarem Zielgerät (Home Assistant, SolarEdge & Co.)
+
+Typisches Bild im Client-Log: einzelne Anfragen laufen in ein Timeout, danach
+schlägt jede weitere Abfrage fehl, bis der Client die Verbindung neu aufbaut.
+In `pymodbus`-basierten Integrationen sieht das so aus:
+
+```
+Error reading inverter ID 4 at InverterCommon:
+Response timeout after 3 seconds for transaction with ID 0x23
+```
+
+Drei Ursachen, die ModBridge gezielt abfängt:
+
+1. **Mehrere Sitzungen zum Gerät.** Viele Wechselrichter (SolarEdge/SunSpec,
+   kleine RTU-Gateways) beantworten nur eine Modbus-Verbindung und lassen
+   weitere still ins Leere laufen. `max_target_conns: 1` erzwingt genau eine
+   Verbindung zum Zielgerät; Anfragen mehrerer Clients werden davor
+   eingereiht.
+2. **Anfragen zu dicht hintereinander.** Manche Geräte verwerfen Anfragen, die
+   ohne Pause aufeinander folgen. `min_request_gap_ms` (z.B. `100`) setzt einen
+   Mindestabstand.
+3. **Antwort kommt, nachdem der Client aufgegeben hat.** Läuft die
+   Weiterleitung inklusive Wiederholungen länger als das Timeout des Clients,
+   trifft die späte Antwort auf dessen nächste Anfrage — ab da passt keine
+   Transaktions-ID mehr und jede Abfrage schlägt fehl. `request_timeout_ms`
+   deckelt die gesamte Anfrage; ist das Budget aufgebraucht, antwortet
+   ModBridge mit einer regulären Modbus-Exception (`0x0B`,
+   *Gateway Target Device Failed To Respond*) statt verspätet mit Nutzdaten.
+
+Zusätzlich vergibt ModBridge zum Zielgerät eigene Transaktions-IDs und
+verwirft Antworten, die nicht zur laufenden Anfrage gehören. Wie oft das
+passiert, steht als `stale_responses` im Proxy-Status — dauerhaft steigende
+Werte bedeuten, dass das Gerät langsamer antwortet als die Timeouts erlauben.
+
+Empfohlener Startpunkt für einen SolarEdge-Wechselrichter mit mehreren
+Unit-IDs, abgefragt aus Home Assistant (Client-Timeout dort: 3 s):
+
+```json
+{
+  "max_target_conns": 1,
+  "min_request_gap_ms": 100,
+  "request_timeout_ms": 2500,
+  "max_retries": 1,
+  "read_timeout": 2
+}
+```
+
 ## Admin-Passwort vergessen
 
 ### Benutzername und Passwort über die WebUI neu vergeben

@@ -276,7 +276,23 @@
                          <label class="block text-sm font-medium mb-1">{{ $t('control.form.connectDelay') }}</label>
                          <InputNumber v-model="proxyForm.connect_delay_ms" :min="0" :max="60000" class="w-full" />
                      </div>
-                     <div class="flex-1" />
+                     <div class="flex-1">
+                         <label class="block text-sm font-medium mb-1">{{ $t('control.form.maxTargetConns') }}</label>
+                         <InputNumber v-model="proxyForm.max_target_conns" :min="0" :max="100" class="w-full" />
+                         <small class="text-xs text-[var(--text-muted)]">{{ $t('control.form.maxTargetConnsHint') }}</small>
+                     </div>
+                 </div>
+                 <div class="flex flex-col sm:flex-row gap-4">
+                     <div class="flex-1">
+                         <label class="block text-sm font-medium mb-1">{{ $t('control.form.minRequestGap') }}</label>
+                         <InputNumber v-model="proxyForm.min_request_gap_ms" :min="0" :max="10000" class="w-full" />
+                         <small class="text-xs text-[var(--text-muted)]">{{ $t('control.form.minRequestGapHint') }}</small>
+                     </div>
+                     <div class="flex-1">
+                         <label class="block text-sm font-medium mb-1">{{ $t('control.form.requestTimeout') }}</label>
+                         <InputNumber v-model="proxyForm.request_timeout_ms" :min="0" :max="600000" class="w-full" />
+                         <small class="text-xs text-[var(--text-muted)]">{{ $t('control.form.requestTimeoutHint') }}</small>
+                     </div>
                  </div>
                  <div class="flex items-center gap-4">
                      <div class="flex items-center gap-2">
@@ -394,6 +410,9 @@ const defaultProxyForm = () => ({
     max_retries: 3,
     max_read_size: 0,
     connect_delay_ms: 0,
+    max_target_conns: 0,
+    min_request_gap_ms: 0,
+    request_timeout_ms: 0,
     enabled: true,
     paused: false,
     tags: []

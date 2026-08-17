@@ -83,6 +83,15 @@ func (m *Manager) AddProxy(cfg config.ProxyConfig, save bool) error {
 	if cfg.ConnectDelayMs > 0 {
 		p.ConnectDelay = time.Duration(cfg.ConnectDelayMs) * time.Millisecond
 	}
+	if cfg.MaxTargetConns > 0 {
+		p.MaxTargetConns = cfg.MaxTargetConns
+	}
+	if cfg.MinRequestGapMs > 0 {
+		p.MinRequestGap = time.Duration(cfg.MinRequestGapMs) * time.Millisecond
+	}
+	if cfg.RequestTimeoutMs > 0 {
+		p.RequestTimeout = time.Duration(cfg.RequestTimeoutMs) * time.Millisecond
+	}
 	m.proxies[cfg.ID] = p
 
 	// Broadcast event
@@ -306,6 +315,15 @@ func (m *Manager) UpdateProxy(cfg config.ProxyConfig) error {
 	if cfg.ConnectDelayMs > 0 {
 		p.ConnectDelay = time.Duration(cfg.ConnectDelayMs) * time.Millisecond
 	}
+	if cfg.MaxTargetConns > 0 {
+		p.MaxTargetConns = cfg.MaxTargetConns
+	}
+	if cfg.MinRequestGapMs > 0 {
+		p.MinRequestGap = time.Duration(cfg.MinRequestGapMs) * time.Millisecond
+	}
+	if cfg.RequestTimeoutMs > 0 {
+		p.RequestTimeout = time.Duration(cfg.RequestTimeoutMs) * time.Millisecond
+	}
 	m.proxies[cfg.ID] = p
 
 	// Start if it was enabled and not paused
@@ -386,6 +404,10 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 			"max_retries":        pCfg.MaxRetries,
 			"max_read_size":      pCfg.MaxReadSize,
 			"connect_delay_ms":   pCfg.ConnectDelayMs,
+			"max_target_conns":   pCfg.MaxTargetConns,
+			"min_request_gap_ms": pCfg.MinRequestGapMs,
+			"request_timeout_ms": pCfg.RequestTimeoutMs,
+			"stale_responses":    p.StaleResponses(),
 			"tags":               tags,
 			"protocol":           pCfg.Protocol,
 		})
@@ -599,6 +621,10 @@ func (m *Manager) getProxyStatusLocked(id string) map[string]interface{} {
 		"max_retries":        pCfg.MaxRetries,
 		"max_read_size":      pCfg.MaxReadSize,
 		"connect_delay_ms":   pCfg.ConnectDelayMs,
+		"max_target_conns":   pCfg.MaxTargetConns,
+		"min_request_gap_ms": pCfg.MinRequestGapMs,
+		"request_timeout_ms": pCfg.RequestTimeoutMs,
+		"stale_responses":    p.StaleResponses(),
 		"tags":               tags,
 		"protocol":           pCfg.Protocol,
 	}

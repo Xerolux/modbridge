@@ -72,7 +72,10 @@ type ProxyConfig struct {
 	MaxRetries        int          `json:"max_retries"`        // Max retry attempts (default: 3)
 	Description       string       `json:"description"`        // User description
 	MaxReadSize       int          `json:"max_read_size"`
-	ConnectDelayMs    int          `json:"connect_delay_ms"` // Delay after TCP connect before first request (ms). For slow devices like Huawei inverters/sDongles.
+	ConnectDelayMs    int          `json:"connect_delay_ms"`   // Delay after TCP connect before first request (ms). For slow devices like Huawei inverters/sDongles.
+	MaxTargetConns    int          `json:"max_target_conns"`   // Max simultaneous connections to the target (0 = default 10). Set to 1 for single-session devices like SolarEdge/SunSpec inverters.
+	MinRequestGapMs   int          `json:"min_request_gap_ms"` // Minimum pause between two requests to the target (ms). For devices that drop back-to-back requests.
+	RequestTimeoutMs  int          `json:"request_timeout_ms"` // Hard cap for one client request incl. retries (ms, 0 = derived). Keep below the client's own timeout.
 	Tags              FlexibleTags `json:"tags"`
 	// Protocol controls the wire format used when talking to the target.
 	// "tcp"     – standard Modbus TCP (MBAP header, default)

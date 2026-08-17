@@ -142,6 +142,10 @@ sudo journalctl -u modbridge -f
 | `read_timeout` | int | Lese-Timeout in Sekunden |
 | `max_retries` | int | Maximale Wiederholungsversuche bei Fehler |
 | `max_read_size` | int | Max. Modbus-Read-Größe (0 = unbegrenzt) |
+| `connect_delay_ms` | int | Pause nach TCP-Connect vor der ersten Anfrage (ms, 0 = aus). Für langsame Geräte wie Huawei-Wechselrichter/sDongles |
+| `max_target_conns` | int | Max. gleichzeitige Verbindungen zum Zielgerät (0 = Standard 10). `1` für Geräte mit nur einer Modbus-Sitzung, z.B. SolarEdge/SunSpec |
+| `min_request_gap_ms` | int | Mindestabstand zwischen zwei Anfragen an das Zielgerät (ms, 0 = aus) |
+| `request_timeout_ms` | int | Hartes Zeitbudget für eine Client-Anfrage inkl. Wiederholungen (ms, 0 = automatisch aus `read_timeout` und `max_retries`) |
 | `description` | string | Optionale Beschreibung |
 | `tags` | array | Optionale Tags zur Kategorisierung |
 
@@ -168,6 +172,10 @@ sudo journalctl -u modbridge -f
       "max_retries": 3,
       "description": "Verbindet sich mit SolarEdge Anlage",
       "max_read_size": 0,
+      "connect_delay_ms": 0,
+      "max_target_conns": 1,
+      "min_request_gap_ms": 100,
+      "request_timeout_ms": 2500,
       "tags": []
     }
   ],

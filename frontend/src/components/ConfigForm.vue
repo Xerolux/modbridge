@@ -226,6 +226,21 @@
                     <input v-model.number="proxy.connect_delay_ms" type="number" min="0" max="60000" @input="markDirty(proxy, index)" />
                     <small v-if="getFieldError(proxy, index, 'connect_delay_ms')" class="field-error">{{ getFieldError(proxy, index, 'connect_delay_ms') }}</small>
                   </div>
+                  <div class="field-group">
+                    <label>Max Target Connections</label>
+                    <input v-model.number="proxy.max_target_conns" type="number" min="0" max="100" @input="markDirty(proxy, index)" />
+                    <small v-if="getFieldError(proxy, index, 'max_target_conns')" class="field-error">{{ getFieldError(proxy, index, 'max_target_conns') }}</small>
+                  </div>
+                  <div class="field-group">
+                    <label>Min Request Gap (ms)</label>
+                    <input v-model.number="proxy.min_request_gap_ms" type="number" min="0" max="10000" @input="markDirty(proxy, index)" />
+                    <small v-if="getFieldError(proxy, index, 'min_request_gap_ms')" class="field-error">{{ getFieldError(proxy, index, 'min_request_gap_ms') }}</small>
+                  </div>
+                  <div class="field-group">
+                    <label>Request Timeout (ms)</label>
+                    <input v-model.number="proxy.request_timeout_ms" type="number" min="0" max="600000" @input="markDirty(proxy, index)" />
+                    <small v-if="getFieldError(proxy, index, 'request_timeout_ms')" class="field-error">{{ getFieldError(proxy, index, 'request_timeout_ms') }}</small>
+                  </div>
                 </div>
               </div>
             </article>
@@ -351,6 +366,9 @@ const addProxy = () => {
     max_retries: 3,
     max_read_size: 0,
     connect_delay_ms: 0,
+    max_target_conns: 0,
+    min_request_gap_ms: 0,
+    request_timeout_ms: 0,
     description: '',
     tags: '',
     _isNew: true,

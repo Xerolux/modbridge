@@ -262,6 +262,28 @@ func (v *Validator) validateProxyConfig(cfg *ProxyConfig, index int) {
 		v.AddError(prefix+".connect_delay_ms", "must not exceed 60000 ms", strconv.Itoa(cfg.ConnectDelayMs))
 	}
 
+	// Validate target connection limit. 0 = default. 1 is the correct value for
+	// devices that only serve a single Modbus session (SolarEdge/SunSpec).
+	if cfg.MaxTargetConns < 0 {
+		v.AddError(prefix+".max_target_conns", "must be non-negative", strconv.Itoa(cfg.MaxTargetConns))
+	} else if cfg.MaxTargetConns > 100 {
+		v.AddError(prefix+".max_target_conns", "must not exceed 100", strconv.Itoa(cfg.MaxTargetConns))
+	}
+
+	// Validate minimum request gap (ms). 0 = disabled.
+	if cfg.MinRequestGapMs < 0 {
+		v.AddError(prefix+".min_request_gap_ms", "must be non-negative", strconv.Itoa(cfg.MinRequestGapMs))
+	} else if cfg.MinRequestGapMs > 10000 {
+		v.AddError(prefix+".min_request_gap_ms", "must not exceed 10000 ms", strconv.Itoa(cfg.MinRequestGapMs))
+	}
+
+	// Validate per-request budget (ms). 0 = derived from read timeout/retries.
+	if cfg.RequestTimeoutMs < 0 {
+		v.AddError(prefix+".request_timeout_ms", "must be non-negative", strconv.Itoa(cfg.RequestTimeoutMs))
+	} else if cfg.RequestTimeoutMs > 600000 {
+		v.AddError(prefix+".request_timeout_ms", "must not exceed 600000 ms", strconv.Itoa(cfg.RequestTimeoutMs))
+	}
+
 	// Validate description length
 	if len(cfg.Description) > 500 {
 		v.AddError(prefix+".description", "must not exceed 500 characters", strconv.Itoa(len(cfg.Description)))
