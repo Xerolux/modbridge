@@ -384,6 +384,7 @@ const addProxy = () => {
     max_target_conns: 0,
     min_request_gap_ms: 0,
     request_timeout_ms: 0,
+    device_profile: '',
     cache_enabled: false,
     cache_ttl_ms: 0,
     poll_interval_ms: 0,

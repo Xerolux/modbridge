@@ -125,7 +125,8 @@
                 <TabPanels>
                     <TabPanel v-for="(group, index) in filteredGroups" :key="group.name" :value="String(index)">
                         <VueDraggable
-                            :list="group.proxies"
+                            :model-value="group.proxies"
+                            @update:model-value="onProxyReorder"
                             :disabled="!editMode"
                             :group="{ name: 'proxy-order', pull: false, put: false }"
                             handle=".drag-handle"
@@ -136,7 +137,6 @@
                             :delay-on-touch-only="true"
                             :touch-start-threshold="4"
                             :fallback-tolerance="5"
-                            @end="onProxyReorder(group.proxies)"
                             class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
                         >
                             <div
@@ -254,7 +254,7 @@
                  <div>
                      <label class="block text-sm font-medium mb-1">{{ $t('control.form.deviceProfile') }}</label>
                      <Select
-                         v-model="deviceProfile"
+                         v-model="proxyForm.device_profile"
                          :options="deviceProfileOptions"
                          optionLabel="label"
                          optionValue="id"
@@ -463,6 +463,7 @@ const defaultProxyForm = () => ({
     max_target_conns: 0,
     min_request_gap_ms: 0,
     request_timeout_ms: 0,
+    device_profile: '',
     cache_enabled: false,
     cache_ttl_ms: 0,
     poll_interval_ms: 0,
@@ -476,9 +477,9 @@ const isEditMode = ref(false);
 const proxyForm = ref(defaultProxyForm());
 const savingProxy = ref(false);
 
-// Device profiles fill the form with settings known to work for a device
-// class. They are a starting point, not a stored property of the proxy.
-const deviceProfile = ref(null);
+// Device profiles fill the form with settings known to work for a device class.
+// The chosen profile is stored with the proxy so the dialog can show it again;
+// the proxy's behaviour still follows the individual fields below it.
 const deviceProfileOptions = computed(() =>
     deviceCategories.map((category) => ({
         label: t(`control.profiles.categories.${category.id}`),
@@ -492,7 +493,7 @@ const protocolOptions = computed(() => [
 // The behaviour class carries the hint; a note is appended when the device has
 // a quirk worth calling out.
 const selectedProfileHint = computed(() => {
-    const profile = findDeviceProfile(deviceProfile.value);
+    const profile = findDeviceProfile(proxyForm.value.device_profile);
     if (!profile) return '';
     const classHint = t(`control.profiles.classes.${profile.class}`);
     return profile.note ? `${classHint} — ${t(`control.profiles.notes.${profile.note}`)}` : classHint;
@@ -507,7 +508,7 @@ const onCacheToggle = () => {
 const applyDeviceProfile = (id) => {
     const profile = findDeviceProfile(id);
     if (!profile) return;
-    proxyForm.value = { ...proxyForm.value, ...profile.values };
+    proxyForm.value = { ...proxyForm.value, ...profile.values, device_profile: id };
     toast.add({
         severity: 'info',
         summary: t('control.profiles.applied'),
@@ -708,14 +709,12 @@ onUnmounted(() => {
 const openAddProxyDialog = () => {
     isEditMode.value = false;
     proxyForm.value = defaultProxyForm();
-    deviceProfile.value = null;
     showProxyDialog.value = true;
 };
 
 const openEditProxyDialog = (proxy) => {
     isEditMode.value = true;
-    proxyForm.value = { ...proxy, protocol: proxy.protocol || 'tcp' };
-    deviceProfile.value = null;
+    proxyForm.value = { ...proxy, protocol: proxy.protocol || 'tcp', device_profile: proxy.device_profile || '' };
     showProxyDialog.value = true;
 };
 

@@ -300,6 +300,15 @@ func (v *Validator) validateProxyConfig(cfg *ProxyConfig, index int) {
 		v.AddError(prefix+".poll_interval_ms", "requires cache_enabled: background polling only fills the cache", strconv.Itoa(cfg.PollIntervalMs))
 	}
 
+	// Validate device profile id. The backend does not know the profile list —
+	// it only stores which one the UI applied — so this guards length and
+	// charset, nothing more.
+	if len(cfg.DeviceProfile) > 64 {
+		v.AddError(prefix+".device_profile", "must not exceed 64 characters", cfg.DeviceProfile)
+	} else if cfg.DeviceProfile != "" && !idRegex.MatchString(cfg.DeviceProfile) {
+		v.AddError(prefix+".device_profile", "must contain only alphanumeric characters, hyphens, and underscores", cfg.DeviceProfile)
+	}
+
 	// Validate description length
 	if len(cfg.Description) > 500 {
 		v.AddError(prefix+".description", "must not exceed 500 characters", strconv.Itoa(len(cfg.Description)))

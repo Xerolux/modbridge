@@ -146,6 +146,7 @@ sudo journalctl -u modbridge -f
 | `max_target_conns` | int | Max. gleichzeitige Verbindungen zum Zielgerät (0 = Standard 10). `1` für Geräte mit nur einer Modbus-Sitzung, z.B. SolarEdge/SunSpec |
 | `min_request_gap_ms` | int | Mindestabstand zwischen zwei Anfragen an das Zielgerät (ms, 0 = aus) |
 | `request_timeout_ms` | int | Hartes Zeitbudget für eine Client-Anfrage inkl. Wiederholungen (ms, 0 = automatisch aus `read_timeout` und `max_retries`) |
+| `device_profile` | string | Zuletzt angewendetes Geräte-Profil. Rein informativ — merkt sich, aus welchem Preset die Werte stammen; das Verhalten richtet sich nach den Einzelfeldern |
 | `cache_enabled` | bool | Wiederholte Lesezugriffe aus einem Cache bedienen (Standard: aus) |
 | `cache_ttl_ms` | int | Gültigkeit eines Cache-Eintrags (ms, 0 = 5000) |
 | `poll_interval_ms` | int | Abgefragte Register im Hintergrund aktualisieren (ms, 0 = aus). Setzt `cache_enabled` voraus |
