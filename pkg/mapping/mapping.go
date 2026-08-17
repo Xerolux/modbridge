@@ -3,6 +3,10 @@
 // Created by Xerolux
 // https://github.com/Xerolux/modbridge
 
+// NOT WIRED UP: no code path reaches this package yet.
+//
+// Register transformations (scaling, type conversion) are a sensible thing for
+// a proxy to offer. Kept as unfinished work; nothing imports it today.
 package mapping
 
 import (

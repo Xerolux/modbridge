@@ -29,6 +29,44 @@ Alle ausführlichen Informationen zu Konfiguration (Web-UI & Headless) und Nutzu
 
 ---
 
+## ⚙️ Was ModBridge zwischen Client und Gerät tut
+
+Ein Proxy ist kein Kabel. ModBridge sitzt zwischen deinem Client (Home
+Assistant, SCADA, eigenes Skript) und dem Modbus-Gerät und löst die Probleme,
+die dort entstehen:
+
+**Ohne Konfiguration, immer aktiv:**
+
+- **Transaktions-Zuordnung** — zum Gerät hin vergibt ModBridge eigene
+  Transaktions-IDs und verwirft Antworten, die nicht zur laufenden Anfrage
+  gehören. Ohne das wird eine verspätete Antwort zur Antwort auf die *nächste*
+  Anfrage, und ab da schlägt jede Abfrage fehl.
+- **Zeitbudget pro Anfrage** — läuft es ab, kommt eine saubere Modbus-Exception
+  statt einer verspäteten Antwort, auf die niemand mehr wartet.
+
+**Pro Proxy einstellbar, standardmäßig aus:**
+
+| Option | Wofür |
+|--------|-------|
+| `max_target_conns` | Geräte, die nur eine Modbus-Sitzung bedienen (SolarEdge/SunSpec und viele Wechselrichter) |
+| `min_request_gap_ms` | Geräte, die Anfragen ohne Pause verwerfen. Achtung: der Wert kostet **pro Anfrage** |
+| `request_timeout_ms` | Harte Obergrenze inklusive Wiederholungen |
+| `cache_enabled` + `poll_interval_ms` | Register im Hintergrund warm halten, damit der Client nicht auf ein träges Gerät wartet |
+
+**In der Oberfläche:**
+
+- **Geräte-Profile** — rund 60 Einträge in sieben Kategorien (Wechselrichter,
+  Wärmepumpen, Lüftung, Zähler, Speicher, Wallboxen, Allgemein). Sie füllen das
+  Formular mit Werten, die zur Geräteklasse passen, und ändern sonst nichts.
+- **Gerät vermessen** — tastet Abstand, Verbindungen und Antwortzeit am echten
+  Gerät ab und schlägt Werte vor, statt sie zu schätzen. Nur Lesezugriffe,
+  höchstens 90 Sekunden, und übernommen wird erst auf Klick. Während der
+  Messung nimmt der Proxy keine Clients an.
+
+Details dazu im [Wiki](https://github.com/Xerolux/modbridge/wiki):
+[Konfiguration](https://github.com/Xerolux/modbridge/wiki/Konfiguration) und
+[Troubleshooting](https://github.com/Xerolux/modbridge/wiki/Troubleshooting).
+
 ## 🚀 Installation mit `modbridge` (empfohlen)
 
 Das Installationsskript übernimmt alles: Binary-Download, systemd-Service mit Autostart und Einrichtung als systemweites CLI-Kommando (`modbridge`).

@@ -192,7 +192,7 @@ func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator,
 		auditorInstance = audit.NewAuditor(db)
 	}
 
-	return &Server{
+	srv := &Server{
 		cfgMgr:           cfg,
 		mgr:              mgr,
 		auth:             a,
@@ -215,6 +215,9 @@ func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator,
 			Arch:      runtime.GOARCH,
 		}),
 	}
+
+	srv.wireDiagnostics()
+	return srv
 }
 
 func buildCSRFSecret() (string, error) {
@@ -392,6 +395,16 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		s.log.Error("API", fmt.Sprintf("Failed to encode ready response: %v", err))
 	}
+}
+
+// wireDiagnostics lets the metrics exporter read the per-proxy counters that
+// live on the proxies themselves, so stale responses and cache behaviour end up
+// in Prometheus alongside the request counts rather than only in the status API.
+func (s *Server) wireDiagnostics() {
+	if s.metrics == nil || s.mgr == nil {
+		return
+	}
+	s.metrics.SetDiagnosticsProvider(s.mgr.ProxyDiagnostics)
 }
 
 // handleMetrics returns Prometheus metrics.

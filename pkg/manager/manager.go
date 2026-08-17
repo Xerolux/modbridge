@@ -13,6 +13,7 @@ import (
 	"modbridge/pkg/database"
 	"modbridge/pkg/devices"
 	"modbridge/pkg/logger"
+	"modbridge/pkg/metrics"
 	"modbridge/pkg/proxy"
 	"sync"
 	"time"
@@ -367,6 +368,27 @@ func (m *Manager) UpdateProxy(cfg config.ProxyConfig) error {
 }
 
 // GetProxies returns status of all proxies.
+// ProxyDiagnostics reports the per-proxy counters that only the proxy knows,
+// keyed by proxy ID, for the metrics exporter.
+func (m *Manager) ProxyDiagnostics() map[string]metrics.ProxyDiagnostics {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	out := make(map[string]metrics.ProxyDiagnostics, len(m.proxies))
+	for id, p := range m.proxies {
+		cache := p.CacheStats()
+		polled, _, _ := p.PollerStats()
+		out[id] = metrics.ProxyDiagnostics{
+			StaleResponses: p.StaleResponses(),
+			CacheHits:      cache.Hits,
+			CacheMisses:    cache.Misses,
+			CacheEntries:   cache.Size,
+			PolledRequests: polled,
+		}
+	}
+	return out
+}
+
 // GetProxyInstance returns the running instance for a proxy ID.
 func (m *Manager) GetProxyInstance(id string) (*proxy.ProxyInstance, bool) {
 	m.mu.RLock()
@@ -433,6 +455,7 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 			"request_timeout_ms": pCfg.RequestTimeoutMs,
 			"stale_responses":    p.StaleResponses(),
 			"device_profile":     pCfg.DeviceProfile,
+			"calibrated_at":      pCfg.CalibratedAt,
 			"cache_enabled":      pCfg.CacheEnabled,
 			"cache_ttl_ms":       pCfg.CacheTTLMs,
 			"poll_interval_ms":   pCfg.PollIntervalMs,
@@ -660,6 +683,7 @@ func (m *Manager) getProxyStatusLocked(id string) map[string]interface{} {
 		"request_timeout_ms": pCfg.RequestTimeoutMs,
 		"stale_responses":    p.StaleResponses(),
 		"device_profile":     pCfg.DeviceProfile,
+		"calibrated_at":      pCfg.CalibratedAt,
 		"cache_enabled":      pCfg.CacheEnabled,
 		"cache_ttl_ms":       pCfg.CacheTTLMs,
 		"poll_interval_ms":   pCfg.PollIntervalMs,

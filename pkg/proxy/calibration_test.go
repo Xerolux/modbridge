@@ -326,3 +326,63 @@ func TestCalibrationFinishesQuicklyAgainstAPickyDevice(t *testing.T) {
 		t.Errorf("recommended %d ms, below the 80 ms the device needs", result.Recommended.MinRequestGapMs)
 	}
 }
+
+// TestCalibrationStopsAtItsDeadline is the promise that matters most in the
+// field: clients are held off for the whole run, so nothing is being polled or
+// controlled while it lasts. A run that overruns its budget is worse than a
+// coarser measurement.
+func TestCalibrationStopsAtItsDeadline(t *testing.T) {
+	target := newPickyTarget(t, 0, 4, 120*time.Millisecond)
+	p := calibrationProxy(t, target.addr())
+
+	started := time.Now()
+	result, err := p.Calibrate(t.Context(), CalibrationConfig{
+		Probe:            ProbeSpec{UnitID: 1, Function: 3, Address: 0, Quantity: 2},
+		RequestsPerStep:  20,
+		GapStepsMs:       []int{200, 150, 100, 50, 25, 10},
+		ConnectionLevels: []int{1, 2, 4},
+		MaxDuration:      3 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("calibration failed: %v", err)
+	}
+
+	elapsed := time.Since(started)
+	if elapsed > 12*time.Second {
+		t.Errorf("run took %v against a 3s ceiling", elapsed)
+	}
+	if len(result.GapSteps) == 0 {
+		t.Error("a run cut short must still report what it measured")
+	}
+	if result.Recommended.MinRequestGapMs == 0 {
+		t.Error("a run cut short must still recommend something usable")
+	}
+}
+
+// TestCalibrationFallsBackWhenTheDeviceIsUnreliable verifies that a device
+// failing even at the most careful spacing yields conservative settings and a
+// plain statement, rather than an error that leaves the operator with nothing.
+func TestCalibrationFallsBackWhenTheDeviceIsUnreliable(t *testing.T) {
+	// A floor far above any spacing the run will try.
+	target := newPickyTarget(t, 5*time.Second, 4, 0)
+	p := calibrationProxy(t, target.addr())
+
+	result, err := p.Calibrate(t.Context(), CalibrationConfig{
+		Probe:           ProbeSpec{UnitID: 1, Function: 3, Address: 0, Quantity: 2},
+		RequestsPerStep: 4,
+		GapStepsMs:      []int{200, 100},
+		MaxDuration:     20 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("expected conservative settings, got an error: %v", err)
+	}
+	if result.Recommended.MinRequestGapMs != 200 {
+		t.Errorf("fallback spacing = %d ms, want the most careful value 200", result.Recommended.MinRequestGapMs)
+	}
+	if result.Recommended.MaxTargetConns != 1 {
+		t.Errorf("fallback connections = %d, want 1", result.Recommended.MaxTargetConns)
+	}
+	if len(result.Notes) == 0 {
+		t.Error("a fallback must say that it is one")
+	}
+}

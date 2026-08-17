@@ -339,7 +339,10 @@
                      <div class="flex items-center justify-between gap-3">
                          <div>
                              <div class="text-sm font-medium">{{ $t('control.form.calibrate') }}</div>
-                             <small class="text-xs text-[var(--text-muted)]">{{ $t('control.form.calibrateHint') }}</small>
+                             <small class="block text-xs text-[var(--text-muted)]">{{ $t('control.form.calibrateHint') }}</small>
+                             <small v-if="proxyForm.calibrated_at" class="block text-xs text-[var(--text-muted)]">
+                                 {{ $t('control.form.calibratedAt', { when: new Date(proxyForm.calibrated_at).toLocaleString() }) }}
+                             </small>
                          </div>
                          <Button
                              :label="$t('control.form.calibrateStart')"
@@ -510,6 +513,7 @@ const defaultProxyForm = () => ({
     min_request_gap_ms: 0,
     request_timeout_ms: 0,
     device_profile: '',
+    calibrated_at: '',
     cache_enabled: false,
     cache_ttl_ms: 0,
     poll_interval_ms: 0,
@@ -560,6 +564,7 @@ const runCalibration = async () => {
             { timeout: 300000 }
         );
         calibrationResult.value = res.data;
+        proxyForm.value = { ...proxyForm.value, calibrated_at: new Date().toISOString() };
     } catch (e) {
         toast.add({
             severity: 'error',

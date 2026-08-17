@@ -92,12 +92,13 @@ type CalibrationResult struct {
 
 // CalibrationConfig tunes a run. The zero value is a sensible run.
 type CalibrationConfig struct {
-	Probe            ProbeSpec // Read to repeat; falls back to the last read the proxy saw
-	RequestsPerStep  int       // Requests per step (default 20). One error is noise; a rate is a measurement.
-	GapStepsMs       []int     // Spacings to try, descending (default 200…10)
-	ConnectionLevels []int     // Parallel connections to try, ascending (default 1, 2, 4)
-	SafetyFactor     float64   // Margin over the fastest clean spacing (default 1.5)
-	Force            bool      // Run even while clients are connected
+	Probe            ProbeSpec     // Read to repeat; falls back to the last read the proxy saw
+	RequestsPerStep  int           // Requests per step (default 20). One error is noise; a rate is a measurement.
+	GapStepsMs       []int         // Spacings to try, descending (default 200…10)
+	ConnectionLevels []int         // Parallel connections to try, ascending (default 1, 2, 4)
+	SafetyFactor     float64       // Margin over the fastest clean spacing (default 1.5)
+	Force            bool          // Run even while clients are connected
+	MaxDuration      time.Duration // Hard ceiling for the whole run (default 90s)
 }
 
 func (cfg *CalibrationConfig) applyDefaults() {
@@ -112,6 +113,12 @@ func (cfg *CalibrationConfig) applyDefaults() {
 	}
 	if cfg.SafetyFactor <= 0 {
 		cfg.SafetyFactor = 1.5
+	}
+	if cfg.MaxDuration <= 0 {
+		// Clients are held off for the duration, so nothing is being polled or
+		// controlled while this runs. A minute and a half is a defensible pause;
+		// ten minutes is not, whatever the measurement would be worth.
+		cfg.MaxDuration = 90 * time.Second
 	}
 }
 
@@ -179,6 +186,7 @@ func (p *ProxyInstance) Calibrate(ctx context.Context, cfg CalibrationConfig) (*
 	}
 
 	started := time.Now()
+	deadline := started.Add(cfg.MaxDuration)
 	result := &CalibrationResult{
 		TargetAddr: p.TargetAddr,
 		Probe:      probe,
@@ -199,6 +207,12 @@ func (p *ProxyInstance) Calibrate(ctx context.Context, cfg CalibrationConfig) (*
 			return nil, ctx.Err()
 		default:
 		}
+		if time.Now().After(deadline) {
+			result.Notes = append(result.Notes, fmt.Sprintf(
+				"stopped after %v to give the device back to its clients; the remaining spacings were not measured",
+				cfg.MaxDuration))
+			break
+		}
 
 		step, err := p.measureGap(ctx, probe, gapMs, cfg.RequestsPerStep, probeTimeout)
 		if err != nil {
@@ -217,8 +231,19 @@ func (p *ProxyInstance) Calibrate(ctx context.Context, cfg CalibrationConfig) (*
 	}
 
 	if len(result.GapSteps) > 0 && result.GapSteps[0].Errors > 0 {
-		return nil, fmt.Errorf("the device already fails at the most careful spacing (%d ms): calibration cannot measure an unreliable target",
-			cfg.GapStepsMs[0])
+		// The device failed even at the most careful spacing. Returning an error
+		// would leave the operator with nothing; the useful answer is the safe
+		// end of the range plus a clear statement of what was seen.
+		result.Recommended = RecommendedSettings{
+			MinRequestGapMs: cfg.GapStepsMs[0],
+			MaxTargetConns:  1,
+			ReadTimeoutS:    readTimeoutFrom(result.GapSteps),
+		}
+		result.Notes = append(result.Notes, fmt.Sprintf(
+			"the device failed %d of %d requests even at the most careful spacing (%d ms) — these are conservative fallback settings, not a measurement. Check the device and the link before trusting them.",
+			result.GapSteps[0].Errors, result.GapSteps[0].Requests, cfg.GapStepsMs[0]))
+		result.DurationMs = time.Since(started).Milliseconds()
+		return result, nil
 	}
 
 	if fastestClean < 0 {
@@ -242,6 +267,10 @@ func (p *ProxyInstance) Calibrate(ctx context.Context, cfg CalibrationConfig) (*
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		default:
+		}
+		if time.Now().After(deadline) {
+			result.Notes = append(result.Notes, "stopped before measuring more parallel connections; keeping the safe single session")
+			break
 		}
 
 		step, err := p.measureConnections(ctx, probe, level, safeGap, cfg.RequestsPerStep, probeTimeout)

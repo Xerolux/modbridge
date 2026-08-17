@@ -146,6 +146,7 @@ sudo journalctl -u modbridge -f
 | `max_target_conns` | int | Max. gleichzeitige Verbindungen zum Zielgerät (0 = Standard 10). `1` für Geräte mit nur einer Modbus-Sitzung, z.B. SolarEdge/SunSpec |
 | `min_request_gap_ms` | int | Mindestabstand zwischen zwei Anfragen an das Zielgerät (ms, 0 = aus) |
 | `request_timeout_ms` | int | Hartes Zeitbudget für eine Client-Anfrage inkl. Wiederholungen (ms, 0 = automatisch aus `read_timeout` und `max_retries`) |
+| `calibrated_at` | string | Zeitpunkt der letzten Messung (RFC3339). Informativ — zeigt, wie alt die eingestellten Werte sind |
 | `device_profile` | string | Zuletzt angewendetes Geräte-Profil. Rein informativ — merkt sich, aus welchem Preset die Werte stammen; das Verhalten richtet sich nach den Einzelfeldern |
 | `cache_enabled` | bool | Wiederholte Lesezugriffe aus einem Cache bedienen (Standard: aus) |
 | `cache_ttl_ms` | int | Gültigkeit eines Cache-Eintrags (ms, 0 = 5000) |
@@ -200,6 +201,45 @@ Was der Cache **nicht** tut:
 
 Im Proxy-Status stehen `cache_hits`, `cache_misses`, `cache_entries` und
 `polled_requests` zum Nachprüfen.
+
+### Gerät vermessen (Kalibrierung)
+
+Profile sind begründete Schätzungen. Die Kalibrierung ersetzt sie durch
+Messwerte am echten Gerät: Sie senkt den Abstand stufenweise, bis das Gerät
+Anfragen verwirft, erhöht die Zahl paralleler Sitzungen, bis es nicht mehr
+antwortet, und leitet das Lese-Timeout aus der gemessenen Latenz ab.
+
+Zu finden im Proxy-Dialog unter **Gerät vermessen**, oder über
+`POST /api/proxies/calibrate` mit `{"id": "<proxy-id>"}`.
+
+**Was während der Messung passiert:** Der Proxy nimmt keine Client-Verbindungen
+an. In dieser Zeit wird über diesen Proxy nichts abgefragt und nichts geregelt.
+Deshalb ist ein Lauf hart auf **90 Sekunden** gedeckelt; läuft die Zeit ab,
+liefert er das bis dahin Gemessene statt weiterzumachen.
+
+Wogegen der Lauf abgesichert ist:
+
+- **Nur Lesezugriffe.** Nie ein Schreibzugriff.
+- Er wiederholt ein Register, das ein Client ohnehin abfragt — der Proxy merkt
+  sich den letzten Lesezugriff. Alternativ gibst du ein Register vor.
+- Er startet nicht, solange Clients verbunden sind, und hält neue für die Dauer
+  ab: deren Verkehr würde die Messung verfälschen und umgekehrt.
+- Er gibt vorher die Pool-Verbindung frei und pausiert den Health-Check — ein
+  Gerät mit nur einer Modbus-Sitzung lässt sich sonst nicht messen, weil der
+  Proxy selbst diese Sitzung hält.
+- Er ändert nichts. Übernehmen ist ein eigener Klick, und gespeichert wird erst
+  beim Speichern des Proxys.
+
+Ein einzelner Fehler ist keine Messung: Jede Stufe wird über eine Serie
+bewertet, und der übernommene Abstand behält 1,5-fachen Abstand zum schnellsten
+Wert, der noch sauber lief. Antwortet das Gerät selbst beim vorsichtigsten
+Abstand nicht zuverlässig, liefert der Lauf bewusst konservative Werte plus
+einen deutlichen Hinweis — statt eines Fehlers, mit dem niemand etwas anfangen
+kann.
+
+`calibrated_at` hält fest, wann zuletzt gemessen wurde. Steigen `stale_responses`
+oder die Fehlerzahl später deutlich, lohnt eine neue Messung — Geräte verhalten
+sich nach einem Firmware-Update anders.
 
 ### Geräte-Profile
 

@@ -79,6 +79,7 @@ type ProxyConfig struct {
 	CacheEnabled      bool         `json:"cache_enabled"`      // Serve repeated reads from a cache instead of asking the target every time
 	CacheTTLMs        int          `json:"cache_ttl_ms"`       // Lifetime of a cached read (ms, 0 = 5000). A cached value is not the live value.
 	PollIntervalMs    int          `json:"poll_interval_ms"`   // Refresh cached reads in the background at this interval (ms, 0 = passive cache only)
+	CalibratedAt      string       `json:"calibrated_at"`      // When this proxy was last measured (RFC3339). Informational: tells you how old the tuned values are.
 	DeviceProfile     string       `json:"device_profile"`     // Device profile last applied in the UI. Purely informational: it records which preset the settings came from, the proxy behaviour follows the individual fields.
 	Tags              FlexibleTags `json:"tags"`
 	// Protocol controls the wire format used when talking to the target.

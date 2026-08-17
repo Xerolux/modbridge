@@ -3,6 +3,12 @@
 // Created by Xerolux
 // https://github.com/Xerolux/modbridge
 
+// NOT WIRED UP: no code path reaches this package yet.
+//
+// Batching adjacent register reads into fewer device requests is a real answer
+// to the cost that dominates slow setups — the number of round trips, not the
+// speed of any single one. It is kept for that reason, but until something
+// imports it, it is unfinished work rather than a feature.
 package batch
 
 import (

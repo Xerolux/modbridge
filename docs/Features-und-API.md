@@ -119,3 +119,35 @@ Führt folgende Schritte aus:
 2. Kopiert das Build-Ergebnis nach `pkg/web/dist/`
 
 ---
+
+## Kalibrierung
+
+`POST /api/proxies/calibrate`
+
+```json
+{ "id": "<proxy-id>" }
+```
+
+Optional lässt sich das Probe-Register vorgeben (`unit_id`, `function`,
+`address`, `quantity`); ohne Angabe wird der letzte Lesezugriff wiederholt, den
+der Proxy gesehen hat. `force: true` misst auch bei verbundenen Clients — das
+verfälscht die Messung und ist nur für Testaufbauten gedacht.
+
+Die Antwort enthält jede gemessene Stufe (Abstand, Fehlerquote, p50/p95), die
+Ergebnisse für parallele Verbindungen, die empfohlenen Werte und Hinweise im
+Klartext. Sie ändert nichts an der Konfiguration.
+
+**Während der Messung nimmt der Proxy keine Client-Verbindungen an.** Ein Lauf
+ist auf 90 Sekunden begrenzt.
+
+## Prometheus-Metriken
+
+Zusätzlich zu Requests, Fehlern, Verbindungen und Latenz:
+
+| Metrik | Bedeutung |
+|--------|-----------|
+| `modbridge_proxy_stale_responses_total` | Verworfene Antworten auf bereits aufgegebene Anfragen |
+| `modbridge_proxy_cache_hits_total` | Aus dem Cache bediente Lesezugriffe |
+| `modbridge_proxy_cache_misses_total` | Lesezugriffe, die zum Gerät mussten |
+| `modbridge_proxy_cache_entries` | Aktuell im Cache gehaltene Register |
+| `modbridge_proxy_polled_requests` | Vom Hintergrund-Poller warmgehaltene Anfragen |
