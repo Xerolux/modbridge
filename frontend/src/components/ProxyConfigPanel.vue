@@ -117,6 +117,39 @@
             />
           </div>
 
+          <div class="config-group">
+            <label class="config-label">Max. Ziel-Verbindungen (0=Standard)</label>
+            <InputNumber
+              v-model="batchConfig.max_target_conns"
+              :min="0"
+              :max="100"
+              class="w-full"
+              showButtons
+            />
+          </div>
+
+          <div class="config-group">
+            <label class="config-label">Mindestabstand zwischen Anfragen (ms)</label>
+            <InputNumber
+              v-model="batchConfig.min_request_gap_ms"
+              :min="0"
+              :max="10000"
+              class="w-full"
+              showButtons
+            />
+          </div>
+
+          <div class="config-group">
+            <label class="config-label">Anfrage-Budget (ms, 0=automatisch)</label>
+            <InputNumber
+              v-model="batchConfig.request_timeout_ms"
+              :min="0"
+              :max="600000"
+              class="w-full"
+              showButtons
+            />
+          </div>
+
           <div class="config-group checkbox-group">
             <div class="flex items-center gap-2">
               <Checkbox v-model="batchConfig.enabled" binary />
@@ -212,6 +245,9 @@ const batchConfig = reactive({
   max_retries: 3,
   max_read_size: 0,
   connect_delay_ms: 0,
+  max_target_conns: 0,
+  min_request_gap_ms: 0,
+  request_timeout_ms: 0,
   enabled: true,
   paused: false
 });
@@ -309,6 +345,9 @@ const applyBatchConfig = async () => {
         max_retries: batchConfig.max_retries,
         max_read_size: batchConfig.max_read_size,
         connect_delay_ms: batchConfig.connect_delay_ms,
+        max_target_conns: batchConfig.max_target_conns,
+        min_request_gap_ms: batchConfig.min_request_gap_ms,
+        request_timeout_ms: batchConfig.request_timeout_ms,
         enabled: batchConfig.enabled,
         paused: batchConfig.paused
       };

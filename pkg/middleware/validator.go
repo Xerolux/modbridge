@@ -122,6 +122,31 @@ func (v *Validator) ValidateProxyConfig(cfg config.ProxyConfig) error {
 		})
 	}
 
+	// Validate Max Target Connections. 0 = default. Single-session devices
+	// (SolarEdge/SunSpec inverters) need exactly 1.
+	if cfg.MaxTargetConns < 0 || cfg.MaxTargetConns > 100 {
+		errs = append(errs, &ValidationError{
+			Field:   "max_target_conns",
+			Message: "must be between 0 and 100",
+		})
+	}
+
+	// Validate Minimum Request Gap (ms). 0 = disabled.
+	if cfg.MinRequestGapMs < 0 || cfg.MinRequestGapMs > 10000 {
+		errs = append(errs, &ValidationError{
+			Field:   "min_request_gap_ms",
+			Message: "must be between 0 and 10000 ms",
+		})
+	}
+
+	// Validate Request Timeout (ms). 0 = derived from read timeout and retries.
+	if cfg.RequestTimeoutMs < 0 || cfg.RequestTimeoutMs > 600000 {
+		errs = append(errs, &ValidationError{
+			Field:   "request_timeout_ms",
+			Message: "must be between 0 and 600000 ms",
+		})
+	}
+
 	if len(errs) > 0 {
 		return v.combineErrors(errs)
 	}

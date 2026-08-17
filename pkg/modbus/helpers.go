@@ -61,6 +61,53 @@ func CreateReadRequest(txID uint16, unitID uint8, fc uint8, startAddr uint16, qu
 	return frame
 }
 
+// FrameTxID returns the transaction ID of a Modbus TCP frame. The second
+// return value is false when the frame is too short to carry an MBAP header.
+func FrameTxID(frame []byte) (uint16, bool) {
+	if len(frame) < 2 {
+		return 0, false
+	}
+	return binary.BigEndian.Uint16(frame[0:2]), true
+}
+
+// SetFrameTxID overwrites the transaction ID of a Modbus TCP frame in place.
+// It reports whether the frame was long enough to be modified.
+func SetFrameTxID(frame []byte, txID uint16) bool {
+	if len(frame) < 2 {
+		return false
+	}
+	binary.BigEndian.PutUint16(frame[0:2], txID)
+	return true
+}
+
+// FrameUnitAndFunction returns the unit ID and function code of a Modbus TCP
+// frame. The second return value is false when the frame is too short.
+func FrameUnitAndFunction(frame []byte) (unitID uint8, fc uint8, ok bool) {
+	if len(frame) < 8 {
+		return 0, 0, false
+	}
+	return frame[6], frame[7], true
+}
+
+// ResponseMatchesRequest reports whether resp is a plausible answer to req:
+// same unit ID and either the same function code or its exception variant
+// (FC | 0x80). Transaction IDs are not compared — the proxy assigns its own
+// towards the target and checks them separately.
+func ResponseMatchesRequest(req, resp []byte) bool {
+	reqUnit, reqFC, ok := FrameUnitAndFunction(req)
+	if !ok {
+		return true // nothing to compare against
+	}
+	respUnit, respFC, ok := FrameUnitAndFunction(resp)
+	if !ok {
+		return false
+	}
+	if reqUnit != respUnit {
+		return false
+	}
+	return respFC == reqFC || respFC == reqFC|0x80
+}
+
 // ParseReadResponse extracts data from a read response frame.
 func ParseReadResponse(frame []byte) ([]byte, error) {
 	if len(frame) < 9 {

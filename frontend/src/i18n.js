@@ -272,9 +272,58 @@ const de = {
       maxRetries: 'Max. Wiederholungen',
       maxReadSize: 'Max. Lese-Größe (0=unbegrenzt)',
       connectDelay: 'Verzögerung nach Connect (ms)',
+      deviceProfile: 'Geräte-Profil',
+      deviceProfilePlaceholder: 'Profil wählen (optional)',
+      deviceProfileFilter: 'Gerät suchen',
+      deviceProfileHint: 'Füllt die Felder unten mit Werten, die für diese Geräteklasse funktionieren',
+      protocol: 'Protokoll',
+      protocolTcp: 'Modbus TCP (Standard)',
+      protocolRtuTcp: 'Modbus RTU über TCP',
+      protocolHint: 'RTU über TCP nur für serielle Adapter, die rohe RTU-Frames ohne MBAP-Header erwarten',
+      maxTargetConns: 'Max. Ziel-Verbindungen (0=Standard)',
+      maxTargetConnsHint: '1 für Geräte mit nur einer Modbus-Sitzung (z. B. SolarEdge/SunSpec)',
+      minRequestGap: 'Mindestabstand zwischen Anfragen (ms)',
+      minRequestGapHint: 'Pause vor jeder Anfrage an das Zielgerät',
+      requestTimeout: 'Anfrage-Budget (ms, 0=automatisch)',
+      requestTimeoutHint: 'Harte Obergrenze inkl. Wiederholungen — unter dem Timeout des Clients halten',
       enabled: 'Aktiviert',
       paused: 'Pausiert',
       tags: 'Tags'
+    },
+    profiles: {
+      applied: 'Profil übernommen',
+      categories: {
+        generic: 'Allgemein',
+        inverter: 'Wechselrichter / PV',
+        heatpump: 'Wärmepumpen / Heizung',
+        ventilation: 'Lüftung / Klima',
+        meter: 'Energiezähler',
+        battery: 'Batteriespeicher',
+        wallbox: 'Wallboxen / Ladeinfrastruktur'
+      },
+      classes: {
+        standard: 'ModBridge-Voreinstellungen ohne Begrenzung',
+        multiSession: 'Schnell und für viele Client-Verbindungen gebaut: keine Begrenzung, kein Abstand',
+        fewSessions: 'Verträgt einige parallele Sitzungen: 2 Verbindungen, 50 ms Abstand',
+        singleSession: 'Bedient nur eine Modbus-Sitzung: 1 Verbindung, 100 ms Abstand',
+        singleSessionFast: 'Eine Sitzung, Budget 2,5 s — bleibt unter dem 3-s-Timeout von Home Assistant',
+        singleSessionSlow: 'Eine Sitzung, träge Steuerung: 250 ms Abstand, 10 s Lese-Timeout',
+        connectDelay: 'Verwirft Anfragen direkt nach dem Verbindungsaufbau: 3 s Pause, eine Sitzung',
+        serialGateway: 'Alle Anfragen teilen sich eine serielle Leitung: 1 Verbindung, 50 ms Abstand, Reads auf 125 Register',
+        rtuOverTcp: 'Rohe RTU-Frames ohne MBAP-Header: Protokoll RTU über TCP, 1 Verbindung'
+      },
+      notes: {
+        haBudget: 'passend für Home Assistant',
+        connectDelay: 'braucht die Pause nach dem Connect',
+        dongle: 'Werte gelten für den LAN-/WLAN-Stick, nicht für den Wechselrichter selbst',
+        enableFirst: 'Modbus muss am Gerät erst freigeschaltet werden',
+        pollSlowly: 'nicht zu häufig abfragen — der Regler ist langsam',
+        viaGateway: 'erreichbar über einen separaten Modbus-Adapter',
+        rawRtu: 'nur für Adapter, die rohe RTU-Frames erwarten',
+        singleClient: 'lässt dokumentiert nur einen Client zu',
+        rtuOnly: 'spricht ausschließlich Modbus RTU'
+      },
+      disclaimer: 'Profile beschreiben eine Geräteklasse, keine Hersteller-Spezifikation — als Startwert gedacht'
     }
   },
 
@@ -683,9 +732,58 @@ const en = {
       maxRetries: 'Max Retries',
       maxReadSize: 'Max Read Size (0=unlimited)',
       connectDelay: 'Connect Delay (ms)',
+      deviceProfile: 'Device Profile',
+      deviceProfilePlaceholder: 'Choose a profile (optional)',
+      deviceProfileFilter: 'Search device',
+      deviceProfileHint: 'Fills the fields below with settings known to work for this device class',
+      protocol: 'Protocol',
+      protocolTcp: 'Modbus TCP (standard)',
+      protocolRtuTcp: 'Modbus RTU over TCP',
+      protocolHint: 'RTU over TCP only for serial adapters expecting raw RTU frames without an MBAP header',
+      maxTargetConns: 'Max Target Connections (0=default)',
+      maxTargetConnsHint: 'Use 1 for devices serving a single Modbus session (e.g. SolarEdge/SunSpec)',
+      minRequestGap: 'Min Request Gap (ms)',
+      minRequestGapHint: 'Pause before each request sent to the target device',
+      requestTimeout: 'Request Budget (ms, 0=auto)',
+      requestTimeoutHint: 'Hard cap including retries — keep it below the client timeout',
       enabled: 'Enabled',
       paused: 'Paused',
       tags: 'Tags'
+    },
+    profiles: {
+      applied: 'Profile applied',
+      categories: {
+        generic: 'General',
+        inverter: 'Inverters / PV',
+        heatpump: 'Heat pumps / heating',
+        ventilation: 'Ventilation / HVAC',
+        meter: 'Energy meters',
+        battery: 'Battery storage',
+        wallbox: 'Wallboxes / charging'
+      },
+      classes: {
+        standard: 'ModBridge defaults, no limits applied',
+        multiSession: 'Fast and built for many client connections: no cap, no spacing',
+        fewSessions: 'Handles a few parallel sessions: 2 connections, 50 ms spacing',
+        singleSession: 'Serves a single Modbus session: 1 connection, 100 ms spacing',
+        singleSessionFast: 'One session, 2.5 s budget — stays below the 3 s Home Assistant timeout',
+        singleSessionSlow: 'One session on a slow controller: 250 ms spacing, 10 s read timeout',
+        connectDelay: 'Drops requests right after connecting: 3 s pause, one session',
+        serialGateway: 'All requests share one serial line: 1 connection, 50 ms spacing, reads split at 125 registers',
+        rtuOverTcp: 'Raw RTU frames without an MBAP header: RTU-over-TCP protocol, 1 connection'
+      },
+      notes: {
+        haBudget: 'tuned for Home Assistant',
+        connectDelay: 'needs the pause after connecting',
+        dongle: 'values apply to the LAN/WiFi stick, not the inverter itself',
+        enableFirst: 'Modbus has to be enabled on the device first',
+        pollSlowly: 'do not poll too often — the controller is slow',
+        viaGateway: 'reached through a separate Modbus adapter',
+        rawRtu: 'only for adapters expecting raw RTU frames',
+        singleClient: 'documented to accept a single client only',
+        rtuOnly: 'speaks Modbus RTU only'
+      },
+      disclaimer: 'Profiles describe a device class, not a vendor specification — treat them as a starting point'
     }
   },
 

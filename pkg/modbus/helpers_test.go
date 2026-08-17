@@ -224,3 +224,64 @@ func BenchmarkCreateExceptionResponse(b *testing.B) {
 		_ = CreateExceptionResponse(reqFrame, 0x0B)
 	}
 }
+
+func TestFrameTxIDRoundTrip(t *testing.T) {
+	frame := CreateReadRequest(0x1234, 1, 0x03, 0, 4)
+
+	got, ok := FrameTxID(frame)
+	if !ok {
+		t.Fatal("FrameTxID reported a too-short frame")
+	}
+	if got != 0x1234 {
+		t.Errorf("FrameTxID = 0x%04X, want 0x1234", got)
+	}
+
+	if !SetFrameTxID(frame, 0xBEEF) {
+		t.Fatal("SetFrameTxID reported a too-short frame")
+	}
+	if got, _ := FrameTxID(frame); got != 0xBEEF {
+		t.Errorf("after SetFrameTxID: 0x%04X, want 0xBEEF", got)
+	}
+}
+
+func TestFrameTxIDShortFrame(t *testing.T) {
+	if _, ok := FrameTxID([]byte{0x01}); ok {
+		t.Error("FrameTxID accepted a 1-byte frame")
+	}
+	if SetFrameTxID([]byte{0x01}, 1) {
+		t.Error("SetFrameTxID accepted a 1-byte frame")
+	}
+}
+
+func TestResponseMatchesRequest(t *testing.T) {
+	req := CreateReadRequest(1, 5, 0x03, 0, 2)
+
+	tests := []struct {
+		name string
+		resp []byte
+		want bool
+	}{
+		{"matching response", func() []byte {
+			r, _ := CreateReadResponse(1, 5, 0x03, []byte{0, 1, 0, 2})
+			return r
+		}(), true},
+		{"exception response", ExceptionResponse(1, 5, 0x03, 0x02), true},
+		{"wrong unit id", func() []byte {
+			r, _ := CreateReadResponse(1, 6, 0x03, []byte{0, 1, 0, 2})
+			return r
+		}(), false},
+		{"wrong function code", func() []byte {
+			r, _ := CreateReadResponse(1, 5, 0x04, []byte{0, 1, 0, 2})
+			return r
+		}(), false},
+		{"truncated response", []byte{0x00, 0x01, 0x00}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ResponseMatchesRequest(req, tt.resp); got != tt.want {
+				t.Errorf("ResponseMatchesRequest = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

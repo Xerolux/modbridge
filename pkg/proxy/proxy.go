@@ -92,11 +92,15 @@ type ProxyInstance struct {
 	MaxConns          int           // Maximum concurrent connections (0 = unlimited)
 	Protocol          string        // "tcp" (default) or "rtu-tcp"
 	ConnectDelay      time.Duration // Optional pause after TCP connect before first request (for slow devices like Huawei inverters/sDongles)
+	MaxTargetConns    int           // Maximum simultaneous connections to the target (0 = default). Set to 1 for devices that accept a single Modbus session (SolarEdge/SunSpec inverters).
+	MinRequestGap     time.Duration // Minimum spacing between two requests to the target (0 = none)
+	RequestTimeout    time.Duration // Hard cap for one client request including retries (0 = derived from read timeout and retries)
 
 	listener net.Listener
 	connPool *pool.Pool
 	connSem  chan struct{} // Semaphore for limiting concurrent connections
 	startMu  sync.Mutex    // Protects Start/Stop lifecycle
+	pacer    *requestPacer // Enforces MinRequestGap towards the target
 
 	log           *logger.Logger
 	deviceTracker *devices.Tracker
@@ -108,6 +112,8 @@ type ProxyInstance struct {
 	circuitBreaker  *CircuitBreaker
 	enhancedStats   *EnhancedStats
 	requestID       int64
+	targetTxID      uint32
+	staleResponses  int64
 	healthChecker   *HealthChecker
 	adaptiveTimeout *AdaptiveTimeout
 	recoveryManager *RecoveryManager
@@ -217,10 +223,19 @@ func (p *ProxyInstance) Start() error {
 	}
 	p.listener = l
 
-	// Create connection pool for target with optimized settings
+	// Create connection pool for target with optimized settings.
+	// MaxTargetConns caps how many sockets the target ever sees at once. Many
+	// inverters (SolarEdge/SunSpec among them) accept exactly one Modbus
+	// session and answer nothing on the others, so this is configurable.
+	maxTargetConns := p.MaxTargetConns
+	if maxTargetConns <= 0 {
+		maxTargetConns = 10 // Moderate concurrency limit to avoid dropping connections
+	}
+	p.pacer = &requestPacer{gap: p.MinRequestGap}
+
 	poolCfg := pool.Config{
-		InitialSize:    1,                // Modbus targets usually accept 1-3 connections max
-		MaxSize:        10,               // Moderate concurrency limit to avoid dropping connections
+		InitialSize:    1, // Modbus targets usually accept 1-3 connections max
+		MaxSize:        maxTargetConns,
 		MaxIdleTime:    10 * time.Minute, // Optimized: Longer idle time for reusability
 		AcquireTimeout: p.ConnectionTimeout,
 		Dialer: func(ctx context.Context) (net.Conn, error) {
@@ -535,6 +550,9 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 }
 
 func (p *ProxyInstance) handleSplitRead(reqFrame []byte) ([]byte, error) {
+	// One budget for the whole client request, not one per chunk.
+	deadline := time.Now().Add(p.requestBudget())
+
 	txID, unitID, fc, startAddr, quantity, err := modbus.ParseReadRequest(reqFrame)
 	if err != nil {
 		// Malformed request, just forward it and let target fail or fail here
@@ -543,7 +561,7 @@ func (p *ProxyInstance) handleSplitRead(reqFrame []byte) ([]byte, error) {
 
 	// If quantity is within limits, forward normally
 	if int(quantity) <= p.MaxReadSize {
-		return p.forwardRequest(reqFrame)
+		return p.forwardRequestBefore(reqFrame, deadline)
 	}
 
 	expectedBytes := int(quantity) * 2 // 2 bytes per register
@@ -560,8 +578,8 @@ func (p *ProxyInstance) handleSplitRead(reqFrame []byte) ([]byte, error) {
 		// Create sub-request with TxID=0 (target doesn't care)
 		subReq := modbus.CreateReadRequest(0, unitID, fc, currentAddr, chunkSize)
 
-		// Forward request
-		subResp, err := p.forwardRequest(subReq)
+		// Forward request under the shared deadline
+		subResp, err := p.forwardRequestBefore(subReq, deadline)
 		if err != nil {
 			return nil, err
 		}
@@ -606,73 +624,126 @@ func (p *ProxyInstance) retryBackoff(attempt int) time.Duration {
 	return base + jitter
 }
 
-// forwardRequest sends a request to the target and returns the response.
-func (p *ProxyInstance) forwardRequest(req []byte) ([]byte, error) {
-	var lastErr error
-
-	readTimeout := p.ReadTimeout
-	connectTimeout := p.ConnectionTimeout
-	if p.adaptiveTimeout != nil {
-		readTimeout = p.adaptiveTimeout.GetReadTimeout()
-		connectTimeout = p.adaptiveTimeout.GetConnectTimeout()
+// brokenMarker returns a function that flags a pooled connection as unusable
+// so it is closed instead of handed to the next request.
+func brokenMarker(conn net.Conn) func() {
+	if wc, ok := conn.(*pool.WrappedConn); ok {
+		return wc.MarkBroken
 	}
+	return func() {}
+}
 
+// proxyContext returns the proxy's lifecycle context, falling back to a
+// background context when the proxy has not been started.
+func (p *ProxyInstance) proxyContext() context.Context {
+	if p.ctx != nil {
+		return p.ctx
+	}
+	return context.Background()
+}
+
+// forwardRequest sends a request to the target and returns the response.
+//
+// The whole call — every retry and backoff included — is bounded by
+// requestBudget. Without that bound a slow target can keep the proxy busy long
+// after the client gave up waiting; the client then reuses its connection for
+// the next request and receives the late answer to the previous one, which
+// desynchronises every transaction that follows.
+func (p *ProxyInstance) forwardRequest(req []byte) ([]byte, error) {
+	return p.forwardRequestBefore(req, time.Now().Add(p.requestBudget()))
+}
+
+// forwardRequestBefore forwards a request under an externally supplied
+// deadline. Split reads share one deadline across all their chunks so that the
+// budget covers the client's request as a whole.
+func (p *ProxyInstance) forwardRequestBefore(req []byte, deadline time.Time) ([]byte, error) {
+	clientTxID, _ := modbus.FrameTxID(req)
+	budget := time.Until(deadline)
+
+	var lastErr error
 	for attempt := 0; attempt <= p.MaxRetries; attempt++ {
 		if attempt > 0 {
-			backoffDuration := p.retryBackoff(attempt)
-			time.Sleep(backoffDuration)
+			backoff := p.retryBackoff(attempt)
+			if time.Now().Add(backoff).After(deadline) {
+				break
+			}
+			time.Sleep(backoff)
 		}
 
-		rawConn, err := p.connPool.Get(p.ctx)
-		if err != nil {
-			lastErr = err
-			continue
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			break
 		}
 
-		var markBroken func()
-		if wc, ok := rawConn.(*pool.WrappedConn); ok {
-			markBroken = wc.MarkBroken
-		} else {
-			markBroken = func() {}
+		resp, err := p.forwardAttempt(req, clientTxID, remaining)
+		if err == nil {
+			return resp, nil
 		}
-
-		// Try write
-		if err := rawConn.SetWriteDeadline(time.Now().Add(connectTimeout)); err != nil {
-			markBroken()
-			rawConn.Close()
-			lastErr = err
-			continue
-		}
-
-		if _, err := rawConn.Write(req); err != nil {
-			markBroken()
-			rawConn.Close()
-			lastErr = err
-			continue
-		}
-
-		// Try read
-		if err := rawConn.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
-			markBroken()
-			rawConn.Close()
-			lastErr = err
-			continue
-		}
-
-		resp, err := modbus.ReadFrame(rawConn)
-		if err != nil {
-			markBroken()
-			rawConn.Close()
-			lastErr = err
-			continue
-		}
-
-		// Return connection to pool
-		rawConn.Close()
-		return resp, nil
+		lastErr = err
 	}
 
-	return nil, fmt.Errorf("failed after %d retries: %w", p.MaxRetries, lastErr)
+	if lastErr == nil {
+		return nil, fmt.Errorf("request budget of %v exhausted before an attempt could run", budget)
+	}
+	return nil, fmt.Errorf("failed within budget %v (max %d retries): %w", budget, p.MaxRetries, lastErr)
+}
+
+// forwardAttempt performs a single request/response exchange with the target.
+//
+// The client's transaction ID is replaced by a proxy-owned one for the hop to
+// the target and restored on the response. Responses that do not carry the
+// expected ID are discarded rather than forwarded, so a late answer from an
+// earlier transaction can never be mistaken for the current one.
+func (p *ProxyInstance) forwardAttempt(req []byte, clientTxID uint16, remaining time.Duration) ([]byte, error) {
+	readTimeout, connectTimeout := p.currentTimeouts()
+	if readTimeout > remaining {
+		readTimeout = remaining
+	}
+	if connectTimeout > remaining {
+		connectTimeout = remaining
+	}
+
+	ctx, cancel := context.WithTimeout(p.proxyContext(), remaining)
+	defer cancel()
+
+	if err := p.pacer.wait(ctx); err != nil {
+		return nil, err
+	}
+
+	rawConn, err := p.connPool.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	markBroken := brokenMarker(rawConn)
+
+	out := make([]byte, len(req))
+	copy(out, req)
+	txID := p.nextTargetTxID()
+	modbus.SetFrameTxID(out, txID)
+
+	if err := rawConn.SetWriteDeadline(time.Now().Add(connectTimeout)); err != nil {
+		markBroken()
+		rawConn.Close()
+		return nil, err
+	}
+	if _, err := rawConn.Write(out); err != nil {
+		markBroken()
+		rawConn.Close()
+		return nil, err
+	}
+
+	resp, err := p.readMatchingResponse(rawConn, out, txID, time.Now().Add(readTimeout))
+	if err != nil {
+		// A response may still be in flight; it would land in front of the next
+		// request on this connection, so the connection must not be reused.
+		markBroken()
+		rawConn.Close()
+		return nil, err
+	}
+
+	rawConn.Close() // Returns the connection to the pool
+	modbus.SetFrameTxID(resp, clientTxID)
+	return resp, nil
 }
 
 // forwardRequestRTU converts a Modbus TCP frame to RTU, sends it to the target,
@@ -690,65 +761,96 @@ func (p *ProxyInstance) forwardRequestRTU(tcpReq []byte) ([]byte, error) {
 		return nil, fmt.Errorf("rtu-tcp: tcp→rtu conversion: %w", err)
 	}
 
+	unitID := tcpReq[6]
+	budget := p.requestBudget()
+	deadline := time.Now().Add(budget)
+
 	var lastErr error
-	rtuReadTimeout := p.ReadTimeout
-	rtuConnectTimeout := p.ConnectionTimeout
-	if p.adaptiveTimeout != nil {
-		rtuReadTimeout = p.adaptiveTimeout.GetReadTimeout()
-		rtuConnectTimeout = p.adaptiveTimeout.GetConnectTimeout()
-	}
 	for attempt := 0; attempt <= p.MaxRetries; attempt++ {
 		if attempt > 0 {
 			backoff := p.retryBackoff(attempt)
+			if time.Now().Add(backoff).After(deadline) {
+				break
+			}
 			time.Sleep(backoff)
 		}
 
-		rawConn, err := p.connPool.Get(p.ctx)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		var markBroken func()
-		if wc, ok := rawConn.(*pool.WrappedConn); ok {
-			markBroken = wc.MarkBroken
-		} else {
-			markBroken = func() {}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			break
 		}
 
-		if err := rawConn.SetWriteDeadline(time.Now().Add(rtuConnectTimeout)); err != nil {
-			markBroken()
-			rawConn.Close()
-			lastErr = err
-			continue
+		tcpResp, err := p.forwardAttemptRTU(rtuReq, unitID, fc, txID, remaining)
+		if err == nil {
+			return tcpResp, nil
 		}
-		if _, err := rawConn.Write(rtuReq); err != nil {
-			markBroken()
-			rawConn.Close()
-			lastErr = err
-			continue
-		}
-		if err := rawConn.SetReadDeadline(time.Now().Add(rtuReadTimeout)); err != nil {
-			markBroken()
-			rawConn.Close()
-			lastErr = err
-			continue
-		}
-		rtuResp, err := modbus.ReadRTUFrame(rawConn, fc)
-		if err != nil {
-			markBroken()
-			rawConn.Close()
-			lastErr = err
-			continue
-		}
-		rawConn.Close()
-
-		tcpResp, err := modbus.RTUToTCP(rtuResp, txID)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		return tcpResp, nil
+		lastErr = err
 	}
 
-	return nil, fmt.Errorf("rtu-tcp: failed after %d retries: %w", p.MaxRetries, lastErr)
+	if lastErr == nil {
+		return nil, fmt.Errorf("rtu-tcp: request budget of %v exhausted before an attempt could run", budget)
+	}
+	return nil, fmt.Errorf("rtu-tcp: failed within budget %v (max %d retries): %w", budget, p.MaxRetries, lastErr)
+}
+
+// forwardAttemptRTU performs a single RTU-over-TCP exchange. RTU frames carry
+// no transaction ID, so the response is matched on slave address and function
+// code instead; a mismatch means the stream is out of sync and the connection
+// is dropped rather than reused.
+func (p *ProxyInstance) forwardAttemptRTU(rtuReq []byte, unitID, fc byte, txID uint16, remaining time.Duration) ([]byte, error) {
+	readTimeout, connectTimeout := p.currentTimeouts()
+	if readTimeout > remaining {
+		readTimeout = remaining
+	}
+	if connectTimeout > remaining {
+		connectTimeout = remaining
+	}
+
+	ctx, cancel := context.WithTimeout(p.proxyContext(), remaining)
+	defer cancel()
+
+	if err := p.pacer.wait(ctx); err != nil {
+		return nil, err
+	}
+
+	rawConn, err := p.connPool.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	markBroken := brokenMarker(rawConn)
+
+	if err := rawConn.SetWriteDeadline(time.Now().Add(connectTimeout)); err != nil {
+		markBroken()
+		rawConn.Close()
+		return nil, err
+	}
+	if _, err := rawConn.Write(rtuReq); err != nil {
+		markBroken()
+		rawConn.Close()
+		return nil, err
+	}
+	if err := rawConn.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
+		markBroken()
+		rawConn.Close()
+		return nil, err
+	}
+
+	rtuResp, err := modbus.ReadRTUFrame(rawConn, fc)
+	if err != nil {
+		markBroken()
+		rawConn.Close()
+		return nil, err
+	}
+
+	if rtuResp[0] != unitID || (rtuResp[1] != fc && rtuResp[1] != fc|0x80) {
+		atomic.AddInt64(&p.staleResponses, 1)
+		p.log.Warn(p.ID, fmt.Sprintf("Discarding stale RTU response (slave %d fc 0x%02X, expected slave %d fc 0x%02X)", rtuResp[0], rtuResp[1], unitID, fc))
+		markBroken()
+		rawConn.Close()
+		return nil, fmt.Errorf("rtu response mismatch: got slave %d fc 0x%02X, want slave %d fc 0x%02X", rtuResp[0], rtuResp[1], unitID, fc)
+	}
+
+	rawConn.Close()
+
+	return modbus.RTUToTCP(rtuResp, txID)
 }
