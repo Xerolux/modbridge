@@ -37,8 +37,9 @@ type RegisterPoller struct {
 	store   func(key uint64, unitID uint8, resp []byte)
 	logf    func(msg string)
 
-	refreshes atomic.Int64
-	failures  atomic.Int64
+	refreshes  atomic.Int64
+	failures   atomic.Int64
+	slowRounds atomic.Int64
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -128,7 +129,28 @@ func (rp *RegisterPoller) loop(ctx context.Context) {
 			return
 		case <-ticker.C:
 		}
+		started := time.Now()
 		rp.refreshAll(ctx)
+		rp.reportRoundDuration(time.Since(started))
+	}
+}
+
+// reportRoundDuration flags refresh rounds that take longer than the interval
+// they are scheduled at. That means the proxy is polling the target
+// continuously and cached values are older than the configured interval
+// suggests — usually too many tracked registers, too large a request gap, or
+// a target that answers slower than assumed.
+func (rp *RegisterPoller) reportRoundDuration(elapsed time.Duration) {
+	if elapsed <= rp.interval {
+		return
+	}
+	rp.slowRounds.Add(1)
+	if rp.logf != nil {
+		tracked, _, _ := rp.Stats()
+		rp.logf(fmt.Sprintf(
+			"Background refresh round took %v for %d requests, longer than the %v poll interval — cached values are older than the interval implies",
+			elapsed.Round(time.Millisecond), tracked, rp.interval,
+		))
 	}
 }
 
@@ -186,4 +208,9 @@ func (rp *RegisterPoller) Stats() (tracked int, refreshes, failures int64) {
 	tracked = len(rp.tracked)
 	rp.mu.Unlock()
 	return tracked, rp.refreshes.Load(), rp.failures.Load()
+}
+
+// SlowRounds returns how many refresh rounds outran their own interval.
+func (rp *RegisterPoller) SlowRounds() int64 {
+	return rp.slowRounds.Load()
 }

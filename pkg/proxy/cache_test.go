@@ -338,6 +338,46 @@ func TestPollerDropsIdleRequests(t *testing.T) {
 	}
 }
 
+// TestPollerReportsSlowRounds verifies the poller notices when a refresh round
+// outruns its own interval — the state where the proxy polls the target
+// continuously and cached values are older than the interval suggests.
+func TestPollerReportsSlowRounds(t *testing.T) {
+	var logged atomic.Int64
+	poller := NewRegisterPoller(
+		50*time.Millisecond,
+		time.Minute,
+		10,
+		func(req []byte) ([]byte, error) {
+			time.Sleep(120 * time.Millisecond) // one request already outlasts the interval
+			resp, _ := modbus.CreateReadResponse(0, 1, 3, []byte{0, 1})
+			return resp, nil
+		},
+		func(key uint64, unitID uint8, resp []byte) {},
+		func(msg string) { logged.Add(1) },
+	)
+
+	req := modbus.CreateReadRequest(1, 1, 3, 0, 1)
+	key, unitID, _ := modbus.RequestCacheKey(req)
+	poller.Track(key, unitID, req)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	poller.Start(ctx)
+	defer poller.Stop()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) && poller.SlowRounds() == 0 {
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	if poller.SlowRounds() == 0 {
+		t.Error("poller did not report a refresh round that outran its interval")
+	}
+	if logged.Load() == 0 {
+		t.Error("slow round was counted but never logged")
+	}
+}
+
 // TestPollerRespectsEntryLimit keeps a client sweeping the address space from
 // growing the warm set without bound.
 func TestPollerRespectsEntryLimit(t *testing.T) {

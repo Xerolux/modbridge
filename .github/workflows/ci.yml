@@ -120,6 +120,63 @@ jobs:
           path: frontend/dist/
           retention-days: 1
 
+  e2e:
+    name: E2E (WebUI)
+    runs-on: ubuntu-latest
+    needs: [build-frontend]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      # Reuse the WebUI built by build-frontend instead of building it twice.
+      - uses: actions/download-artifact@v8
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+
+      - name: Embed WebUI and build the binary under test
+        run: |
+          rm -rf pkg/web/dist
+          cp -r frontend/dist pkg/web/dist
+          CGO_ENABLED=1 go build -o modbridge .
+
+      - name: Install Playwright browser
+        working-directory: ./frontend
+        run: npx playwright install --with-deps chromium
+
+      # The suite starts the binary itself, walks the first-run password
+      # change and drives the UI, so it covers what a build and unit tests
+      # cannot: whether the page actually works when clicked.
+      - name: Run end-to-end tests
+        working-directory: ./frontend
+        run: npm run test:e2e
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+            frontend/e2e-setup-failure.png
+          retention-days: 7
+          if-no-files-found: ignore
+
   build-binaries:
     name: Build (${{ matrix.suffix }})
     runs-on: ubuntu-latest
@@ -244,7 +301,7 @@ jobs:
     name: Auto Release
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    needs: [quality, test, build-frontend, build-binaries, build-headless]
+    needs: [quality, test, build-frontend, e2e, build-binaries, build-headless]
     timeout-minutes: 15
     permissions:
       contents: write
