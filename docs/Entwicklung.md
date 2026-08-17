@@ -56,6 +56,45 @@ docker-compose up -d
 ---
 
 
+## End-to-End-Tests (WebUI)
+
+Unit-Tests und ein grüner Build sagen nichts darüber aus, ob eine Seite auf
+Klicks reagiert. Genau dort sind zwei Fehler durchgerutscht — ein nicht
+funktionierendes Verschieben von Karten und eine Auswahl, die beim erneuten
+Öffnen leer war. Dagegen gibt es jetzt eine Playwright-Suite in
+`frontend/e2e/`.
+
+Die Tests starten ein echtes ModBridge-Binary in einem temporären Verzeichnis,
+durchlaufen den erzwungenen Passwortwechsel des ersten Starts und bedienen
+danach die Oberfläche wie ein Benutzer.
+
+```bash
+# WebUI bauen und ins Binary einbetten
+npm --prefix frontend run build
+rm -rf pkg/web/dist && cp -r frontend/dist pkg/web/dist
+CGO_ENABLED=1 go build -o modbridge .
+
+# Tests ausführen
+npm --prefix frontend run test:e2e
+```
+
+Nützliche Umgebungsvariablen:
+
+| Variable | Zweck |
+|----------|-------|
+| `MODBRIDGE_BIN` | Pfad zum Binary (Standard: `../modbridge`) |
+| `MODBRIDGE_URL` | Adresse der Instanz (Standard: `http://localhost:8080`) |
+| `PLAYWRIGHT_CHROMIUM_PATH` | Vorhandenes Chromium nutzen statt herunterzuladen |
+
+In CI läuft das als Job **E2E (WebUI)**; das automatische Release hängt davon
+ab. Sollte sich die Suite als unzuverlässig erweisen, nimm `e2e` aus dem
+`needs`-Block des `auto-release`-Jobs heraus — dann bleibt der rote Haken am
+PR sichtbar, ohne Releases zu blockieren.
+
+**Ein neuer Test ist erst fertig, wenn er auch fehlschlägt.** Beide vorhandenen
+Tests wurden gegen den kaputten Stand geprüft und melden dort genau das, was
+der Benutzer gemeldet hat.
+
 ## Automatisierter Build (GitHub Actions)
 
 Das Projekt nutzt GitHub Actions für automatisierte Builds und Releases:
