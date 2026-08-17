@@ -75,24 +75,36 @@ export default async function globalSetup(config) {
     const browser = await chromium.launch(launchOptions);
     const page = await browser.newPage();
 
+    // Wait for the app to leave a route rather than for a fixed number of
+    // seconds. A loaded CI runner is slower than a developer's machine, and a
+    // sleep that is long enough locally is a coin flip there.
+    const leaveRoute = (route) =>
+      page.waitForFunction(
+        (r) => !window.location.hash.includes(r),
+        route,
+        { timeout: 30000 }
+      );
+
+    const login = async (password) => {
+      await page.fill('#login-username', 'admin');
+      await page.fill('#login-password', password);
+      await page.getByRole('button', { name: /anmelden|login|sign in/i }).click();
+      await leaveRoute('/login');
+    };
+
     await page.goto(BASE_URL, { waitUntil: 'networkidle' });
-    await page.fill('#login-username', 'admin');
-    await page.fill('#login-password', initialPassword);
-    await page.getByRole('button', { name: /anmelden|login|sign in/i }).click();
-    await page.waitForTimeout(2000);
+    await login(initialPassword);
 
     if (page.url().includes('change-password')) {
       await page.fill('#cp-current', initialPassword);
       await page.fill('#cp-new', NEW_PASSWORD);
       await page.fill('#cp-confirm', NEW_PASSWORD);
       await page.getByRole('button', { name: /change password|passwort ändern/i }).click();
-      await page.waitForTimeout(2500);
+      await leaveRoute('/change-password');
 
-      if (page.url().includes('login')) {
-        await page.fill('#login-username', 'admin');
-        await page.fill('#login-password', NEW_PASSWORD);
-        await page.getByRole('button', { name: /anmelden|login|sign in/i }).click();
-        await page.waitForTimeout(2000);
+      // Some builds send you back to the login form afterwards.
+      if (page.url().includes('/login')) {
+        await login(NEW_PASSWORD);
       }
     }
 
