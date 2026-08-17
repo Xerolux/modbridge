@@ -92,6 +92,13 @@ func (m *Manager) AddProxy(cfg config.ProxyConfig, save bool) error {
 	if cfg.RequestTimeoutMs > 0 {
 		p.RequestTimeout = time.Duration(cfg.RequestTimeoutMs) * time.Millisecond
 	}
+	p.CacheEnabled = cfg.CacheEnabled
+	if cfg.CacheTTLMs > 0 {
+		p.CacheTTL = time.Duration(cfg.CacheTTLMs) * time.Millisecond
+	}
+	if cfg.PollIntervalMs > 0 {
+		p.PollInterval = time.Duration(cfg.PollIntervalMs) * time.Millisecond
+	}
 	m.proxies[cfg.ID] = p
 
 	// Broadcast event
@@ -324,6 +331,13 @@ func (m *Manager) UpdateProxy(cfg config.ProxyConfig) error {
 	if cfg.RequestTimeoutMs > 0 {
 		p.RequestTimeout = time.Duration(cfg.RequestTimeoutMs) * time.Millisecond
 	}
+	p.CacheEnabled = cfg.CacheEnabled
+	if cfg.CacheTTLMs > 0 {
+		p.CacheTTL = time.Duration(cfg.CacheTTLMs) * time.Millisecond
+	}
+	if cfg.PollIntervalMs > 0 {
+		p.PollInterval = time.Duration(cfg.PollIntervalMs) * time.Millisecond
+	}
 	m.proxies[cfg.ID] = p
 
 	// Start if it was enabled and not paused
@@ -368,6 +382,8 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 	for _, p := range m.proxies {
 		status := &p.Stats
 		latency := p.LatencyPercentiles()
+		cacheStats := p.CacheStats()
+		polledRequests, _, _ := p.PollerStats()
 		uptime := time.Duration(0)
 		if status.GetStatus() == "Running" {
 			uptime = time.Since(status.GetLastStart())
@@ -408,6 +424,13 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 			"min_request_gap_ms": pCfg.MinRequestGapMs,
 			"request_timeout_ms": pCfg.RequestTimeoutMs,
 			"stale_responses":    p.StaleResponses(),
+			"cache_enabled":      pCfg.CacheEnabled,
+			"cache_ttl_ms":       pCfg.CacheTTLMs,
+			"poll_interval_ms":   pCfg.PollIntervalMs,
+			"cache_hits":         cacheStats.Hits,
+			"cache_misses":       cacheStats.Misses,
+			"cache_entries":      cacheStats.Size,
+			"polled_requests":    polledRequests,
 			"tags":               tags,
 			"protocol":           pCfg.Protocol,
 		})
@@ -587,6 +610,8 @@ func (m *Manager) getProxyStatusLocked(id string) map[string]interface{} {
 
 	status := &p.Stats
 	latency := p.LatencyPercentiles()
+	cacheStats := p.CacheStats()
+	polledRequests, _, _ := p.PollerStats()
 	uptime := time.Duration(0)
 	if status.GetStatus() == "Running" {
 		uptime = time.Since(status.GetLastStart())
@@ -625,6 +650,13 @@ func (m *Manager) getProxyStatusLocked(id string) map[string]interface{} {
 		"min_request_gap_ms": pCfg.MinRequestGapMs,
 		"request_timeout_ms": pCfg.RequestTimeoutMs,
 		"stale_responses":    p.StaleResponses(),
+		"cache_enabled":      pCfg.CacheEnabled,
+		"cache_ttl_ms":       pCfg.CacheTTLMs,
+		"poll_interval_ms":   pCfg.PollIntervalMs,
+		"cache_hits":         cacheStats.Hits,
+		"cache_misses":       cacheStats.Misses,
+		"cache_entries":      cacheStats.Size,
+		"polled_requests":    polledRequests,
 		"tags":               tags,
 		"protocol":           pCfg.Protocol,
 	}

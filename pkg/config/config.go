@@ -76,6 +76,9 @@ type ProxyConfig struct {
 	MaxTargetConns    int          `json:"max_target_conns"`   // Max simultaneous connections to the target (0 = default 10). Set to 1 for single-session devices like SolarEdge/SunSpec inverters.
 	MinRequestGapMs   int          `json:"min_request_gap_ms"` // Minimum pause between two requests to the target (ms). For devices that drop back-to-back requests.
 	RequestTimeoutMs  int          `json:"request_timeout_ms"` // Hard cap for one client request incl. retries (ms, 0 = derived). Keep below the client's own timeout.
+	CacheEnabled      bool         `json:"cache_enabled"`      // Serve repeated reads from a cache instead of asking the target every time
+	CacheTTLMs        int          `json:"cache_ttl_ms"`       // Lifetime of a cached read (ms, 0 = 5000). A cached value is not the live value.
+	PollIntervalMs    int          `json:"poll_interval_ms"`   // Refresh cached reads in the background at this interval (ms, 0 = passive cache only)
 	Tags              FlexibleTags `json:"tags"`
 	// Protocol controls the wire format used when talking to the target.
 	// "tcp"     – standard Modbus TCP (MBAP header, default)

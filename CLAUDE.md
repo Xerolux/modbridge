@@ -209,12 +209,16 @@ Primary configuration file. Key fields:
 | `DEBUG` | — | Enable pprof endpoints |
 | `MODBRIDGE_MAX_CONNECTIONS` | `10000` | Global connection limit |
 | `MODBRIDGE_CIRCUIT_BREAKER_ENABLED` | `true` | Circuit breaker toggle |
-| `MODBRIDGE_CACHE_ENABLED` | `true` | Register cache toggle |
-| `MODBRIDGE_CACHE_TTL` | `5s` | Cache TTL |
 | `MODBRIDGE_HEALTH_CHECK_INTERVAL` | `30s` | Health check frequency |
 | `MODBRIDGE_ALERTING_ENABLED` | `true` | Webhook alerting toggle |
 
 **Configuration priority:** Environment variables > `config.json` > compiled defaults
+
+**Response caching** is configured per proxy in `config.json` (`cache_enabled`,
+`cache_ttl_ms`, `poll_interval_ms`), not through environment variables. It is
+off by default: a cached register is not the live value. See
+`docs/Konfiguration.md` for the guarantees the cache keeps (writes are never
+cached and invalidate the unit; exceptions are never cached).
 
 ---
 

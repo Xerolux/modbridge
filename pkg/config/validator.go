@@ -284,6 +284,22 @@ func (v *Validator) validateProxyConfig(cfg *ProxyConfig, index int) {
 		v.AddError(prefix+".request_timeout_ms", "must not exceed 600000 ms", strconv.Itoa(cfg.RequestTimeoutMs))
 	}
 
+	// Validate cache settings. The cache is opt-in; a cached register is by
+	// definition not the live value.
+	if cfg.CacheTTLMs < 0 {
+		v.AddError(prefix+".cache_ttl_ms", "must be non-negative", strconv.Itoa(cfg.CacheTTLMs))
+	} else if cfg.CacheTTLMs > 3600000 {
+		v.AddError(prefix+".cache_ttl_ms", "must not exceed 3600000 ms", strconv.Itoa(cfg.CacheTTLMs))
+	}
+
+	if cfg.PollIntervalMs < 0 {
+		v.AddError(prefix+".poll_interval_ms", "must be non-negative", strconv.Itoa(cfg.PollIntervalMs))
+	} else if cfg.PollIntervalMs > 3600000 {
+		v.AddError(prefix+".poll_interval_ms", "must not exceed 3600000 ms", strconv.Itoa(cfg.PollIntervalMs))
+	} else if cfg.PollIntervalMs > 0 && !cfg.CacheEnabled {
+		v.AddError(prefix+".poll_interval_ms", "requires cache_enabled: background polling only fills the cache", strconv.Itoa(cfg.PollIntervalMs))
+	}
+
 	// Validate description length
 	if len(cfg.Description) > 500 {
 		v.AddError(prefix+".description", "must not exceed 500 characters", strconv.Itoa(len(cfg.Description)))

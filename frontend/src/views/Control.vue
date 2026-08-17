@@ -323,6 +323,24 @@
                          <small class="text-xs text-[var(--text-muted)]">{{ $t('control.form.requestTimeoutHint') }}</small>
                      </div>
                  </div>
+                 <div class="flex flex-col sm:flex-row gap-4">
+                     <div class="flex-1">
+                         <label class="block text-sm font-medium mb-1">{{ $t('control.form.cacheTtl') }}</label>
+                         <InputNumber v-model="proxyForm.cache_ttl_ms" :min="0" :max="3600000" :disabled="!proxyForm.cache_enabled" class="w-full" />
+                     </div>
+                     <div class="flex-1">
+                         <label class="block text-sm font-medium mb-1">{{ $t('control.form.pollInterval') }}</label>
+                         <InputNumber v-model="proxyForm.poll_interval_ms" :min="0" :max="3600000" :disabled="!proxyForm.cache_enabled" class="w-full" />
+                         <small class="text-xs text-[var(--text-muted)]">{{ $t('control.form.pollIntervalHint') }}</small>
+                     </div>
+                 </div>
+                 <div class="flex items-center gap-4">
+                     <div class="flex items-center gap-2">
+                         <Checkbox v-model="proxyForm.cache_enabled" binary @change="onCacheToggle" />
+                         <span class="text-sm">{{ $t('control.form.cacheEnabled') }}</span>
+                     </div>
+                 </div>
+                 <small class="block text-xs text-[var(--text-muted)] -mt-2">{{ $t('control.form.cacheEnabledHint') }}</small>
                  <div class="flex items-center gap-4">
                      <div class="flex items-center gap-2">
                          <Checkbox v-model="proxyForm.enabled" binary />
@@ -445,6 +463,9 @@ const defaultProxyForm = () => ({
     max_target_conns: 0,
     min_request_gap_ms: 0,
     request_timeout_ms: 0,
+    cache_enabled: false,
+    cache_ttl_ms: 0,
+    poll_interval_ms: 0,
     enabled: true,
     paused: false,
     tags: []
@@ -476,6 +497,12 @@ const selectedProfileHint = computed(() => {
     const classHint = t(`control.profiles.classes.${profile.class}`);
     return profile.note ? `${classHint} — ${t(`control.profiles.notes.${profile.note}`)}` : classHint;
 });
+
+const onCacheToggle = () => {
+    if (!proxyForm.value.cache_enabled) {
+        proxyForm.value.poll_interval_ms = 0;
+    }
+};
 
 const applyDeviceProfile = (id) => {
     const profile = findDeviceProfile(id);

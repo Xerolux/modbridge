@@ -34,7 +34,10 @@ export const profileClasses = {
         connect_delay_ms: 0,
         max_target_conns: 0,
         min_request_gap_ms: 0,
-        request_timeout_ms: 0
+        request_timeout_ms: 0,
+        cache_enabled: false,
+        cache_ttl_ms: 0,
+        poll_interval_ms: 0
     },
     // Fast TCP servers built for many clients.
     multiSession: {
@@ -46,7 +49,10 @@ export const profileClasses = {
         connect_delay_ms: 0,
         max_target_conns: 0,
         min_request_gap_ms: 0,
-        request_timeout_ms: 0
+        request_timeout_ms: 0,
+        cache_enabled: false,
+        cache_ttl_ms: 0,
+        poll_interval_ms: 0
     },
     // Handles a couple of parallel sessions, slows down beyond that.
     fewSessions: {
@@ -58,7 +64,10 @@ export const profileClasses = {
         connect_delay_ms: 0,
         max_target_conns: 2,
         min_request_gap_ms: 50,
-        request_timeout_ms: 0
+        request_timeout_ms: 0,
+        cache_enabled: false,
+        cache_ttl_ms: 0,
+        poll_interval_ms: 0
     },
     // Serves exactly one Modbus session and ignores the rest.
     singleSession: {
@@ -70,7 +79,10 @@ export const profileClasses = {
         connect_delay_ms: 0,
         max_target_conns: 1,
         min_request_gap_ms: 100,
-        request_timeout_ms: 0
+        request_timeout_ms: 0,
+        cache_enabled: false,
+        cache_ttl_ms: 0,
+        poll_interval_ms: 0
     },
     // One session, and the budget stays below the 3s timeout that common Home
     // Assistant integrations use.
@@ -83,7 +95,10 @@ export const profileClasses = {
         connect_delay_ms: 0,
         max_target_conns: 1,
         min_request_gap_ms: 100,
-        request_timeout_ms: 2500
+        request_timeout_ms: 2500,
+        cache_enabled: false,
+        cache_ttl_ms: 0,
+        poll_interval_ms: 0
     },
     // One session on a controller that takes its time — heating controllers and
     // inverter logger sticks.
@@ -96,7 +111,13 @@ export const profileClasses = {
         connect_delay_ms: 0,
         max_target_conns: 1,
         min_request_gap_ms: 250,
-        request_timeout_ms: 0
+        request_timeout_ms: 0,
+        // The one class where caching earns its keep: these devices cannot be
+        // made faster, so the poller reads them continuously in the background
+        // and the client is served from the cache instead of waiting.
+        cache_enabled: true,
+        cache_ttl_ms: 5000,
+        poll_interval_ms: 5000
     },
     // Drops requests that arrive right after the TCP handshake.
     connectDelay: {
@@ -108,7 +129,10 @@ export const profileClasses = {
         connect_delay_ms: 3000,
         max_target_conns: 1,
         min_request_gap_ms: 200,
-        request_timeout_ms: 0
+        request_timeout_ms: 0,
+        cache_enabled: false,
+        cache_ttl_ms: 0,
+        poll_interval_ms: 0
     },
     // TCP-to-RTU gateway: every request shares one serial line. 125 registers is
     // the Modbus limit for a single read of holding/input registers.
@@ -121,7 +145,10 @@ export const profileClasses = {
         connect_delay_ms: 0,
         max_target_conns: 1,
         min_request_gap_ms: 50,
-        request_timeout_ms: 0
+        request_timeout_ms: 0,
+        cache_enabled: false,
+        cache_ttl_ms: 0,
+        poll_interval_ms: 0
     },
     // Serial adapter forwarding raw RTU frames without an MBAP header.
     rtuOverTcp: {
@@ -133,7 +160,10 @@ export const profileClasses = {
         connect_delay_ms: 0,
         max_target_conns: 1,
         min_request_gap_ms: 50,
-        request_timeout_ms: 0
+        request_timeout_ms: 0,
+        cache_enabled: false,
+        cache_ttl_ms: 0,
+        poll_interval_ms: 0
     }
 };
 
@@ -152,7 +182,8 @@ export const deviceCategories = [
     {
         id: 'inverter',
         devices: [
-            { id: 'solaredge', label: 'SolarEdge (SunSpec)', class: 'singleSessionFast', note: 'haBudget' },
+            { id: 'solaredge', label: 'SolarEdge (SunSpec, einzelner Wechselrichter)', class: 'singleSessionFast', note: 'haBudget' },
+            { id: 'solaredgeMulti', label: 'SolarEdge Leader + Follower (mehrere Unit-IDs)', class: 'singleSessionSlow', note: 'relayed' },
             { id: 'sma', label: 'SMA (Speedwire / Modbus)', class: 'fewSessions' },
             { id: 'fronius', label: 'Fronius (Symo, GEN24)', class: 'fewSessions' },
             { id: 'kostal', label: 'Kostal (Plenticore, PIKO)', class: 'singleSession' },
@@ -174,7 +205,7 @@ export const deviceCategories = [
     {
         id: 'heatpump',
         devices: [
-            { id: 'idm', label: 'IDM (Navigator 2.0)', class: 'singleSessionSlow', note: 'pollSlowly' },
+            { id: 'idm', label: 'IDM (Navigator 2.0 / Navigator 10)', class: 'singleSessionSlow', note: 'pollSlowly' },
             { id: 'stiebel', label: 'Stiebel Eltron (ISG + Modbus)', class: 'singleSessionSlow', note: 'pollSlowly' },
             { id: 'tecalor', label: 'Tecalor (ISG + Modbus)', class: 'singleSessionSlow', note: 'pollSlowly' },
             { id: 'nibeS', label: 'NIBE S-Serie', class: 'singleSession' },

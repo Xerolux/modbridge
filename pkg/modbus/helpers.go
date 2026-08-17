@@ -61,6 +61,71 @@ func CreateReadRequest(txID uint16, unitID uint8, fc uint8, startAddr uint16, qu
 	return frame
 }
 
+// Read and write function codes. Reads may be served from a cache; writes
+// change device state and must always reach the target.
+const (
+	FuncReadCoils              = 0x01
+	FuncReadDiscreteInputs     = 0x02
+	FuncWriteSingleCoil        = 0x05
+	FuncWriteSingleRegister    = 0x06
+	FuncWriteMultipleCoils     = 0x0F
+	FuncWriteMultipleRegisters = 0x10
+	FuncMaskWriteRegister      = 0x16
+	FuncReadWriteRegisters     = 0x17
+)
+
+// IsReadFunction reports whether fc only reads device state.
+func IsReadFunction(fc uint8) bool {
+	switch fc {
+	case FuncReadCoils, FuncReadDiscreteInputs, FuncReadHoldingRegisters, FuncReadInputRegisters:
+		return true
+	}
+	return false
+}
+
+// IsWriteFunction reports whether fc changes device state. Read/write multiple
+// (0x17) counts as a write because it modifies registers.
+func IsWriteFunction(fc uint8) bool {
+	switch fc {
+	case FuncWriteSingleCoil, FuncWriteSingleRegister, FuncWriteMultipleCoils,
+		FuncWriteMultipleRegisters, FuncMaskWriteRegister, FuncReadWriteRegisters:
+		return true
+	}
+	return false
+}
+
+// IsExceptionResponse reports whether a response frame carries a Modbus
+// exception (function code with the high bit set).
+func IsExceptionResponse(frame []byte) bool {
+	_, fc, ok := FrameUnitAndFunction(frame)
+	return ok && fc&0x80 != 0
+}
+
+// RequestCacheKey derives a cache key from a request frame. The key covers the
+// unit ID, function code and all request data (address and quantity), but not
+// the transaction ID — two clients asking the same question share an entry.
+//
+// ok is false for frames that are too short or that are not pure reads;
+// only reads may ever be answered from a cache.
+func RequestCacheKey(frame []byte) (key uint64, unitID uint8, ok bool) {
+	unitID, fc, valid := FrameUnitAndFunction(frame)
+	if !valid || !IsReadFunction(fc) {
+		return 0, 0, false
+	}
+
+	// FNV-1a over the PDU (unit ID onwards).
+	const (
+		offset64 = 14695981039346656037
+		prime64  = 1099511628211
+	)
+	hash := uint64(offset64)
+	for _, b := range frame[MBAPHeaderLength:] {
+		hash ^= uint64(b)
+		hash *= prime64
+	}
+	return hash, unitID, true
+}
+
 // FrameTxID returns the transaction ID of a Modbus TCP frame. The second
 // return value is false when the frame is too short to carry an MBAP header.
 func FrameTxID(frame []byte) (uint16, bool) {

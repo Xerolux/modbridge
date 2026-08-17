@@ -146,10 +146,52 @@ sudo journalctl -u modbridge -f
 | `max_target_conns` | int | Max. gleichzeitige Verbindungen zum Zielgerät (0 = Standard 10). `1` für Geräte mit nur einer Modbus-Sitzung, z.B. SolarEdge/SunSpec |
 | `min_request_gap_ms` | int | Mindestabstand zwischen zwei Anfragen an das Zielgerät (ms, 0 = aus) |
 | `request_timeout_ms` | int | Hartes Zeitbudget für eine Client-Anfrage inkl. Wiederholungen (ms, 0 = automatisch aus `read_timeout` und `max_retries`) |
+| `cache_enabled` | bool | Wiederholte Lesezugriffe aus einem Cache bedienen (Standard: aus) |
+| `cache_ttl_ms` | int | Gültigkeit eines Cache-Eintrags (ms, 0 = 5000) |
+| `poll_interval_ms` | int | Abgefragte Register im Hintergrund aktualisieren (ms, 0 = aus). Setzt `cache_enabled` voraus |
 | `protocol` | string | `tcp` (Standard) oder `rtu-tcp` für serielle Adapter, die rohe RTU-Frames erwarten |
 | `description` | string | Optionale Beschreibung |
 | `tags` | array | Optionale Tags zur Kategorisierung |
 
+
+### Cache und Hintergrund-Abfrage
+
+Manche Geräte lassen sich nicht beschleunigen: ein SolarEdge-Leader holt
+Follower-Register erst über die RS485-Kette, ein Heizungsregler braucht
+schlicht Sekunden. Wenn der Client (z.B. Home Assistant mit 3 s Timeout)
+schneller aufgibt als das Gerät antwortet, hilft kein Timeout-Tuning mehr.
+
+Dafür gibt es zwei zusammengehörige Optionen:
+
+- **`cache_enabled`** — wiederholte Lesezugriffe werden aus dem Cache bedient,
+  statt das Gerät erneut zu fragen.
+- **`poll_interval_ms`** — ein Hintergrund-Poller aktualisiert genau die
+  Register, die Clients tatsächlich abfragen, in seinem eigenen Takt. Der
+  Client bekommt dadurch sofort eine Antwort und wartet nie auf das Gerät.
+
+```json
+"cache_enabled": true,
+"cache_ttl_ms": 5000,
+"poll_interval_ms": 5000
+```
+
+**Was du dabei in Kauf nimmst:** Ein zwischengespeicherter Wert ist per
+Definition nicht der Live-Wert — er ist bis zu `cache_ttl_ms` alt. Für
+Dashboards und Energiedaten ist das unproblematisch, für Regelkreise nicht.
+Deshalb ist die Funktion standardmäßig **aus** und muss bewusst aktiviert
+werden.
+
+Was der Cache **nicht** tut:
+
+- Schreibzugriffe werden nie zwischengespeichert und immer durchgereicht.
+- Nach einem Schreibzugriff werden alle Cache-Einträge dieser Unit-ID
+  verworfen — ein gerade geänderter Wert wäre nicht nur alt, sondern falsch.
+- Modbus-Exceptions landen nie im Cache.
+- Der Poller fragt nur Register ab, die ein Client vorher angefragt hat, und
+  vergisst sie wieder, wenn längere Zeit niemand danach fragt.
+
+Im Proxy-Status stehen `cache_hits`, `cache_misses`, `cache_entries` und
+`polled_requests` zum Nachprüfen.
 
 ### Geräte-Profile
 
@@ -184,8 +226,8 @@ ein Startpunkt, der ein Gerät stabil hält — Feintuning bleibt deine Sache.
 | Kategorie | Geräte |
 |-----------|--------|
 | Allgemein | Standard, SPS/PLC, Modbus-TCP→RTU-Gateway, serieller Adapter |
-| Wechselrichter / PV | SolarEdge, SMA, Fronius, Kostal, Huawei, Sungrow, GoodWe, Growatt, SolaX, Deye/Sunsynk, Sofar, Delta, KACO, FIMER/ABB, E3/DC, Victron, SunSpec allgemein |
-| Wärmepumpen / Heizung | IDM, Stiebel Eltron ISG, Tecalor ISG, NIBE S-Serie, NIBE MODBUS 40, Lambda, Waterkotte, Ochsner, Nilan, Daikin Altherma, Panasonic Aquarea, LG Therma V, Mitsubishi Ecodan |
+| Wechselrichter / PV | SolarEdge (einzeln), SolarEdge Leader+Follower, SMA, Fronius, Kostal, Huawei, Sungrow, GoodWe, Growatt, SolaX, Deye/Sunsynk, Sofar, Delta, KACO, FIMER/ABB, E3/DC, Victron, SunSpec allgemein |
+| Wärmepumpen / Heizung | IDM (Navigator 2.0 / Navigator 10), Stiebel Eltron ISG, Tecalor ISG, NIBE S-Serie, NIBE MODBUS 40, Lambda, Waterkotte, Ochsner, Nilan, Daikin Altherma, Panasonic Aquarea, LG Therma V, Mitsubishi Ecodan |
 | Lüftung / Klima | Helios KWL, Zehnder ComfoAir Q, Vallox, Pluggit, Wolf CWL |
 | Energiezähler | Eastron SDM, Carlo Gavazzi EM24/EM340, Janitza UMG, Schneider iEM3000, Siemens SENTRON PAC, ABB B23/B24, Finder 7M, Iskra WM3, Shelly Pro EM |
 | Batteriespeicher | BYD Battery-Box, Pylontech, VARTA |

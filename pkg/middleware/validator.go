@@ -147,6 +147,27 @@ func (v *Validator) ValidateProxyConfig(cfg config.ProxyConfig) error {
 		})
 	}
 
+	// Validate cache TTL (ms). 0 = default.
+	if cfg.CacheTTLMs < 0 || cfg.CacheTTLMs > 3600000 {
+		errs = append(errs, &ValidationError{
+			Field:   "cache_ttl_ms",
+			Message: "must be between 0 and 3600000 ms",
+		})
+	}
+
+	// Validate background poll interval (ms). 0 = passive cache only.
+	if cfg.PollIntervalMs < 0 || cfg.PollIntervalMs > 3600000 {
+		errs = append(errs, &ValidationError{
+			Field:   "poll_interval_ms",
+			Message: "must be between 0 and 3600000 ms",
+		})
+	} else if cfg.PollIntervalMs > 0 && !cfg.CacheEnabled {
+		errs = append(errs, &ValidationError{
+			Field:   "poll_interval_ms",
+			Message: "requires cache_enabled to be set",
+		})
+	}
+
 	if len(errs) > 0 {
 		return v.combineErrors(errs)
 	}

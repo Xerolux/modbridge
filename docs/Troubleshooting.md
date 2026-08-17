@@ -57,6 +57,32 @@ verwirft Antworten, die nicht zur laufenden Anfrage gehören. Wie oft das
 passiert, steht als `stale_responses` im Proxy-Status — dauerhaft steigende
 Werte bedeuten, dass das Gerät langsamer antwortet als die Timeouts erlauben.
 
+### Wenn das Gerät grundsätzlich langsamer ist als der Client wartet
+
+Bei einem SolarEdge-Leader mit Followern (Unit-IDs 2, 3, 4 …) laufen die
+Follower-Register über die RS485-Kette und brauchen oft mehr als die 3 s, die
+Home Assistant wartet. Typisches Muster: der Leader antwortet zuverlässig, die
+Follower laufen in Timeouts.
+
+Hier hilft kein kürzeres Budget, sondern der umgekehrte Weg — Cache plus
+Hintergrund-Abfrage:
+
+```json
+"max_target_conns": 1,
+"min_request_gap_ms": 250,
+"read_timeout": 15,
+"max_retries": 1,
+"request_timeout_ms": 0,
+"cache_enabled": true,
+"cache_ttl_ms": 5000,
+"poll_interval_ms": 5000
+```
+
+ModBridge fragt die Register dann selbstständig alle 5 s ab und bedient Home
+Assistant sofort aus dem Cache. Der Wert ist dadurch bis zu 5 s alt — für
+PV-Daten unkritisch. Das Profil **SolarEdge Leader + Follower** setzt genau
+das.
+
 Im Proxy-Dialog des Web-Interface setzt das Geräte-Profil
 **SolarEdge / SunSpec** diese Werte mit einem Klick; für Huawei-Wechselrichter
 und sDongles gibt es ein eigenes Profil. Die Profile füllen nur das Formular —
