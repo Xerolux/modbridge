@@ -14,7 +14,7 @@
     "gridstack": "^13.0.2",
     "pinia": "^4.0.3",
     "primeicons": "^8.0.0",
-    "primevue": "^5.0.0",
+    "primevue": "^5.0.1",
     "vue": "^3.5.41",
     "vue-draggable-plus": "^0.6.1",
     "vue-i18n": "^11.4.8",
