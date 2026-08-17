@@ -288,6 +288,16 @@ const de = {
       calibrateStart: 'Messen',
       calibrateRunning: 'Messung läuft — {elapsed} s von höchstens {max} s. Der Proxy weist in dieser Zeit alle Clients ab.',
       calibrateDone: 'Messung abgeschlossen nach {seconds} s.',
+      calibrateNotes: {
+        stoppedOnTime: 'Nach {seconds} s abgebrochen, um das Gerät seinen Clients zurückzugeben — die übrigen Abstände wurden nicht gemessen.',
+        spacingCeiling: '{gapMs} ms Abstand ergab {errors} Fehler bei {requests} Anfragen — hier kommt das Gerät nicht mehr mit.',
+        unreliableDevice: 'Das Gerät verwarf {errors} von {requests} Anfragen selbst beim vorsichtigsten Abstand ({gapMs} ms). Das sind zurückhaltende Ersatzwerte, keine Messung — prüfe Gerät und Verbindung, bevor du ihnen traust.',
+        noCleanSpacing: 'Kein Abstand lief fehlerfrei; der vorsichtigste Wert bleibt stehen.',
+        spacingMargin: 'Der schnellste saubere Abstand war {fastestMs} ms; empfohlen werden {recommendedMs} ms, damit das Gerät warm oder ausgelastet Reserve behält.',
+        stoppedBeforeConnections: 'Vor der Messung weiterer paralleler Verbindungen abgebrochen; es bleibt bei einer Sitzung.',
+        connectionsRefused: '{connections} parallele Verbindungen ergaben {errors} Fehler — so viele Sitzungen bedient das Gerät nicht.',
+        singleConnectionErrors: 'Das Gerät verwarf {errors} von {requests} Anfragen auf einer einzigen Verbindung — prüfe Gerät und Verbindung; es bleibt bei einer Sitzung.'
+      },
       calibrateGap: 'Abstand',
       calibrateConnections: 'Verbindungen',
       calibrateShowLast: 'Letzte Messung ansehen',
@@ -768,6 +778,16 @@ const en = {
       calibrateStart: 'Measure',
       calibrateRunning: 'Measuring — {elapsed} s of at most {max} s. The proxy turns every client away while this runs.',
       calibrateDone: 'Measurement finished after {seconds} s.',
+      calibrateNotes: {
+        stoppedOnTime: 'Stopped after {seconds} s to give the device back to its clients — the remaining spacings were not measured.',
+        spacingCeiling: '{gapMs} ms spacing produced {errors} error(s) in {requests} requests — this is where the device stops keeping up.',
+        unreliableDevice: 'The device failed {errors} of {requests} requests even at the most careful spacing ({gapMs} ms). These are conservative fallback settings, not a measurement — check the device and the link before trusting them.',
+        noCleanSpacing: 'No spacing ran cleanly; keeping the most careful value.',
+        spacingMargin: 'Fastest clean spacing was {fastestMs} ms; recommending {recommendedMs} ms so the device keeps headroom when warm or busy.',
+        stoppedBeforeConnections: 'Stopped before measuring more parallel connections; keeping the safe single session.',
+        connectionsRefused: '{connections} parallel connection(s) produced {errors} error(s) — the device does not serve that many sessions.',
+        singleConnectionErrors: 'The device failed {errors} of {requests} requests on a single connection — check the device or the link; keeping one session.'
+      },
       calibrateGap: 'Spacing',
       calibrateConnections: 'Connections',
       calibrateShowLast: 'Show last measurement',

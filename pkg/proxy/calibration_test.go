@@ -25,6 +25,18 @@ type pickyTarget struct {
 	// Session slots, one per connection the device is willing to serve.
 	slots chan struct{}
 
+	// releaseDelay is how long the device keeps a session occupied after the
+	// peer has gone. Real single-session devices do not free the slot at the
+	// instant the socket closes; they notice, and that takes a moment.
+	releaseDelay time.Duration
+
+	// ignoreFirstRequest makes every connection swallow its first request, the
+	// behaviour of a device that needs a moment after the handshake.
+	ignoreFirstRequest bool
+
+	// live counts connections the device still holds open.
+	live atomic.Int32
+
 	mu       sync.Mutex
 	lastSeen time.Time
 }
@@ -46,6 +58,13 @@ type pickyTarget struct {
 const sessionHandover = 150 * time.Millisecond
 
 func newPickyTarget(t *testing.T, minGap time.Duration, maxSessions int, latency time.Duration) *pickyTarget {
+	return newSlowReleasingTarget(t, minGap, maxSessions, latency, 0)
+}
+
+// newSlowReleasingTarget adds the one behaviour that separates a device holding
+// a session from a device refusing one: it keeps the slot for a while after the
+// peer disconnects.
+func newSlowReleasingTarget(t *testing.T, minGap time.Duration, maxSessions int, latency, releaseDelay time.Duration) *pickyTarget {
 	t.Helper()
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -54,10 +73,11 @@ func newPickyTarget(t *testing.T, minGap time.Duration, maxSessions int, latency
 	}
 
 	target := &pickyTarget{
-		listener: listener,
-		minGap:   minGap,
-		latency:  latency,
-		slots:    make(chan struct{}, maxSessions),
+		listener:     listener,
+		minGap:       minGap,
+		latency:      latency,
+		releaseDelay: releaseDelay,
+		slots:        make(chan struct{}, maxSessions),
 	}
 
 	go func() {
@@ -75,12 +95,21 @@ func newPickyTarget(t *testing.T, minGap time.Duration, maxSessions int, latency
 }
 
 func (pt *pickyTarget) serve(conn net.Conn) {
+	pt.live.Add(1)
+	defer pt.live.Add(-1)
 	defer conn.Close()
+
+	seen := 0
 
 	var over bool
 	select {
 	case pt.slots <- struct{}{}:
-		defer func() { <-pt.slots }()
+		defer func() {
+			if pt.releaseDelay > 0 {
+				time.Sleep(pt.releaseDelay)
+			}
+			<-pt.slots
+		}()
 	case <-time.After(sessionHandover):
 		over = true
 	}
@@ -92,6 +121,11 @@ func (pt *pickyTarget) serve(conn net.Conn) {
 		}
 		if over {
 			continue // accepted the socket, answers nothing — the usual failure mode
+		}
+
+		seen++
+		if pt.ignoreFirstRequest && seen == 1 {
+			continue // the handshake is done, the device is not ready yet
 		}
 
 		pt.mu.Lock()
@@ -476,5 +510,128 @@ func TestCalibrationHoldsTheBackgroundPoller(t *testing.T) {
 	}
 	if polls.Load() <= resumed {
 		t.Error("the poller did not resume after the measurement")
+	}
+}
+
+// TestCalibrationDoesNotBlameParallelismForAHandover covers the moment between
+// the two phases. A device that serves one session at a time frees it shortly
+// after the socket closes, not at the instant of closing; dialling into that
+// window made the first connection look like a second session, and the run then
+// reported that a single-session device cannot serve a single session.
+func TestCalibrationDoesNotBlameParallelismForAHandover(t *testing.T) {
+	// Holds its session for 200 ms after the peer leaves — long enough that
+	// dialling straight into the handover window is judged a second session.
+	target := newSlowReleasingTarget(t, 0, 1, 5*time.Millisecond, 200*time.Millisecond)
+	p := calibrationProxy(t, target.addr())
+
+	result, err := p.Calibrate(t.Context(), CalibrationConfig{
+		Probe:            ProbeSpec{UnitID: 1, Function: 3, Address: 0, Quantity: 2},
+		RequestsPerStep:  8,
+		GapStepsMs:       []int{50},
+		ConnectionLevels: []int{1},
+		MaxDuration:      30 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("calibration failed: %v", err)
+	}
+
+	if len(result.ConnectionSteps) == 0 {
+		t.Fatal("no connection step was measured")
+	}
+	if first := result.ConnectionSteps[0]; first.Connections != 1 || first.Errors != 0 {
+		t.Errorf("a single connection to a single-session device should be clean, got %+v", first)
+	}
+	if result.Recommended.MaxTargetConns != 1 {
+		t.Errorf("recommended %d connections against a single-session device", result.Recommended.MaxTargetConns)
+	}
+	for _, n := range result.Notes {
+		if n.Code == "singleConnectionErrors" {
+			t.Errorf("the device served its one session; note says otherwise: %q", n.Text)
+		}
+	}
+}
+
+// TestCalibrationNotesCarryCodesAndNumbers guards what makes the notes
+// translatable: a code the interface can look up and the numbers separately,
+// rather than a finished English sentence it can only print.
+func TestCalibrationNotesCarryCodesAndNumbers(t *testing.T) {
+	target := newPickyTarget(t, 60*time.Millisecond, 4, 5*time.Millisecond)
+	p := calibrationProxy(t, target.addr())
+
+	result, err := p.Calibrate(t.Context(), CalibrationConfig{
+		Probe:            ProbeSpec{UnitID: 1, Function: 3, Address: 0, Quantity: 2},
+		RequestsPerStep:  6,
+		GapStepsMs:       []int{200, 100, 25},
+		ConnectionLevels: []int{1},
+		MaxDuration:      30 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("calibration failed: %v", err)
+	}
+	if len(result.Notes) == 0 {
+		t.Fatal("a run that found a limit should say so in its notes")
+	}
+
+	byCode := map[string]Note{}
+	for _, n := range result.Notes {
+		if n.Code == "" {
+			t.Errorf("note without a code cannot be translated: %+v", n)
+		}
+		if n.Text == "" {
+			t.Errorf("note %q has no English fallback", n.Code)
+		}
+		byCode[n.Code] = n
+	}
+
+	// The device gives up at 25 ms, so that note must carry the spacing it
+	// failed at — as a number, not only inside the sentence.
+	ceiling, ok := byCode["spacingCeiling"]
+	if !ok {
+		t.Fatalf("expected a spacingCeiling note, got %v", byCode)
+	}
+	if ceiling.Args["gapMs"] != 25 {
+		t.Errorf("spacingCeiling reports gapMs %d, want 25", ceiling.Args["gapMs"])
+	}
+	if ceiling.Args["errors"] <= 0 {
+		t.Errorf("spacingCeiling reports %d errors, want the failures it saw", ceiling.Args["errors"])
+	}
+}
+
+// TestMeasureGapClosesTheConnectionItReplaces covers a leak on the path that
+// matters most. The warm-up request exists because the first request after a
+// fresh connection carries the transition; when it fails, the step dials again.
+// The close was written as `defer conn.Close()`, which binds the connection the
+// statement saw — so the replacement was never closed. On a device that serves
+// one session that leaked socket holds the session for the rest of the run, and
+// every later step then measures a device busy with us.
+func TestMeasureGapClosesTheConnectionItReplaces(t *testing.T) {
+	// Swallows the first request on every connection, so the warm-up always
+	// fails and the redial always happens.
+	target := newPickyTarget(t, 0, 8, 2*time.Millisecond)
+	target.ignoreFirstRequest = true
+	p := calibrationProxy(t, target.addr())
+
+	// The proxy's own health check may hold a connection; what matters is that
+	// the step leaves no more behind than it found.
+	time.Sleep(300 * time.Millisecond)
+	before := target.live.Load()
+
+	step, err := p.measureGap(t.Context(), ProbeSpec{UnitID: 1, Function: 3, Address: 0, Quantity: 2},
+		10, 3, 500*time.Millisecond)
+	if err != nil {
+		t.Fatalf("measureGap failed: %v", err)
+	}
+	if step.Requests != 3 {
+		t.Fatalf("measured %d requests, want 3", step.Requests)
+	}
+
+	// Give the device a moment to notice the closes, then insist on silence.
+	deadline := time.Now().Add(2 * time.Second)
+	for target.live.Load() > before && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if held := target.live.Load(); held > before {
+		t.Errorf("the step left %d connection(s) open beyond the %d it started with; the redial was never closed",
+			held-before, before)
 	}
 }

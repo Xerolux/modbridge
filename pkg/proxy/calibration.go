@@ -86,8 +86,31 @@ type CalibrationResult struct {
 	GapSteps        []GapStep           `json:"gap_steps"`
 	ConnectionSteps []ConnectionStep    `json:"connection_steps"`
 	Recommended     RecommendedSettings `json:"recommended"`
-	Notes           []string            `json:"notes"`
+	Notes           []Note              `json:"notes"`
 	DurationMs      int64               `json:"duration_ms"`
+}
+
+// Note explains one finding of a run. It carries a code and the numbers that
+// belong to it rather than a finished sentence, because the interface speaks
+// the operator's language and the server does not know which one that is. Text
+// is the same statement in English, for anything reading the API directly and
+// as a fallback when a code is newer than the interface showing it.
+type Note struct {
+	Code string         `json:"code"`
+	Args map[string]int `json:"args,omitempty"`
+	Text string         `json:"text"`
+}
+
+// sessionReleaseGrace is the pause between the spacing phase and the connection
+// phase. A device that serves one session at a time releases it a moment after
+// the socket closes, not at the instant of closing, and measuring inside that
+// window blames parallelism for a handover.
+const sessionReleaseGrace = 300 * time.Millisecond
+
+// note builds a Note; the English sentence is written at the call site so the
+// code and its wording stay next to each other.
+func note(code, text string, args map[string]int) Note {
+	return Note{Code: code, Args: args, Text: text}
 }
 
 // CalibrationConfig tunes a run. The zero value is a sensible run.
@@ -192,6 +215,14 @@ func (p *ProxyInstance) Calibrate(ctx context.Context, cfg CalibrationConfig) (*
 	if p.connPool != nil {
 		if drained := p.connPool.DrainIdle(); drained > 0 {
 			p.log.Info(p.ID, fmt.Sprintf("Calibration released %d pooled connection(s) so the target is idle", drained))
+			// Same handover as between the phases: the socket is closed, the
+			// device has not noticed yet. Probing into that window measures a
+			// device that is still busy with the connection we just gave back.
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(sessionReleaseGrace):
+			}
 		}
 	}
 
@@ -200,7 +231,7 @@ func (p *ProxyInstance) Calibrate(ctx context.Context, cfg CalibrationConfig) (*
 	result := &CalibrationResult{
 		TargetAddr: p.TargetAddr,
 		Probe:      probe,
-		Notes:      []string{},
+		Notes:      []Note{},
 	}
 
 	// Spacing: walk down until the device starts failing. The last clean step
@@ -218,9 +249,9 @@ func (p *ProxyInstance) Calibrate(ctx context.Context, cfg CalibrationConfig) (*
 		default:
 		}
 		if time.Now().After(deadline) {
-			result.Notes = append(result.Notes, fmt.Sprintf(
+			result.Notes = append(result.Notes, note("stoppedOnTime", fmt.Sprintf(
 				"stopped after %v to give the device back to its clients; the remaining spacings were not measured",
-				cfg.MaxDuration))
+				cfg.MaxDuration), map[string]int{"seconds": int(cfg.MaxDuration.Seconds())}))
 			break
 		}
 
@@ -231,9 +262,10 @@ func (p *ProxyInstance) Calibrate(ctx context.Context, cfg CalibrationConfig) (*
 		result.GapSteps = append(result.GapSteps, step)
 
 		if step.Errors > 0 {
-			result.Notes = append(result.Notes, fmt.Sprintf(
+			result.Notes = append(result.Notes, note("spacingCeiling", fmt.Sprintf(
 				"%d ms spacing produced %d error(s) in %d requests — this is where the device stops keeping up",
-				gapMs, step.Errors, step.Requests))
+				gapMs, step.Errors, step.Requests),
+				map[string]int{"gapMs": gapMs, "errors": step.Errors, "requests": step.Requests}))
 			break
 		}
 		fastestClean = gapMs
@@ -249,27 +281,43 @@ func (p *ProxyInstance) Calibrate(ctx context.Context, cfg CalibrationConfig) (*
 			MaxTargetConns:  1,
 			ReadTimeoutS:    readTimeoutFrom(result.GapSteps),
 		}
-		result.Notes = append(result.Notes, fmt.Sprintf(
+		result.Notes = append(result.Notes, note("unreliableDevice", fmt.Sprintf(
 			"the device failed %d of %d requests even at the most careful spacing (%d ms) — these are conservative fallback settings, not a measurement. Check the device and the link before trusting them.",
-			result.GapSteps[0].Errors, result.GapSteps[0].Requests, cfg.GapStepsMs[0]))
+			result.GapSteps[0].Errors, result.GapSteps[0].Requests, cfg.GapStepsMs[0]),
+			map[string]int{"errors": result.GapSteps[0].Errors, "requests": result.GapSteps[0].Requests, "gapMs": cfg.GapStepsMs[0]}))
 		result.DurationMs = time.Since(started).Milliseconds()
 		return result, nil
 	}
 
 	if fastestClean < 0 {
 		result.Recommended.MinRequestGapMs = cfg.GapStepsMs[0]
-		result.Notes = append(result.Notes, "no spacing ran cleanly; keeping the most careful value")
+		result.Notes = append(result.Notes, note("noCleanSpacing",
+			"no spacing ran cleanly; keeping the most careful value", nil))
 	} else {
 		result.Recommended.MinRequestGapMs = withSafetyMargin(fastestClean, cfg.SafetyFactor)
 		if result.Recommended.MinRequestGapMs != fastestClean {
-			result.Notes = append(result.Notes, fmt.Sprintf(
+			result.Notes = append(result.Notes, note("spacingMargin", fmt.Sprintf(
 				"fastest clean spacing was %d ms; recommending %d ms so the device keeps headroom when warm or busy",
-				fastestClean, result.Recommended.MinRequestGapMs))
+				fastestClean, result.Recommended.MinRequestGapMs),
+				map[string]int{"fastestMs": fastestClean, "recommendedMs": result.Recommended.MinRequestGapMs}))
 		}
 	}
 
 	// Parallel sessions: many devices serve exactly one and ignore the rest,
 	// which shows up as timeouts rather than as a refusal.
+	//
+	// The spacing phase has just closed its connection, and a device that keeps
+	// one session does not free it the instant the socket closes — it notices.
+	// Dialling straight into that window makes the very first connection look
+	// like a second session, and the run then concludes that a device cannot
+	// serve the one session it is plainly serving. Waiting a moment costs
+	// nothing next to a run of tens of seconds.
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(sessionReleaseGrace):
+	}
+
 	safeGap := result.Recommended.MinRequestGapMs
 	result.Recommended.MaxTargetConns = 1
 	for _, level := range cfg.ConnectionLevels {
@@ -279,7 +327,8 @@ func (p *ProxyInstance) Calibrate(ctx context.Context, cfg CalibrationConfig) (*
 		default:
 		}
 		if time.Now().After(deadline) {
-			result.Notes = append(result.Notes, "stopped before measuring more parallel connections; keeping the safe single session")
+			result.Notes = append(result.Notes, note("stoppedBeforeConnections",
+				"stopped before measuring more parallel connections; keeping the safe single session", nil))
 			break
 		}
 
@@ -290,9 +339,20 @@ func (p *ProxyInstance) Calibrate(ctx context.Context, cfg CalibrationConfig) (*
 		result.ConnectionSteps = append(result.ConnectionSteps, step)
 
 		if step.Errors > 0 {
-			result.Notes = append(result.Notes, fmt.Sprintf(
-				"%d parallel connection(s) produced %d error(s) — the device does not serve that many sessions",
-				level, step.Errors))
+			// At one connection there is no "that many sessions" to blame: the
+			// device failed on the only session there was, which says something
+			// about the device or the link, not about parallelism.
+			if level <= 1 {
+				result.Notes = append(result.Notes, note("singleConnectionErrors", fmt.Sprintf(
+					"the device failed %d of %d requests on a single connection — check the device or the link; keeping one session",
+					step.Errors, step.Requests),
+					map[string]int{"errors": step.Errors, "requests": step.Requests}))
+			} else {
+				result.Notes = append(result.Notes, note("connectionsRefused", fmt.Sprintf(
+					"%d parallel connection(s) produced %d error(s) — the device does not serve that many sessions",
+					level, step.Errors),
+					map[string]int{"connections": level, "errors": step.Errors}))
+			}
 			break
 		}
 		result.Recommended.MaxTargetConns = level
@@ -362,7 +422,12 @@ func (p *ProxyInstance) measureGap(ctx context.Context, probe ProbeSpec, gapMs, 
 	if err != nil {
 		return step, err
 	}
-	defer conn.Close()
+	// Closed through the variable, not through the connection this statement
+	// happens to see: the warm-up below may replace it, and `defer conn.Close()`
+	// would then close the first socket and leak the second. On a device that
+	// serves one session that leak holds the session for the rest of the run,
+	// so every later step measures a device that is busy with us.
+	defer func() { conn.Close() }()
 
 	latencies := make([]float64, 0, requests)
 	gap := time.Duration(gapMs) * time.Millisecond
