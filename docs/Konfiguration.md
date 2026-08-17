@@ -184,7 +184,7 @@ ein Startpunkt, der ein Gerät stabil hält — Feintuning bleibt deine Sache.
 | Kategorie | Geräte |
 |-----------|--------|
 | Allgemein | Standard, SPS/PLC, Modbus-TCP→RTU-Gateway, serieller Adapter |
-| Wechselrichter / PV | SolarEdge, SMA, Fronius, Kostal, Huawei, Sungrow, GoodWe, Growatt, SolaX, Deye/Sunsynk, Sofar, Delta, KACO, FIMER/ABB, E3/DC, Victron, SunSpec allgemein |
+| Wechselrichter / PV | SolarEdge (einzeln), SolarEdge Leader+Follower, SMA, Fronius, Kostal, Huawei, Sungrow, GoodWe, Growatt, SolaX, Deye/Sunsynk, Sofar, Delta, KACO, FIMER/ABB, E3/DC, Victron, SunSpec allgemein |
 | Wärmepumpen / Heizung | IDM (Navigator 2.0 / Navigator 10), Stiebel Eltron ISG, Tecalor ISG, NIBE S-Serie, NIBE MODBUS 40, Lambda, Waterkotte, Ochsner, Nilan, Daikin Altherma, Panasonic Aquarea, LG Therma V, Mitsubishi Ecodan |
 | Lüftung / Klima | Helios KWL, Zehnder ComfoAir Q, Vallox, Pluggit, Wolf CWL |
 | Energiezähler | Eastron SDM, Carlo Gavazzi EM24/EM340, Janitza UMG, Schneider iEM3000, Siemens SENTRON PAC, ABB B23/B24, Finder 7M, Iskra WM3, Shelly Pro EM |

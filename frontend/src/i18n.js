@@ -313,7 +313,8 @@ const de = {
         rtuOverTcp: 'Rohe RTU-Frames ohne MBAP-Header: Protokoll RTU über TCP, 1 Verbindung'
       },
       notes: {
-        haBudget: 'passend für Home Assistant',
+        haBudget: 'passend für Home Assistant, einzelner Wechselrichter',
+        relayed: 'Follower-Register laufen über die RS485-Kette des Leaders und brauchen deutlich länger — kein enges Zeitbudget setzen',
         connectDelay: 'braucht die Pause nach dem Connect',
         dongle: 'Werte gelten für den LAN-/WLAN-Stick, nicht für den Wechselrichter selbst',
         enableFirst: 'Modbus muss am Gerät erst freigeschaltet werden',
@@ -773,7 +774,8 @@ const en = {
         rtuOverTcp: 'Raw RTU frames without an MBAP header: RTU-over-TCP protocol, 1 connection'
       },
       notes: {
-        haBudget: 'tuned for Home Assistant',
+        haBudget: 'tuned for Home Assistant, single inverter',
+        relayed: 'follower registers travel the leader\'s RS485 chain and take considerably longer — do not set a tight budget',
         connectDelay: 'needs the pause after connecting',
         dongle: 'values apply to the LAN/WiFi stick, not the inverter itself',
         enableFirst: 'Modbus has to be enabled on the device first',

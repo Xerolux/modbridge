@@ -152,7 +152,8 @@ export const deviceCategories = [
     {
         id: 'inverter',
         devices: [
-            { id: 'solaredge', label: 'SolarEdge (SunSpec)', class: 'singleSessionFast', note: 'haBudget' },
+            { id: 'solaredge', label: 'SolarEdge (SunSpec, einzelner Wechselrichter)', class: 'singleSessionFast', note: 'haBudget' },
+            { id: 'solaredgeMulti', label: 'SolarEdge Leader + Follower (mehrere Unit-IDs)', class: 'singleSessionSlow', note: 'relayed' },
             { id: 'sma', label: 'SMA (Speedwire / Modbus)', class: 'fewSessions' },
             { id: 'fronius', label: 'Fronius (Symo, GEN24)', class: 'fewSessions' },
             { id: 'kostal', label: 'Kostal (Plenticore, PIKO)', class: 'singleSession' },
