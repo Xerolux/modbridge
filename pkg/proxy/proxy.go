@@ -106,8 +106,10 @@ type ProxyInstance struct {
 	pacer       *requestPacer // Enforces MinRequestGap towards the target
 	cache       *ResponseCache
 	poller      *RegisterPoller
-	lastRead    atomic.Value // Last read a client asked for, replayed as a calibration probe
-	calibrating atomic.Bool  // A measurement owns the target: hold clients off for its duration
+	lastRead    atomic.Value          // Last read a client asked for, replayed as a calibration probe
+	calibrating atomic.Bool           // A measurement owns the target: hold clients off for its duration
+	clientsMu   sync.Mutex            // Guards clients
+	clients     map[net.Conn]struct{} // Live client connections, so a measurement can hand the device back
 
 	log           *logger.Logger
 	deviceTracker *devices.Tracker
@@ -480,6 +482,36 @@ func configureTCPConn(conn net.Conn) {
 	_ = tcpConn.SetNoDelay(true)
 }
 
+// registerClient remembers a live client connection. The proxy needs to be able
+// to reach them for one reason only: a measurement has to hand the device back,
+// and nobody can unplug a controller on request.
+func (p *ProxyInstance) registerClient(conn net.Conn) {
+	p.clientsMu.Lock()
+	defer p.clientsMu.Unlock()
+	if p.clients == nil {
+		p.clients = make(map[net.Conn]struct{})
+	}
+	p.clients[conn] = struct{}{}
+}
+
+// unregisterClient forgets a connection that has ended.
+func (p *ProxyInstance) unregisterClient(conn net.Conn) {
+	p.clientsMu.Lock()
+	defer p.clientsMu.Unlock()
+	delete(p.clients, conn)
+}
+
+// liveClients returns the connections clients currently hold.
+func (p *ProxyInstance) liveClients() []net.Conn {
+	p.clientsMu.Lock()
+	defer p.clientsMu.Unlock()
+	conns := make([]net.Conn, 0, len(p.clients))
+	for c := range p.clients {
+		conns = append(conns, c)
+	}
+	return conns
+}
+
 func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 	defer p.wg.Done()
 	defer clientConn.Close()
@@ -499,12 +531,24 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 		p.deviceTracker.TrackConnection(clientConn, p.ID)
 	}
 
+	// Remembered so a measurement can reach this connection and end it.
+	p.registerClient(clientConn)
+	defer p.unregisterClient(clientConn)
+
 	for {
 		// Check context
 		select {
 		case <-p.ctx.Done():
 			return
 		default:
+		}
+
+		// A measurement owns the target. Whatever request was in hand has been
+		// answered by now; this is where the connection is given back. The
+		// client reconnects once the run is over.
+		if p.calibrating.Load() {
+			p.log.Info(p.ID, "Ending client connection for the duration of the measurement")
+			return
 		}
 
 		// Use a generous idle timeout for the client connection (e.g., 5 minutes)

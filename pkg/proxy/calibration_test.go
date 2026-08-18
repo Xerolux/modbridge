@@ -231,9 +231,24 @@ func TestCalibrationFindsSessionLimit(t *testing.T) {
 	}
 }
 
-// TestCalibrationRefusesWhileClientsConnected guards the promise that a run
-// never quietly competes with live traffic.
-func TestCalibrationRefusesWhileClientsConnected(t *testing.T) {
+// waitForClients blocks until the proxy reports the given number of live client
+// connections, so a test does not race the accept loop.
+func waitForClients(t *testing.T, p *ProxyInstance, want int64) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if p.Stats.ActiveConns.Load() == want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("proxy reports %d client(s), want %d", p.Stats.ActiveConns.Load(), want)
+}
+
+// TestCalibrationReleasesConnectedClients is the promise that replaced the old
+// refusal: a run still never competes with live traffic, but the person who
+// pressed the button is not the one who has to go unplug a controller.
+func TestCalibrationReleasesConnectedClients(t *testing.T) {
 	target := newPickyTarget(t, 0, 4, 0)
 	p := calibrationProxy(t, target.addr())
 
@@ -242,19 +257,92 @@ func TestCalibrationRefusesWhileClientsConnected(t *testing.T) {
 		t.Fatalf("failed to connect a client: %v", err)
 	}
 	defer client.Close()
+	waitForClients(t, p, 1)
 
-	deadline := time.Now().Add(2 * time.Second)
-	for p.Stats.ActiveConns.Load() == 0 && time.Now().Before(deadline) {
-		time.Sleep(20 * time.Millisecond)
+	result, err := p.Calibrate(t.Context(), CalibrationConfig{
+		Probe:            ProbeSpec{UnitID: 1, Function: 3, Address: 0, Quantity: 2},
+		RequestsPerStep:  2,
+		GapStepsMs:       []int{50},
+		ConnectionLevels: []int{1},
+	})
+	if err != nil {
+		t.Fatalf("calibration refused to run instead of releasing the client: %v", err)
+	}
+	if p.Stats.ActiveConns.Load() != 0 {
+		t.Errorf("%d client(s) still connected after the run", p.Stats.ActiveConns.Load())
 	}
 
-	_, err = p.Calibrate(t.Context(), CalibrationConfig{
-		Probe:           ProbeSpec{UnitID: 1, Function: 3, Address: 0, Quantity: 2},
-		RequestsPerStep: 2,
-		GapStepsMs:      []int{50},
-	})
-	if err == nil {
-		t.Fatal("calibration ran while a client was connected")
+	// The client learns it was let go, rather than sitting on a socket the
+	// proxy has stopped answering.
+	if err := client.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("set deadline failed: %v", err)
+	}
+	if _, err := modbus.ReadFrame(client); err == nil {
+		t.Error("the client connection was still open after the run")
+	}
+
+	// And the report says so, in numbers rather than a finished sentence.
+	var released *Note
+	for i := range result.Notes {
+		if result.Notes[i].Code == "clientsReleased" {
+			released = &result.Notes[i]
+		}
+	}
+	if released == nil {
+		t.Fatalf("no note about the released client, got %+v", result.Notes)
+	}
+	if released.Args["clients"] != 1 {
+		t.Errorf("note reports %d released client(s), want 1", released.Args["clients"])
+	}
+}
+
+// TestCalibrationLetsAClientFinishItsRequest is the difference between handing
+// a connection back and cutting it. A client waiting on an answer gets it; only
+// then does the run take the device. Without that, a write in flight would be
+// left unanswered and its sender would not know whether it landed.
+func TestCalibrationLetsAClientFinishItsRequest(t *testing.T) {
+	target := newPickyTarget(t, 0, 4, 300*time.Millisecond)
+	p := calibrationProxy(t, target.addr())
+	p.ReadTimeout = 2 * time.Second // the target is deliberately slow here
+
+	client, err := net.Dial("tcp", p.ListenAddr)
+	if err != nil {
+		t.Fatalf("failed to connect a client: %v", err)
+	}
+	defer client.Close()
+	waitForClients(t, p, 1)
+
+	if _, err := client.Write(modbus.CreateReadRequest(7, 1, 3, 0, 2)); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+	// Long enough that the request is with the target, short enough that its
+	// answer is not back yet.
+	time.Sleep(100 * time.Millisecond)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := p.Calibrate(t.Context(), CalibrationConfig{
+			Probe:            ProbeSpec{UnitID: 1, Function: 3, Address: 0, Quantity: 2},
+			RequestsPerStep:  2,
+			GapStepsMs:       []int{50},
+			ConnectionLevels: []int{1},
+		})
+		done <- err
+	}()
+
+	if err := client.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatalf("set deadline failed: %v", err)
+	}
+	frame, err := modbus.ReadFrame(client)
+	if err != nil {
+		t.Fatalf("the request in flight was dropped instead of answered: %v", err)
+	}
+	if len(frame) < 8 || frame[7] != 3 {
+		t.Errorf("client got %X, want an answer to its read", frame)
+	}
+
+	if err := <-done; err != nil {
+		t.Fatalf("calibration failed: %v", err)
 	}
 }
 

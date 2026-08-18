@@ -62,8 +62,9 @@ die dort entstehen:
   Formular mit Werten, die zur Geräteklasse passen, und ändern sonst nichts.
 - **Gerät vermessen** — tastet Abstand, Verbindungen und Antwortzeit am echten
   Gerät ab und schlägt Werte vor, statt sie zu schätzen. Nur Lesezugriffe,
-  höchstens 90 Sekunden, und übernommen wird erst auf Klick. Während der
-  Messung nimmt der Proxy keine Clients an.
+  höchstens 90 Sekunden, und übernommen wird erst auf Klick. Für die Dauer
+  trennt der Proxy verbundene Clients und nimmt keine neuen an; sie verbinden
+  sich danach von selbst wieder.
 
 Details dazu im [Wiki](https://github.com/Xerolux/modbridge/wiki):
 [Konfiguration](https://github.com/Xerolux/modbridge/wiki/Konfiguration) und

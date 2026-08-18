@@ -28,8 +28,10 @@ import (
 //   - It runs on its own connections, never through the proxy's pool, so a
 //     running proxy is not reconfigured underneath its clients.
 //   - It only ever reports. Applying the result stays a deliberate act.
-//   - It refuses to run while clients are connected, because their traffic
-//     both distorts the measurement and gets distorted by it.
+//   - It ends the connections clients hold for the duration, because their
+//     traffic both distorts the measurement and gets distorted by it. Nobody
+//     can unplug a controller on request, so the proxy does it; the clients
+//     reconnect on their own once the run is over.
 //
 // A single error is not a measurement either: every step sends a series of
 // requests and is judged on the error rate, and the accepted value keeps a
@@ -136,7 +138,6 @@ type CalibrationConfig struct {
 	GapStepsMs       []int         // Spacings to try, descending (default 200…10)
 	ConnectionLevels []int         // Parallel connections to try, ascending (default 1, 2, 4)
 	SafetyFactor     float64       // Margin over the fastest clean spacing (default 1.5)
-	Force            bool          // Run even while clients are connected
 	MaxDuration      time.Duration // Hard ceiling for the whole run (default 90s)
 }
 
@@ -184,6 +185,61 @@ func (p *ProxyInstance) recordObservedRead(frame []byte) {
 	}
 }
 
+// clientReleaseGrace is how long a client handler is given to finish the request
+// it is holding and leave on its own before the connection is closed underneath
+// it. A request bounded by the proxy's own timeouts fits; a stuck one does not,
+// and waiting on it would spend the measurement's budget on it.
+const clientReleaseGrace = 2 * time.Second
+
+// releaseClients hands the device back to the measurement by ending the
+// connections clients hold. It reports how many were held when it started and
+// whether the proxy is idle now.
+//
+// It is not a kill first. p.calibrating is already set, so a handler in the
+// middle of a request answers it and then leaves through the check at the top
+// of its loop; only a reader parked between requests is cut short, and that is
+// what expiring its deadline does. What is still holding on after the grace
+// gets its connection closed, because a run that gave up here would leave
+// whoever pressed the button with a message and nothing they could do about it.
+func (p *ProxyInstance) releaseClients(ctx context.Context) (int, bool) {
+	conns := p.liveClients()
+	if len(conns) == 0 {
+		return 0, true
+	}
+
+	// An idle reader is parked in a five-minute deadline. Expiring it wakes the
+	// handler now instead of at the end of the run.
+	for _, c := range conns {
+		_ = c.SetReadDeadline(time.Now())
+	}
+	if p.waitForIdle(ctx, clientReleaseGrace) {
+		return len(conns), true
+	}
+
+	for _, c := range conns {
+		_ = c.Close()
+	}
+	return len(conns), p.waitForIdle(ctx, clientReleaseGrace)
+}
+
+// waitForIdle reports whether the proxy stopped serving clients within d.
+func (p *ProxyInstance) waitForIdle(ctx context.Context, d time.Duration) bool {
+	deadline := time.Now().Add(d)
+	for {
+		if p.Stats.ActiveConns.Load() == 0 {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
 // Calibrate measures the target and returns what it tolerates. It does not
 // change the proxy's configuration.
 func (p *ProxyInstance) Calibrate(ctx context.Context, cfg CalibrationConfig) (*CalibrationResult, error) {
@@ -192,12 +248,6 @@ func (p *ProxyInstance) Calibrate(ctx context.Context, cfg CalibrationConfig) (*
 	if p.Stats.GetStatus() != "Running" {
 		return nil, refuse("proxyNotRunning", "proxy is not running", nil)
 	}
-	if active := p.Stats.ActiveConns.Load(); active > 0 && !cfg.Force {
-		return nil, refuse("clientsConnected", fmt.Sprintf(
-			"%d client(s) connected: their traffic would distort the measurement and be distorted by it", active),
-			map[string]int{"clients": int(active)})
-	}
-
 	probe := cfg.Probe
 	if !probe.Valid() {
 		observed, ok := p.LastObservedRead()
@@ -208,10 +258,23 @@ func (p *ProxyInstance) Calibrate(ctx context.Context, cfg CalibrationConfig) (*
 		probe = observed
 	}
 
-	// Hold clients off for the duration. The check above rules out the ones
-	// already connected; this rules out the one that connects mid-run.
+	// Hold clients off for the duration. This rules out the client that
+	// connects mid-run, and tells the ones already connected to leave.
 	p.calibrating.Store(true)
 	defer p.calibrating.Store(false)
+
+	// Their traffic would distort the measurement and be distorted by it, and
+	// nobody can unplug a controller for ninety seconds on request — so the
+	// proxy does it and they reconnect when the run is over.
+	releasedClients, ok := p.releaseClients(ctx)
+	if !ok {
+		return nil, refuse("clientsStillConnected", fmt.Sprintf(
+			"%d client(s) would not let go of their connection: their traffic would distort the measurement and be distorted by it", releasedClients),
+			map[string]int{"clients": releasedClients})
+	}
+	if releasedClients > 0 {
+		p.log.Info(p.ID, fmt.Sprintf("Calibration ended %d client connection(s) for the duration of the run", releasedClients))
+	}
 
 	// A device that serves a single Modbus session cannot be measured while the
 	// proxy is holding that session, and the health check would take it too.
@@ -251,6 +314,11 @@ func (p *ProxyInstance) Calibrate(ctx context.Context, cfg CalibrationConfig) (*
 		TargetAddr: p.TargetAddr,
 		Probe:      probe,
 		Notes:      []Note{},
+	}
+	if releasedClients > 0 {
+		result.Notes = append(result.Notes, note("clientsReleased", fmt.Sprintf(
+			"%d client connection(s) were ended for the run and reconnect on their own", releasedClients),
+			map[string]int{"clients": releasedClients}))
 	}
 
 	// Spacing: walk down until the device starts failing. The last clean step

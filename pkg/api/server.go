@@ -1262,7 +1262,6 @@ func (s *Server) handleProxyCalibrate(w http.ResponseWriter, r *http.Request) {
 		Function uint8  `json:"function"`
 		Address  uint16 `json:"address"`
 		Quantity uint16 `json:"quantity"`
-		Force    bool   `json:"force"`
 	}
 	if err := decodeJSON(w, r, &req); err != nil {
 		writeJSONDecodeError(w, err)
@@ -1297,7 +1296,6 @@ func (s *Server) handleProxyCalibrate(w http.ResponseWriter, r *http.Request) {
 			Address:  req.Address,
 			Quantity: req.Quantity,
 		},
-		Force: req.Force,
 	})
 	if err != nil {
 		// A refusal is meant to be read by whoever pressed the button, so it

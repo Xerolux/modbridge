@@ -229,8 +229,11 @@ Wogegen der Lauf abgesichert ist:
 - **Nur Lesezugriffe.** Nie ein Schreibzugriff.
 - Er wiederholt ein Register, das ein Client ohnehin abfragt — der Proxy merkt
   sich den letzten Lesezugriff. Alternativ gibst du ein Register vor.
-- Er startet nicht, solange Clients verbunden sind, und hält neue für die Dauer
-  ab: deren Verkehr würde die Messung verfälschen und umgekehrt.
+- Er trennt verbundene Clients für die Dauer und hält neue ab: deren Verkehr
+  würde die Messung verfälschen und umgekehrt. Niemand kann einen Regler auf
+  Zuruf für 90 Sekunden abstecken, also macht es der Proxy — eine Anfrage, die
+  gerade unterwegs ist, wird noch beantwortet, und die Clients verbinden sich
+  danach von selbst wieder.
 - Er gibt vorher die Pool-Verbindung frei und pausiert den Health-Check — ein
   Gerät mit nur einer Modbus-Sitzung lässt sich sonst nicht messen, weil der
   Proxy selbst diese Sitzung hält.

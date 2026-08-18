@@ -130,8 +130,12 @@ Führt folgende Schritte aus:
 
 Optional lässt sich das Probe-Register vorgeben (`unit_id`, `function`,
 `address`, `quantity`); ohne Angabe wird der letzte Lesezugriff wiederholt, den
-der Proxy gesehen hat. `force: true` misst auch bei verbundenen Clients — das
-verfälscht die Messung und ist nur für Testaufbauten gedacht.
+der Proxy gesehen hat.
+
+Verbundene Clients werden zu Beginn getrennt: Wer gerade auf eine Antwort
+wartet, bekommt sie noch, danach gibt der Proxy die Verbindung zurück. Die
+Clients verbinden sich nach dem Lauf von selbst wieder. Wie viele es waren,
+steht als Hinweis im Bericht.
 
 Die Antwort enthält jede gemessene Stufe (Abstand, Fehlerquote, p50/p95), die
 Ergebnisse für parallele Verbindungen, die empfohlenen Werte und Hinweise im
