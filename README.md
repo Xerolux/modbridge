@@ -262,8 +262,8 @@ modbridge logs | grep -i password
 |---|---|
 | ![Dashboard](./docs/assets/screenshots/dashboard.png) | ![Proxy-Steuerung](./docs/assets/screenshots/proxies.png) |
 | **Dashboard** — Zustand aller Proxys auf einen Blick | **Steuerung** — Proxys anlegen, starten, gruppieren |
-| ![Proxy bearbeiten](./docs/assets/screenshots/proxy-dialog.png) | ![Gerät vermessen](./docs/assets/screenshots/calibration-panel.png) |
-| **Proxy-Dialog** — Profil, Abstand, Cache, Protokoll | **Vermessen** — misst das Gerät, statt Werte zu raten |
+| ![Proxy bearbeiten](./docs/assets/screenshots/proxy-dialog.png) | ![Letzte Messung](./docs/assets/screenshots/calibration-report.png) |
+| **Proxy-Dialog** — Profil, Abstand, Cache, Protokoll | **Messbericht** — jeder Schritt nachvollziehbar, Übernahme auf Klick |
 
 Weitere Ansichten — Geräte, Logs, dunkles Design und Handy-Format — im
 [Wiki](https://github.com/Xerolux/modbridge/wiki/Images).

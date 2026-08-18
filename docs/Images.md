@@ -54,6 +54,19 @@ gespeicherte Bericht zurück, ohne dass erneut gemessen werden muss.
 
 ![Kalibrierung im Proxy-Dialog](assets/screenshots/calibration-panel.png)
 
+### Letzte Messung
+
+Der gespeicherte Bericht: jeder Abstandsschritt mit Fehlerquote und Laufzeiten,
+die geprüften Verbindungsstufen, und darunter in Worten, was daraus folgt. Hier
+verträgt das Gerät 50 ms und bekommt 100 ms empfohlen; bei 25 ms verwirft es
+Anfragen, und eine zweite parallele Sitzung bedient es nicht.
+
+Der Bericht bleibt beim Proxy erhalten, damit niemand eine Messung wiederholen
+muss, nur um sie noch einmal zu lesen — und **Werte übernehmen** ist ein eigener
+Klick, gemessen wird, entschieden wirst du.
+
+![Gespeicherter Messbericht](assets/screenshots/calibration-report.png)
+
 ### Geräte
 
 Welche Clients sich verbunden haben, wann zuletzt, und über welchen Proxy.
