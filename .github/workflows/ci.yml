@@ -24,6 +24,56 @@ env:
   NODE_VERSION: '24'
 
 jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      next: ${{ steps.compute.outputs.next }}
+      stamp: ${{ steps.compute.outputs.stamp }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # The release binaries used to be stamped with github.ref_name, and the
+      # auto-release runs on a push to main — so every published binary called
+      # itself "main" and nobody could tell which version they were running.
+      # The number is decided here, once, and both the builds and the release
+      # use it.
+      - name: Decide the version this run carries
+        id: compute
+        run: |
+          git fetch --tags --force
+          CURRENT=$(tr -d '[:space:]' < version.txt)
+          if [[ ! "$CURRENT" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "Invalid version in version.txt: ${CURRENT}"
+            exit 1
+          fi
+          IFS='.' read -r MAJOR MINOR PATCH BUILD <<< "$CURRENT"
+          BUILD=${BUILD:-0}
+          BUILD=$((BUILD + 1))
+          NEXT="${MAJOR}.${MINOR}.${PATCH}.${BUILD}"
+          while git rev-parse -q --verify "refs/tags/v${NEXT}" >/dev/null; do
+            BUILD=$((BUILD + 1))
+            NEXT="${MAJOR}.${MINOR}.${PATCH}.${BUILD}"
+          done
+
+          # What the binary calls itself: the version about to be released on a
+          # push to main, the tag when built from one, and otherwise a name that
+          # says plainly this is not a release.
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            STAMP="$NEXT"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            STAMP="${{ github.ref_name }}"
+          else
+            STAMP="dev-${{ github.ref_name }}"
+          fi
+
+          echo "next=${NEXT}"   >> $GITHUB_OUTPUT
+          echo "stamp=${STAMP}" >> $GITHUB_OUTPUT
+          echo "This run builds ${STAMP}; a release from it would be v${NEXT}"
+
   quality:
     name: Code Quality
     runs-on: ubuntu-latest
@@ -180,7 +230,7 @@ jobs:
   build-binaries:
     name: Build (${{ matrix.suffix }})
     runs-on: ubuntu-latest
-    needs: [quality, test, build-frontend]
+    needs: [version, quality, test, build-frontend]
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -227,7 +277,7 @@ jobs:
           CC: ${{ matrix.cc }}
         run: |
           go build \
-            -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
+            -ldflags="-s -w -X main.Version=${{ needs.version.outputs.stamp }}" \
             -trimpath \
             -o "modbridge-${{ matrix.suffix }}" \
             .
@@ -241,7 +291,7 @@ jobs:
   build-headless:
     name: Headless (${{ matrix.suffix }})
     runs-on: ubuntu-latest
-    needs: [quality, test]
+    needs: [version, quality, test]
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -286,7 +336,7 @@ jobs:
           CC: ${{ matrix.cc }}
         run: |
           go build \
-            -ldflags="-s -w -X main.Version=${{ github.ref_name == 'main' && 'dev' || github.ref_name }}" \
+            -ldflags="-s -w -X main.Version=${{ needs.version.outputs.stamp }}" \
             -trimpath \
             -o "modbridge-${{ matrix.suffix }}" \
             ./cmd/modbridge-headless
@@ -308,7 +358,7 @@ jobs:
     # release. Its result stays visible as a red check on main; it just no
     # longer holds the tag hostage. Everything that can be trusted to be
     # deterministic still gates: compile, vet, unit tests, all binaries.
-    needs: [quality, test, build-frontend, build-binaries, build-headless]
+    needs: [version, quality, test, build-frontend, build-binaries, build-headless]
     timeout-minutes: 15
     permissions:
       contents: write
@@ -323,29 +373,23 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Bump version
+      # The number was decided by the version job, and the binaries waiting to
+      # be published carry it. Recomputing it here would risk publishing a tag
+      # the binaries do not agree with, so this only records what was decided.
+      - name: Record the version
         id: bump
         run: |
+          NEW_VERSION="${{ needs.version.outputs.next }}"
+          TAG="v${NEW_VERSION}"
           git fetch --tags --force
-          CURRENT=$(tr -d '[:space:]' < version.txt)
-          IFS='.' read -r MAJOR MINOR PATCH BUILD <<< "$CURRENT"
-          if [[ ! "$CURRENT" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "Invalid version in version.txt: ${CURRENT}"
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "::error::${TAG} already exists — the binaries of this run are stamped ${NEW_VERSION}, so publishing under another tag would mislabel them. Push to main again to build a fresh version."
             exit 1
           fi
-          BUILD=${BUILD:-0}
-          BUILD=$((BUILD + 1))
-          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}.${BUILD}"
-          TAG="v${NEW_VERSION}"
-          while git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; do
-            BUILD=$((BUILD + 1))
-            NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}.${BUILD}"
-            TAG="v${NEW_VERSION}"
-          done
           echo "$NEW_VERSION" > version.txt
           echo "version=${NEW_VERSION}" >> $GITHUB_OUTPUT
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "Bumping ${CURRENT} -> ${NEW_VERSION} (${TAG})"
+          echo "Releasing ${NEW_VERSION} (${TAG})"
 
       - name: Commit version bump & tag
         run: |
