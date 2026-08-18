@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -1228,6 +1229,19 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// writeCalibrationRefusal answers with a refusal the interface can translate:
+// a code and its numbers, plus the English sentence for anything reading the
+// API directly or showing a code it does not know yet.
+func (s *Server) writeCalibrationRefusal(w http.ResponseWriter, status int, code, text string, args map[string]int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"error": map[string]interface{}{"code": code, "args": args, "text": text},
+	}); err != nil {
+		s.log.Error("API", fmt.Sprintf("Failed to encode calibration refusal: %v", err))
+	}
+}
+
 // handleProxyCalibrate measures what a target device tolerates and reports the
 // result. It changes nothing: applying the recommendation stays a deliberate
 // act by whoever reads it.
@@ -1255,19 +1269,20 @@ func (s *Server) handleProxyCalibrate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.ID == "" {
-		http.Error(w, "proxy id is required", http.StatusBadRequest)
+		s.writeCalibrationRefusal(w, http.StatusBadRequest, "proxyIdRequired", "proxy id is required", nil)
 		return
 	}
 
 	instance, ok := s.mgr.GetProxyInstance(req.ID)
 	if !ok {
-		http.Error(w, "proxy not found", http.StatusNotFound)
+		s.writeCalibrationRefusal(w, http.StatusNotFound, "proxyNotFound", "proxy not found", nil)
 		return
 	}
 
 	// Two runs against one device would measure each other.
 	if !proxy.TryLockCalibration(req.ID) {
-		http.Error(w, "a calibration run is already in progress for this proxy", http.StatusConflict)
+		s.writeCalibrationRefusal(w, http.StatusConflict, "alreadyRunning",
+			"a calibration run is already in progress for this proxy", nil)
 		return
 	}
 	defer proxy.UnlockCalibration(req.ID)
@@ -1285,7 +1300,14 @@ func (s *Server) handleProxyCalibrate(w http.ResponseWriter, r *http.Request) {
 		Force: req.Force,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		// A refusal is meant to be read by whoever pressed the button, so it
+		// travels as a code the interface can say in their language.
+		var refusal *proxy.CalibrationError
+		if errors.As(err, &refusal) {
+			s.writeCalibrationRefusal(w, http.StatusBadRequest, refusal.Code, refusal.Text, refusal.Args)
+			return
+		}
+		s.writeCalibrationRefusal(w, http.StatusBadRequest, "", err.Error(), nil)
 		return
 	}
 

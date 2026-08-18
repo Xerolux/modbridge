@@ -465,7 +465,7 @@ import { useAuthStore } from '../stores/auth';
 import { deviceCategories, findDeviceProfile } from '../deviceProfiles';
 
 const auth = useAuthStore();
-const { t } = useI18n();
+const { t, te } = useI18n();
 const proxies = ref([]);
 const loading = ref(true);
 const editMode = ref(false);
@@ -574,6 +574,19 @@ const calibrationProgress = computed(() =>
     Math.min(97, Math.round((calibrationElapsed.value / calibrationMaxSeconds) * 100))
 );
 
+// A refused run is meant to be read by whoever pressed the button, so the
+// server sends a code and its numbers and the sentence is built here. Older
+// servers answer with plain text; that is shown as it comes.
+const calibrationRefusal = (e) => {
+    const payload = e.response?.data;
+    const refusal = payload && typeof payload === 'object' ? payload.error : null;
+    if (refusal?.code) {
+        const key = `control.form.calibrateRefusals.${refusal.code}`;
+        if (te(key)) return t(key, refusal.args || {});
+    }
+    return refusal?.text || (typeof payload === 'string' && payload) || e.message;
+};
+
 const runCalibration = async () => {
     calibrating.value = true;
     calibrationResult.value = null;
@@ -604,7 +617,7 @@ const runCalibration = async () => {
         toast.add({
             severity: 'error',
             summary: t('common.error'),
-            detail: e.response?.data || e.message,
+            detail: calibrationRefusal(e),
             life: 8000
         });
     } finally {

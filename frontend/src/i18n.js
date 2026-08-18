@@ -298,6 +298,14 @@ const de = {
         connectionsRefused: '{connections} parallele Verbindungen ergaben {errors} Fehler — so viele Sitzungen bedient das Gerät nicht.',
         singleConnectionErrors: 'Das Gerät verwarf {errors} von {requests} Anfragen auf einer einzigen Verbindung — prüfe Gerät und Verbindung; es bleibt bei einer Sitzung.'
       },
+      calibrateRefusals: {
+        proxyNotRunning: 'Der Proxy läuft nicht — starte ihn, bevor du misst.',
+        clientsConnected: '{clients} Client(s) verbunden: ihr Verkehr würde die Messung verfälschen und von ihr verfälscht werden. Trenne sie und miss erneut.',
+        noProbeKnown: 'Noch keine Leseanfrage gesehen und keine angegeben: lass einen Client einmal abfragen oder nenne ein Register zum Antasten.',
+        proxyIdRequired: 'Kein Proxy angegeben.',
+        proxyNotFound: 'Proxy nicht gefunden.',
+        alreadyRunning: 'Für diesen Proxy läuft bereits eine Messung.'
+      },
       calibrateGap: 'Abstand',
       calibrateConnections: 'Verbindungen',
       calibrateShowLast: 'Letzte Messung ansehen',
@@ -787,6 +795,14 @@ const en = {
         stoppedBeforeConnections: 'Stopped before measuring more parallel connections; keeping the safe single session.',
         connectionsRefused: '{connections} parallel connection(s) produced {errors} error(s) — the device does not serve that many sessions.',
         singleConnectionErrors: 'The device failed {errors} of {requests} requests on a single connection — check the device or the link; keeping one session.'
+      },
+      calibrateRefusals: {
+        proxyNotRunning: 'The proxy is not running — start it before measuring.',
+        clientsConnected: '{clients} client(s) connected: their traffic would distort the measurement and be distorted by it. Disconnect them and measure again.',
+        noProbeKnown: 'No read request observed yet and none supplied: let a client poll once, or name a register to probe.',
+        proxyIdRequired: 'No proxy given.',
+        proxyNotFound: 'Proxy not found.',
+        alreadyRunning: 'A measurement is already running for this proxy.'
       },
       calibrateGap: 'Spacing',
       calibrateConnections: 'Connections',

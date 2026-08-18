@@ -107,6 +107,22 @@ type Note struct {
 // window blames parallelism for a handover.
 const sessionReleaseGrace = 300 * time.Millisecond
 
+// CalibrationError is a refusal a person is meant to read. Like a Note it
+// carries a code and its numbers rather than a finished sentence: the interface
+// speaks the operator's language, and a run refused in English inside a German
+// dialog is the same fault as a note in English there.
+type CalibrationError struct {
+	Code string
+	Args map[string]int
+	Text string
+}
+
+func (e *CalibrationError) Error() string { return e.Text }
+
+func refuse(code, text string, args map[string]int) error {
+	return &CalibrationError{Code: code, Args: args, Text: text}
+}
+
 // note builds a Note; the English sentence is written at the call site so the
 // code and its wording stay next to each other.
 func note(code, text string, args map[string]int) Note {
@@ -174,17 +190,20 @@ func (p *ProxyInstance) Calibrate(ctx context.Context, cfg CalibrationConfig) (*
 	cfg.applyDefaults()
 
 	if p.Stats.GetStatus() != "Running" {
-		return nil, fmt.Errorf("proxy is not running")
+		return nil, refuse("proxyNotRunning", "proxy is not running", nil)
 	}
 	if active := p.Stats.ActiveConns.Load(); active > 0 && !cfg.Force {
-		return nil, fmt.Errorf("%d client(s) connected: their traffic would distort the measurement and be distorted by it", active)
+		return nil, refuse("clientsConnected", fmt.Sprintf(
+			"%d client(s) connected: their traffic would distort the measurement and be distorted by it", active),
+			map[string]int{"clients": int(active)})
 	}
 
 	probe := cfg.Probe
 	if !probe.Valid() {
 		observed, ok := p.LastObservedRead()
 		if !ok {
-			return nil, fmt.Errorf("no read request observed yet and none supplied: let a client poll once, or name a register to probe")
+			return nil, refuse("noProbeKnown",
+				"no read request observed yet and none supplied: let a client poll once, or name a register to probe", nil)
 		}
 		probe = observed
 	}
