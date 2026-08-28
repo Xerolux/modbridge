@@ -245,20 +245,42 @@ func (m *Manager) Load() error {
 	return nil
 }
 
+// writeConfigFile persists the config atomically: it writes to a temp file,
+// fsyncs it, and renames it over the target. A crash mid-write would
+// otherwise truncate config.json in place, and the next successful save
+// would permanently overwrite the operator's config with compiled defaults.
+func (m *Manager) writeConfigFile() error {
+	tmp := m.path + ".tmp"
+	f, err := os.Create(tmp)
+	if err != nil {
+		return err
+	}
+
+	enc := json.NewEncoder(f)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(m.cfg); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, m.path)
+}
+
 // Save writes config to disk.
 func (m *Manager) Save() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	f, err := os.Create(m.path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	enc := json.NewEncoder(f)
-	enc.SetIndent("", "  ")
-	return enc.Encode(m.cfg)
+	return m.writeConfigFile()
 }
 
 func (m *Manager) Get() Config {
@@ -328,16 +350,7 @@ func (m *Manager) Update(fn func(*Config) error) error {
 	m.cfg = newCfg
 
 	// Save to disk immediately
-	f, err := os.Create(m.path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	enc := json.NewEncoder(f)
-	enc.SetIndent("", "  ")
-
-	return enc.Encode(m.cfg)
+	return m.writeConfigFile()
 }
 
 // CanRollback reports whether a previous config snapshot is available.
@@ -361,15 +374,7 @@ func (m *Manager) Rollback() error {
 	m.previous = nil // consume the snapshot
 	m.cfg = restored
 
-	f, err := os.Create(m.path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	enc := json.NewEncoder(f)
-	enc.SetIndent("", "  ")
-	return enc.Encode(m.cfg)
+	return m.writeConfigFile()
 }
 
 // Validate validates the current configuration

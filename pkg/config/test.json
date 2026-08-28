@@ -2,7 +2,7 @@
   "web_port": ":8080",
   "admin_pass_hash": "",
   "force_password_change": false,
-  "multi_user": false,
+  "multi_user": true,
   "proxies": [
     {
       "id": "1",
@@ -16,6 +16,7 @@
       "max_retries": 0,
       "description": "",
       "max_read_size": 0,
+      "connect_delay_ms": 0,
       "tags": null,
       "protocol": ""
     }

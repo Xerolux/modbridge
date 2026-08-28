@@ -521,8 +521,18 @@ func (s *Server) multiUserEnabled() bool {
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	proxies := []map[string]interface{}{}
-	if s.mgr != nil {
-		proxies = s.mgr.GetProxies()
+	// The endpoint is public (the login page reads setup_required and
+	// multi_user from it), so only include the proxy inventory — target IPs,
+	// names, and traffic counters — for callers holding a session with
+	// proxy-view permission.
+	if s.mgr != nil && s.auth != nil {
+		if cookie, err := r.Cookie("session_token"); err == nil {
+			if session := s.auth.GetSession(cookie.Value); session != nil {
+				if rbac.HasPermission(rbac.Role(session.Role), rbac.PermProxyView) {
+					proxies = s.mgr.GetProxies()
+				}
+			}
+		}
 	}
 	status := map[string]interface{}{
 		"setup_required": false,

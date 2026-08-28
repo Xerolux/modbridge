@@ -219,7 +219,12 @@ func (s *Server) handleSystemConfig(w http.ResponseWriter, r *http.Request) {
 			c.EmailFrom = req.EmailFrom
 			c.EmailTo = req.EmailTo
 			c.EmailUsername = req.EmailUsername
-			c.EmailPassword = req.EmailPassword
+			// The GET handler sanitizes EmailPassword to "", so a normal
+			// "save settings" round-trip sends an empty value back. Only
+			// overwrite the stored secret when the client actually sends one.
+			if req.EmailPassword != "" {
+				c.EmailPassword = req.EmailPassword
+			}
 			c.EmailAlertOnError = req.EmailAlertOnError
 			c.EmailAlertOnWarning = req.EmailAlertOnWarning
 			c.BackupEnabled = req.BackupEnabled

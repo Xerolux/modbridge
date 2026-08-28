@@ -350,14 +350,24 @@ func (p *Pool) PreWarm(ctx context.Context, count int) error {
 			conn.Close()
 			return ErrPoolClosed
 		}
+		// Re-check capacity under the lock: concurrent Get() calls may have
+		// created connections since `available` was computed.
+		if p.size >= p.maxSize {
+			p.mu.Unlock()
+			conn.Close()
+			continue
+		}
 		pc := &poolConn{
 			conn:     conn,
 			lastUsed: time.Now(),
 		}
 		p.size++
-		p.mu.Unlock()
-
+		// Send under the mutex: Close() also runs under it, so the channel
+		// cannot be closed between the check and the send (send-on-closed
+		// panics kill the process). The send cannot block: the buffer holds
+		// cap == maxSize slots and size <= maxSize.
 		p.conns <- pc
+		p.mu.Unlock()
 	}
 
 	return firstErr
@@ -388,25 +398,25 @@ func (p *Pool) cleanup() {
 			p.mu.Unlock()
 			return
 		}
-		p.mu.Unlock()
-
+		// Drain and requeue under the mutex so Close() cannot race us:
+		// a send on the closed channel would panic, and a receive on a
+		// closed+empty channel yields a nil pc.
 		count := len(p.conns)
+	drain:
 		for i := 0; i < count; i++ {
 			select {
 			case pc := <-p.conns:
 				if time.Since(pc.lastUsed) > p.maxIdleTime {
 					pc.conn.Close()
-					p.mu.Lock()
 					p.size--
-					p.mu.Unlock()
 				} else {
 					p.conns <- pc
 				}
 			default:
-				goto done
+				break drain
 			}
 		}
-	done:
+		p.mu.Unlock()
 	}
 }
 

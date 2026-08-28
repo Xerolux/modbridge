@@ -79,7 +79,7 @@ func bootstrapUsers(userMgr *users.Manager, cfg config.Config, l *logger.Logger)
 			l.Error("SYSTEM", fmt.Sprintf("bootstrap: could not set MustChangePassword: %v", err))
 		}
 	}
-	l.Info("SYSTEM", "Bestehendes Admin-Passwort migriert (Benutzername: admin).")
+	l.Info("SYSTEM", "Existing admin password migrated (username: admin).")
 	log.Println("SYSTEM: Existing admin password migrated (username: admin).")
 }
 
@@ -332,7 +332,7 @@ func main() {
 	defer cancel()
 
 	// Stop all proxies
-	mgr.StopAll()
+	mgr.Shutdown()
 
 	// Stop API background goroutines
 	apiServer.Stop()

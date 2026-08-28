@@ -150,7 +150,7 @@ func runServer(configFile string, port int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	mgr.StopAll()
+	mgr.Shutdown()
 
 	if err := server.Shutdown(ctx); err != nil {
 		log.Printf("Server forced to shutdown: %v", err)

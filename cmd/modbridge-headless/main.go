@@ -124,7 +124,7 @@ func main() {
 		shutCancel()
 	}
 
-	mgr.StopAll()
+	mgr.Shutdown()
 
 	log.Println("Stopped.")
 	l.Info("HEADLESS", "All proxies stopped. Goodbye.")

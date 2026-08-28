@@ -132,16 +132,22 @@ func (m *Manager) AddProxy(cfg config.ProxyConfig, save bool) error {
 
 // RemoveProxy removes a proxy.
 func (m *Manager) RemoveProxy(id string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	p, ok := m.proxies[id]
+	m.mu.RUnlock()
 
-	if _, ok := m.proxies[id]; !ok {
+	if !ok {
 		return fmt.Errorf("proxy not found")
 	}
 
-	p := m.proxies[id]
+	// Stop outside the lock: Stop() can block on lingering client
+	// connections, and holding m.mu across it would freeze every manager
+	// read (status, proxies list, metrics) for that duration.
 	p.Stop()
+
+	m.mu.Lock()
 	delete(m.proxies, id)
+	m.mu.Unlock()
 
 	// Broadcast event
 	m.broadcaster.Broadcast(map[string]interface{}{
@@ -313,9 +319,6 @@ func (m *Manager) UpdateProxy(cfg config.ProxyConfig) error {
 	// Stop the old proxy without holding the lock
 	old.Stop()
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	// Create new proxy with updated config
 	p := proxy.NewProxyInstance(cfg.ID, cfg.Name, cfg.ListenAddr, cfg.TargetAddr, cfg.MaxReadSize, cfg.ConnectionTimeout, cfg.ReadTimeout, cfg.MaxRetries, m.log, m.deviceTracker)
 	if cfg.Protocol != "" {
@@ -340,21 +343,31 @@ func (m *Manager) UpdateProxy(cfg config.ProxyConfig) error {
 	if cfg.PollIntervalMs > 0 {
 		p.PollInterval = time.Duration(cfg.PollIntervalMs) * time.Millisecond
 	}
-	m.proxies[cfg.ID] = p
 
-	// Start if it was enabled and not paused
+	// Start outside the lock: Start() pre-warms the pool with a synchronous
+	// dial to the target (up to the connection timeout) and would block all
+	// manager reads if the target is unreachable.
+	var startErr error
 	if cfg.Enabled && !cfg.Paused {
-		if err := p.Start(); err != nil {
-			return fmt.Errorf("proxy %s failed to start after update: %w", cfg.ID, err)
-		}
+		startErr = p.Start()
+	}
+
+	m.mu.Lock()
+	m.proxies[cfg.ID] = p
+	m.mu.Unlock()
+
+	if startErr != nil {
+		return fmt.Errorf("proxy %s failed to start after update: %w", cfg.ID, startErr)
 	}
 
 	// Broadcast event
+	m.mu.RLock()
 	m.broadcaster.Broadcast(map[string]interface{}{
 		"type":      "proxy_updated",
 		"timestamp": time.Now(),
 		"proxy":     m.getProxyStatusLocked(cfg.ID),
 	})
+	m.mu.RUnlock()
 
 	// Update config
 	return m.cfgMgr.Update(func(c *config.Config) error {
@@ -484,10 +497,12 @@ func (m *Manager) GetProxies() []map[string]interface{} {
 	return res
 }
 
-// StopAll stops all running proxies and cleans up resources.
+// StopAll stops all running proxies. It deliberately keeps the health
+// monitor and device tracker alive: StopAll is also used by routine bulk
+// actions (stop_all/restart_all, config import/rollback), and both helpers
+// are one-way — a stopped tracker silently drops all device persistence and
+// a stopped health monitor never comes back until the process restarts.
 func (m *Manager) StopAll() {
-	m.stopHealthMonitor()
-
 	m.mu.Lock()
 	var wg sync.WaitGroup
 	for _, p := range m.proxies {
@@ -502,6 +517,13 @@ func (m *Manager) StopAll() {
 	m.mu.Unlock()
 
 	wg.Wait()
+}
+
+// Shutdown stops everything the manager owns, including the one-way helpers
+// (health monitor, device tracker). Intended for process exit only.
+func (m *Manager) Shutdown() {
+	m.stopHealthMonitor()
+	m.StopAll()
 
 	m.mu.Lock()
 	m.deviceTracker.Stop()

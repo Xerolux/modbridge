@@ -108,6 +108,14 @@ func (rm *RecoveryManager) AddTask(target string, priority int) (string, error) 
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
+	// Prune terminal tasks so a flapping target cannot grow the map
+	// without bound; nothing else removes them in production.
+	for id, task := range rm.recoveryTasks {
+		if task.Status == StatusCompleted || task.Status == StatusFailed {
+			delete(rm.recoveryTasks, id)
+		}
+	}
+
 	taskID := fmt.Sprintf("recovery_%s_%d", target, time.Now().UnixNano())
 
 	task := &RecoveryTask{

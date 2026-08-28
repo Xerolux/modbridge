@@ -111,6 +111,12 @@ type ProxyInstance struct {
 	clientsMu   sync.Mutex            // Guards clients
 	clients     map[net.Conn]struct{} // Live client connections, so a measurement can hand the device back
 
+	// Registry of accepted client connections so Stop() can actively close
+	// them; without this, goroutines parked in ReadFrame on idle connections
+	// block wg.Wait() for the full 5-minute read deadline.
+	clientConns   map[net.Conn]struct{}
+	clientConnsMu sync.Mutex
+
 	log           *logger.Logger
 	deviceTracker *devices.Tracker
 	ctx           context.Context
@@ -202,6 +208,7 @@ func NewProxyInstance(id, name, listen, target string, maxReadSize, connectionTi
 	// Initialize the connection semaphore once so that a restart does not
 	// leave old connections holding a reference to a stale channel.
 	p.connSem = make(chan struct{}, p.MaxConns)
+	p.clientConns = make(map[net.Conn]struct{})
 	return p
 }
 
@@ -382,6 +389,15 @@ func (p *ProxyInstance) Stop() {
 	// Then cancel the context to signal goroutines to exit
 	p.cancel()
 
+	// Actively close all accepted client connections. Goroutines parked in
+	// ReadFrame on idle connections would otherwise block wg.Wait() below
+	// for up to the 5-minute read deadline.
+	p.clientConnsMu.Lock()
+	for conn := range p.clientConns {
+		conn.Close()
+	}
+	p.clientConnsMu.Unlock()
+
 	if p.connPool != nil {
 		p.connPool.Close()
 	}
@@ -515,6 +531,17 @@ func (p *ProxyInstance) liveClients() []net.Conn {
 func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 	defer p.wg.Done()
 	defer clientConn.Close()
+
+	// Register the connection so Stop() can force-close it and unblock a
+	// pending ReadFrame.
+	p.clientConnsMu.Lock()
+	p.clientConns[clientConn] = struct{}{}
+	p.clientConnsMu.Unlock()
+	defer func() {
+		p.clientConnsMu.Lock()
+		delete(p.clientConns, clientConn)
+		p.clientConnsMu.Unlock()
+	}()
 
 	// Release global connection counter
 	defer globalLimiter.release()
