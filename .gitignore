@@ -46,6 +46,10 @@ temp/
 # Build artifacts
 build/
 
+# Frontend build artifacts accidentally copied next to the README banner
+/assets/*
+!/assets/banner.png
+
 # SSH Keys (NEVER commit\!)
 modbridge_server
 modbridge_server.pub
