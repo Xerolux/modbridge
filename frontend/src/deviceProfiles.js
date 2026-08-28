@@ -188,15 +188,15 @@ export const deviceCategories = [
         id: 'generic',
         devices: [
             { id: 'standard', label: 'Standard', class: 'standard' },
-            { id: 'plc', label: 'SPS / PLC (Siemens, Beckhoff, WAGO)', class: 'multiSession' },
+            { id: 'plc', label: 'PLC (Siemens, Beckhoff, WAGO)', class: 'multiSession' },
             { id: 'rtuGateway', label: 'Modbus-TCP → RTU Gateway (Wago, Moxa, USR)', class: 'serialGateway' },
-            { id: 'rtuAdapter', label: 'Serieller Adapter (Waveshare, USR, Elfin)', class: 'rtuOverTcp', note: 'rawRtu' }
+            { id: 'rtuAdapter', label: 'Serial Adapter (Waveshare, USR, Elfin)', class: 'rtuOverTcp', note: 'rawRtu' }
         ]
     },
     {
         id: 'inverter',
         devices: [
-            { id: 'solaredge', label: 'SolarEdge (SunSpec, einzelner Wechselrichter)', class: 'singleSessionFast', note: 'haBudget' },
+            { id: 'solaredge', label: 'SolarEdge (SunSpec, single inverter)', class: 'singleSessionFast', note: 'haBudget' },
             { id: 'solaredgeMulti', label: 'SolarEdge Leader + Follower (mehrere Unit-IDs)', class: 'singleSessionSlow', note: 'relayed' },
             { id: 'sma', label: 'SMA (Speedwire / Modbus)', class: 'fewSessions' },
             { id: 'fronius', label: 'Fronius (Symo, GEN24)', class: 'fewSessions' },
@@ -213,7 +213,7 @@ export const deviceCategories = [
             { id: 'fimer', label: 'FIMER / ABB (VSN300)', class: 'singleSession' },
             { id: 'e3dc', label: 'E3/DC (S10)', class: 'fewSessions', note: 'enableFirst' },
             { id: 'victron', label: 'Victron GX / Venus OS', class: 'multiSession' },
-            { id: 'sunspecGeneric', label: 'SunSpec-Wechselrichter (allgemein)', class: 'singleSession' }
+            { id: 'sunspecGeneric', label: 'SunSpec Inverter (generic)', class: 'singleSession' }
         ]
     },
     {
@@ -224,7 +224,7 @@ export const deviceCategories = [
             { id: 'tecalor', label: 'Tecalor (ISG + Modbus)', class: 'singleSessionSlow', note: 'pollSlowly' },
             { id: 'nibeS', label: 'NIBE S-Serie', class: 'singleSession' },
             { id: 'nibeModbus40', label: 'NIBE F-Serie (MODBUS 40)', class: 'serialGateway', note: 'viaGateway' },
-            { id: 'lambda', label: 'Lambda Wärmepumpen', class: 'singleSession' },
+            { id: 'lambda', label: 'Lambda Heat Pumps', class: 'singleSession' },
             { id: 'waterkotte', label: 'Waterkotte (EcoTouch)', class: 'singleSessionSlow' },
             { id: 'ochsner', label: 'Ochsner (OTE)', class: 'singleSessionSlow' },
             { id: 'nilan', label: 'Nilan (CTS602)', class: 'serialGateway', note: 'viaGateway' },
@@ -272,7 +272,7 @@ export const deviceCategories = [
             { id: 'keba', label: 'KEBA P30 / P40', class: 'singleSession', note: 'singleClient' },
             { id: 'alfen', label: 'Alfen Eve', class: 'singleSessionSlow', note: 'singleClient' },
             { id: 'goE', label: 'go-e Charger', class: 'singleSession' },
-            { id: 'wallboxPulsar', label: 'Wallbox Pulsar Plus', class: 'singleSession' },
+            { id: 'wallboxPulsar', label: 'Wallbox Pulsar Plus (EV Charger)', class: 'singleSession' },
             { id: 'mennekes', label: 'MENNEKES AMTRON', class: 'singleSession' },
             { id: 'webasto', label: 'Webasto Live / Next', class: 'singleSession' },
             { id: 'abl', label: 'ABL eMH', class: 'serialGateway', note: 'viaGateway' },
