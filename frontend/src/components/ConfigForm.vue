@@ -8,10 +8,9 @@
             Proxy Studio
           </div>
           <div class="space-y-2">
-            <h2 class="text-2xl sm:text-3xl font-bold text-gradient">Glass WebUI mit Drag and Drop</h2>
+            <h2 class="text-2xl sm:text-3xl font-bold text-gradient">{{ t('configForm.heroTitle') }}</h2>
             <p class="max-w-2xl text-sm sm:text-base text-[var(--text-secondary)]">
-              Reordne Proxies per Drag-and-Drop, bearbeite Parameter direkt in Karten und speichere nur die Einträge,
-              die sich wirklich geändert haben.
+{{ t('configForm.heroSubtitle') }}
             </p>
           </div>
         </div>
@@ -42,13 +41,13 @@
         <div class="space-y-4">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 class="text-xl font-bold text-[var(--text-primary)]">Proxy-Liste</h3>
+              <h3 class="text-xl font-bold text-[var(--text-primary)]">{{ t('configForm.listTitle') }}</h3>
               <p class="text-sm text-[var(--text-muted)]">
-                Ziehe die Karten an der Griffleiste, um deine Arbeitsreihenfolge visuell zu organisieren.
+{{ t('configForm.listHint') }}
               </p>
             </div>
             <Button
-              label="Proxy hinzufügen"
+              :label="t('configForm.addProxy')"
               icon="pi pi-plus"
               @click="addProxy"
               class="w-full sm:w-auto"
@@ -59,9 +58,9 @@
             <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-white/5">
               <i class="pi pi-inbox text-2xl text-[var(--text-secondary)]"></i>
             </div>
-            <h4 class="text-lg font-semibold text-[var(--text-primary)]">Noch keine Proxies angelegt</h4>
+            <h4 class="text-lg font-semibold text-[var(--text-primary)]">{{ t('configForm.emptyTitle') }}</h4>
             <p class="mx-auto mt-2 max-w-md text-sm text-[var(--text-muted)]">
-              Lege deinen ersten Proxy an und verwalte danach Reihenfolge, Status und Zeitlimits direkt in dieser Oberfläche.
+{{ t('configForm.emptyHint') }}
             </p>
           </div>
 
@@ -89,7 +88,7 @@
                     <button
                       type="button"
                        class="proxy-drag-handle mt-1 flex h-11 w-11 items-center justify-center rounded-2xl border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-[var(--text-secondary)] transition hover:border-gray-400 dark:hover:border-white/20 hover:text-[var(--text-primary)]"
-                      title="Proxy verschieben"
+                      :title="t('configForm.moveProxy')"
                     >
                       <GripVerticalIcon class="h-5 w-5" />
                     </button>
@@ -100,9 +99,9 @@
                           <span class="status-dot" :class="statusDotClass(proxy.status)"></span>
                           {{ proxy.status || 'Draft' }}
                         </span>
-                        <span v-if="proxy._isNew" class="proxy-pill proxy-pill--info">Neu</span>
-                        <span v-if="proxy._isDirty" class="proxy-pill proxy-pill--warning">Geändert</span>
-                        <span class="proxy-pill">{{ normalizeTags(proxy).length }} Tags</span>
+                        <span v-if="proxy._isNew" class="proxy-pill proxy-pill--info">{{ t('configForm.pillNew') }}</span>
+                        <span v-if="proxy._isDirty" class="proxy-pill proxy-pill--warning">{{ t('configForm.pillChanged') }}</span>
+                        <span class="proxy-pill">{{ t('configForm.tagsCount', { n: normalizeTags(proxy).length }) }}</span>
                       </div>
                       <div>
                         <h4 class="text-lg font-semibold text-[var(--text-primary)]">
@@ -118,14 +117,14 @@
                   <div class="flex flex-wrap items-center gap-2">
                     <Button
                       v-if="proxy._isDirty || proxy._isNew"
-                      :label="proxy._isNew ? 'Erstellen' : 'Speichern'"
+                      :label="proxy._isNew ? t('configForm.create') : t('config.save')"
                       icon="pi pi-save"
                       @click.stop="saveProxy(proxy, index)"
                       :loading="store.isLoading && activeSaveKey === getProxyKey(proxy, index)"
                       size="small"
                     />
                     <Button
-                      :label="proxy._showAdvanced ? 'Weniger' : 'Mehr'"
+                      :label="proxy._showAdvanced ? t('configForm.showLess') : t('configForm.showMore')"
                       :icon="proxy._showAdvanced ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
                       severity="secondary"
                       text
@@ -163,8 +162,8 @@
                   </div>
 
                   <div class="field-group xl:col-span-6">
-                    <label>Beschreibung</label>
-                    <input v-model="proxy.description" type="text" placeholder="Optionaler Hinweis zur Anlage" @input="markDirty(proxy, index)" />
+                    <label>{{ t('config.description') }}</label>
+                    <input v-model="proxy.description" type="text" :placeholder="t('configForm.descriptionPlaceholder')" @input="markDirty(proxy, index)" />
                   </div>
 
                   <div class="field-group xl:col-span-6">
@@ -182,11 +181,11 @@
                   <div class="flex flex-wrap gap-3">
                     <label class="toggle-chip">
                       <input type="checkbox" v-model="proxy.enabled" @change="markDirty(proxy, index)" />
-                      <span>Aktiviert</span>
+                      <span>{{ t('config.enabled') }}</span>
                     </label>
                     <label class="toggle-chip">
                       <input type="checkbox" v-model="proxy.paused" @change="markDirty(proxy, index)" />
-                      <span>Pausiert</span>
+                      <span>{{ t('configForm.paused') }}</span>
                     </label>
                   </div>
 
@@ -195,7 +194,7 @@
                       {{ tag }}
                     </span>
                     <span v-if="normalizeTags(proxy).length === 0" class="text-xs text-[var(--text-muted)]">
-                      Keine Tags gesetzt
+                      {{ t('configForm.noTags') }}
                     </span>
                   </div>
                 </div>
@@ -266,7 +265,7 @@
           <div class="side-card rounded-[24px] p-5">
             <div class="space-y-3">
               <div>
-                <p class="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Web Interface</p>                <h3 class="mt-1 text-xl font-bold text-[var(--text-primary)]">Port und Zugriff</h3>
+                <p class="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">{{ t('configForm.webInterface') }}</p>                <h3 class="mt-1 text-xl font-bold text-[var(--text-primary)]">{{ t('configForm.portTitle') }}</h3>
               </div>
               <div class="field-group">
                 <label>Web Interface Address</label>
@@ -278,7 +277,7 @@
                     placeholder=":8080"
                   >
                   <Button
-                    label="Speichern"
+                    :label="t('config.save')"
                     icon="pi pi-check"
                     @click="savePort"
                     :loading="store.isLoading"
@@ -286,26 +285,26 @@
                 </div>
               </div>
               <p class="text-sm text-[var(--text-muted)]">
-                Eine Port-Änderung benötigt einen Neustart des Dienstes. Die Eingabe akzeptiert `:8080` oder `host:8080`.
+                {{ t('configForm.portHint') }}
               </p>
             </div>
           </div>
 
           <div class="side-card rounded-[24px] p-5">
             <div class="space-y-3">
-              <h3 class="text-xl font-bold text-[var(--text-primary)]">Workflow</h3>
+              <h3 class="text-xl font-bold text-[var(--text-primary)]">{{ t('configForm.workflowTitle') }}</h3>
               <ol class="space-y-3 text-sm text-[var(--text-secondary)]">
                 <li class="workflow-step">
                   <span class="workflow-badge">1</span>
-                  Karten verschieben, um deine bevorzugte Arbeitsreihenfolge zu setzen.
+                  {{ t('configForm.workflow1') }}
                 </li>
                 <li class="workflow-step">
                   <span class="workflow-badge">2</span>
-                  Änderungen pro Karte prüfen und nur betroffene Einträge speichern.
+                  {{ t('configForm.workflow2') }}
                 </li>
                 <li class="workflow-step">
                   <span class="workflow-badge">3</span>
-                  Erweiterte Timeout- und Retry-Werte bei Bedarf ausklappen.
+                  {{ t('configForm.workflow3') }}
                 </li>
               </ol>
             </div>
@@ -319,6 +318,7 @@
 
 <script setup>
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import Button from 'primevue/button';
 import ConfirmDialog from 'primevue/confirmdialog';
 import { useConfirm } from 'primevue/useconfirm';
@@ -327,6 +327,7 @@ import GripVerticalIcon from './icons/GripVertical.vue';
 import { useAppStore } from '../stores/appStore';
 import validators from '../utils/validators';
 
+const { t } = useI18n();
 const store = useAppStore();
 const confirm = useConfirm();
 
@@ -405,8 +406,8 @@ const removeProxy = async (id, index) => {
   }
 
   confirm.require({
-    message: 'Möchtest du diesen Proxy wirklich entfernen?',
-    header: 'Proxy entfernen',
+    message: t('configForm.confirmRemoveMessage'),
+    header: t('configForm.confirmRemoveHeader'),
     icon: 'pi pi-exclamation-triangle',
     accept: async () => {
       await store.deleteProxy(id);
@@ -440,7 +441,7 @@ const saveProxy = async (proxy, index) => {
   if (success) {
     activeProxyKey.value = null;
     // Refetch to drop transient flags (_isDirty/_isNew) and restore the
-    // canonical server state; otherwise the card stays stuck on "Geändert".
+    // canonical server state; otherwise the card stays stuck on "Changed".
     await store.fetchProxies();
   }
 
@@ -449,8 +450,8 @@ const saveProxy = async (proxy, index) => {
 
 const savePort = async () => {
   confirm.require({
-    message: 'Eine Port-Änderung erfordert einen Neustart. Fortfahren?',
-    header: 'Port speichern',
+    message: t('configForm.confirmPortMessage'),
+    header: t('configForm.confirmPortHeader'),
     icon: 'pi pi-exclamation-triangle',
     accept: async () => {
       await store.saveWebPort(store.webPort);

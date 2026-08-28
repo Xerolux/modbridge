@@ -3,8 +3,10 @@ import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useEventSource } from '../utils/eventSource';
 import axios from '../axios.js';
 import { formatDateTime, getLogLevelColor } from '../utils/helpers';
+import { useI18n } from 'vue-i18n';
 
 const logs = ref([]);
+const { t } = useI18n();
 const isConnected = ref(false);
 const autoScroll = ref(localStorage.getItem('logsAutoScroll') !== 'false');
 const logsContainer = ref(null);
@@ -122,7 +124,7 @@ watch(logs, (newVal) => {
             title="Logs neu laden"
           >
             <i class="pi pi-refresh text-sm"></i>
-            <span>Aktualisieren</span>
+            <span>{{ t('logs.refresh') }}</span>
           </button>
         </div>
       </div>
@@ -134,7 +136,7 @@ watch(logs, (newVal) => {
         <div class="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-[var(--bg-panel-item)] border border-[var(--border-subtle)]">
           <i class="pi pi-spin pi-spinner text-3xl text-[var(--accent)]"></i>
         </div>
-        <p class="text-[var(--text-secondary)] text-sm">Logs werden geladen…</p>
+        <p class="text-[var(--text-secondary)] text-sm">{{ t('logs.loading') }}</p>
       </div>
     </div>
 
@@ -144,8 +146,8 @@ watch(logs, (newVal) => {
         <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--bg-panel-item)] border border-[var(--border-subtle)]">
           <i class="pi pi-inbox text-2xl text-[var(--text-muted)]"></i>
         </div>
-        <h3 class="text-lg font-semibold text-[var(--text-primary)]">Keine Logs vorhanden</h3>
-        <p class="mt-2 text-sm text-[var(--text-muted)] max-w-sm">Es wurden noch keine Log-Einträge empfangen.</p>
+        <h3 class="text-lg font-semibold text-[var(--text-primary)]">{{ t('logs.emptyTitle') }}</h3>
+        <p class="mt-2 text-sm text-[var(--text-muted)] max-w-sm">{{ t('logs.emptyHint') }}</p>
       </div>
     </div>
 

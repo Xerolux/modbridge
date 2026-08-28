@@ -31,8 +31,8 @@
     <div v-else-if="error" class="flex justify-center min-h-[500px]">
       <div class="text-center">
         <i class="pi pi-exclamation-triangle text-4xl text-red-500"></i>
-        <p class="mt-4 text-red-400">Fehler: {{ error }}</p>
-        <Button @click="fetchDevices" label="Erneut versuchen" class="mt-4" />
+        <p class="mt-4 text-red-400">{{ t('common.error') }}: {{ error }}</p>
+        <Button @click="fetchDevices" :label="t('common.retry')" class="mt-4" />
       </div>
     </div>
 
@@ -75,17 +75,17 @@
             />
           </template>
         </Column>
-        <Column field="mac" header="MAC-Adresse" sortable>
+        <Column field="mac" :header="t('devices.macAddress')" sortable>
           <template #body="{ data }">
             <span
-              :title="data.mac === 'unknown' ? 'N/A (TCP Remote - MAC nur im lokalen Netzwerk direkt ermittelbar)' : data.mac"
+              :title="data.mac === 'unknown' ? t('devices.macUnknownTooltip') : data.mac"
               class="cursor-help"
             >
               {{ data.mac === 'unknown' ? 'N/A' : data.mac }}
             </span>
           </template>
         </Column>
-        <Column field="firstSeen" header="Erstmals gesehen" sortable>
+        <Column field="firstSeen" :header="t('devices.firstSeen')" sortable>
           <template #body="{ data }">
             {{ formatDate(data.firstSeen) }}
           </template>
@@ -119,15 +119,15 @@
     </div>
 
     <Toast />
-    <Dialog v-model:visible="deviceDetailsVisible" header="Geräte-Details" class="w-full max-w-lg mx-4" modal>
+    <Dialog v-model:visible="deviceDetailsVisible" :header="t('devices.deviceDetails')" class="w-full max-w-lg mx-4" modal>
       <div v-if="selectedDevice" class="flex flex-col gap-4">
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="font-semibold">IP-Adresse:</label>
+            <label class="font-semibold">{{ t('devices.ipAddress') }}:</label>
             <p>{{ selectedDevice.ip }}</p>
           </div>
           <div>
-            <label class="font-semibold">MAC-Adresse:</label>
+            <label class="font-semibold">{{ t('devices.macAddress') }}:</label>
             <p>{{ selectedDevice.mac || 'N/A' }}</p>
           </div>
           <div>
@@ -135,15 +135,15 @@
             <p>{{ selectedDevice.name || 'N/A' }}</p>
           </div>
           <div>
-            <label class="font-semibold">Erstmals gesehen:</label>
+            <label class="font-semibold">{{ t('devices.firstSeen') }}:</label>
             <p>{{ formatDate(selectedDevice.firstSeen) }}</p>
           </div>
           <div>
-            <label class="font-semibold">Letzte Verbindung:</label>
+            <label class="font-semibold">{{ t('devices.lastSeen') }}</label>
             <p>{{ selectedDevice.lastSeen ? formatDate(selectedDevice.lastSeen) : 'N/A' }}</p>
           </div>
           <div>
-            <label class="font-semibold">Gesamtverbindungen:</label>
+            <label class="font-semibold">{{ t('devices.totalConnections') }}</label>
             <p>{{ selectedDevice.connectionCount }}</p>
           </div>
         </div>
@@ -220,11 +220,11 @@ const selectedDevice = ref(null);
 const connectionHistory = ref([]);
 
 const sortOptions = [
-  { label: 'Name (A-Z)', value: 'name_asc' },
-  { label: 'Name (Z-A)', value: 'name_desc' },
-  { label: 'IP (A-Z)', value: 'ip_asc' },
-  { label: 'Verbindungen (Höchste)', value: 'connections_desc' },
-  { label: 'Zuerst gesehen', value: 'firstSeen_desc' }
+  { label: t('devices.sortNameAsc'), value: 'name_asc' },
+  { label: t('devices.sortNameDesc'), value: 'name_desc' },
+  { label: t('devices.sortIpAsc'), value: 'ip_asc' },
+  { label: t('devices.sortConnectionsDesc'), value: 'connections_desc' },
+  { label: t('devices.sortFirstSeenDesc'), value: 'firstSeen_desc' }
 ];
 
 const filters = ref({

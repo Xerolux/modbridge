@@ -8,7 +8,7 @@ This file describes the codebase structure, development workflows, and conventio
 
 **ModBridge** is a Modbus TCP Proxy Manager with a web UI. It proxies Modbus TCP traffic, exposing a REST API and Vue.js frontend for configuration and monitoring. The application is written in Go (backend) with a Vue.js 3 frontend embedded into the binary.
 
-**Current version: 2.0.8.0
+**Current version:** see `version.txt`
 **Go version:** 1.26.4 (see `go.mod`)
 **Node version:** 24 (CI/CD, `frontend/`)
 
@@ -155,7 +155,7 @@ go test -run TestFunctionName  # Single test
 
 ### Test Organization
 
-- **28 test files** spread across packages (co-located with source: `pkg/foo/foo_test.go`)
+- Tests are co-located with source (`pkg/foo/foo_test.go`)
 - **Mock Modbus server:** `pkg/testing/mockmodbus/` — use for proxy/modbus tests
 - **Integration tests:** `pkg/testing/integration/`
 - **Performance tests:** `pkg/testing/performance/`
@@ -283,7 +283,7 @@ import (
 
 - Components use `<script setup>` syntax
 - State management via Pinia stores in `frontend/src/stores/`
-- All user-facing strings go through `vue-i18n` (locales in `frontend/src/locales/`)
+- All user-facing strings go through `vue-i18n` (translations live in `frontend/src/i18n.js`, German + English)
 - API calls use Axios; dev proxy redirects `/api/*` to `:8080`
 - UI components from PrimeVue; icons from `lucide-vue-next`
 - Dashboard layouts use `gridstack` for drag-and-drop
@@ -303,12 +303,10 @@ Located in `.github/workflows/`:
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `main.yml` | push/PR to main, tags | Primary: format check, vet, test, build binaries, Docker push, releases |
+| `ci.yml` | push/PR to main | Primary: format check, vet, test, build binaries, Docker push, auto-release |
 | `release.yml` | tag `v*` | GitHub release with cross-platform binaries and checksums |
-| `docker.yml` | push to main | Docker Hub push (legacy) |
-| `headless.yml` | push to main | Build variant without WebUI |
 | `pages.yml` | push to main | GitHub Pages docs site |
-| `wiki-sync.yml` | push to main | Sync GitHub Wiki |
+| `wiki-sync.yml` | push to main (docs/**) | Sync docs/ to the GitHub Wiki |
 
 **Release process:** Push a tag matching `v*` → CI builds all platforms → creates GitHub release with checksums.
 

@@ -1,71 +1,50 @@
 # Troubleshooting
 
-## Port bereits in Verwendung
+## Port already in use
 
 ```bash
-# Prozess finden, der den Port belegt
+# Find the process occupying the port
 sudo lsof -i :8080
 
-# Prozess beenden
+# Terminate the process
 sudo kill -9 <PID>
 
-# Oder anderen Port verwenden (Umgebungsvariable)
+# Or use a different port (environment variable)
 WEB_PORT=:9090 ./modbridge
 ```
 
-## Keine Verbindung zum Zielgerät
+## Cannot connect to the target device
 
 ```bash
-# Erreichbarkeit prüfen
+# Check reachability
 ping 192.168.1.100
 
-# Port prüfen
+# Check the port
 nc -zv 192.168.1.100 502
 ```
 
-## Timeouts trotz erreichbarem Zielgerät (Home Assistant, SolarEdge & Co.)
+## Timeouts despite a reachable device (Home Assistant, SolarEdge & co.)
 
-Typisches Bild im Client-Log: einzelne Anfragen laufen in ein Timeout, danach
-schlägt jede weitere Abfrage fehl, bis der Client die Verbindung neu aufbaut.
-In `pymodbus`-basierten Integrationen sieht das so aus:
+Typical picture in the client log: individual requests run into a timeout, then every further query fails until the client rebuilds the connection. In `pymodbus`-based integrations it looks like this:
 
 ```
 Error reading inverter ID 4 at InverterCommon:
 Response timeout after 3 seconds for transaction with ID 0x23
 ```
 
-Drei Ursachen, die ModBridge gezielt abfängt:
+Three causes that ModBridge counters specifically:
 
-1. **Mehrere Sitzungen zum Gerät.** Viele Wechselrichter (SolarEdge/SunSpec,
-   kleine RTU-Gateways) beantworten nur eine Modbus-Verbindung und lassen
-   weitere still ins Leere laufen. `max_target_conns: 1` erzwingt genau eine
-   Verbindung zum Zielgerät; Anfragen mehrerer Clients werden davor
-   eingereiht.
-2. **Anfragen zu dicht hintereinander.** Manche Geräte verwerfen Anfragen, die
-   ohne Pause aufeinander folgen. `min_request_gap_ms` (z.B. `100`) setzt einen
-   Mindestabstand.
-3. **Antwort kommt, nachdem der Client aufgegeben hat.** Läuft die
-   Weiterleitung inklusive Wiederholungen länger als das Timeout des Clients,
-   trifft die späte Antwort auf dessen nächste Anfrage — ab da passt keine
-   Transaktions-ID mehr und jede Abfrage schlägt fehl. `request_timeout_ms`
-   deckelt die gesamte Anfrage; ist das Budget aufgebraucht, antwortet
-   ModBridge mit einer regulären Modbus-Exception (`0x0B`,
-   *Gateway Target Device Failed To Respond*) statt verspätet mit Nutzdaten.
+1. **Multiple sessions to the device.** Many inverters (SolarEdge/SunSpec, small RTU gateways) serve only one Modbus connection and silently ignore further ones. `max_target_conns: 1` enforces exactly one connection to the target device; requests from multiple clients are queued in front of it.
+2. **Requests too close together.** Some devices discard requests that follow each other without a pause. `min_request_gap_ms` (e.g. `100`) enforces a minimum gap.
+3. **The answer arrives after the client has given up.** If forwarding including retries takes longer than the client's timeout, the late response lands on its next request — from then on no transaction ID fits anymore and every query fails. `request_timeout_ms` caps the entire request; when the budget is used up, ModBridge answers with a regular Modbus exception (`0x0B`, *Gateway Target Device Failed To Respond*) instead of late with payload.
 
-Zusätzlich vergibt ModBridge zum Zielgerät eigene Transaktions-IDs und
-verwirft Antworten, die nicht zur laufenden Anfrage gehören. Wie oft das
-passiert, steht als `stale_responses` im Proxy-Status — dauerhaft steigende
-Werte bedeuten, dass das Gerät langsamer antwortet als die Timeouts erlauben.
+Additionally, ModBridge assigns its own transaction IDs towards the target device and discards responses that do not belong to the current request. How often that happens is shown as `stale_responses` in the proxy status — persistently rising values mean the device answers more slowly than the timeouts allow.
 
-### Wenn das Gerät grundsätzlich langsamer ist als der Client wartet
+### When the device is fundamentally slower than the client waits
 
-Bei einem SolarEdge-Leader mit Followern (Unit-IDs 2, 3, 4 …) laufen die
-Follower-Register über die RS485-Kette und brauchen oft mehr als die 3 s, die
-Home Assistant wartet. Typisches Muster: der Leader antwortet zuverlässig, die
-Follower laufen in Timeouts.
+With a SolarEdge leader with followers (unit IDs 2, 3, 4 …), the follower registers travel across the RS485 chain and often need more than the 3 s Home Assistant waits. Typical pattern: the leader answers reliably, the followers run into timeouts.
 
-Hier hilft kein kürzeres Budget, sondern der umgekehrte Weg — Cache plus
-Hintergrund-Abfrage:
+A shorter budget does not help here — the opposite does: cache plus background polling:
 
 ```json
 "max_target_conns": 1,
@@ -78,18 +57,11 @@ Hintergrund-Abfrage:
 "poll_interval_ms": 5000
 ```
 
-ModBridge fragt die Register dann selbstständig alle 5 s ab und bedient Home
-Assistant sofort aus dem Cache. Der Wert ist dadurch bis zu 5 s alt — für
-PV-Daten unkritisch. Das Profil **SolarEdge Leader + Follower** setzt genau
-das.
+ModBridge then queries the registers by itself every 5 s and serves Home Assistant instantly from the cache. The value is thereby up to 5 s old — uncritical for PV data. The **SolarEdge Leader + Follower** profile sets exactly this.
 
-Im Proxy-Dialog des Web-Interface setzt das Geräte-Profil
-**SolarEdge / SunSpec** diese Werte mit einem Klick; für Huawei-Wechselrichter
-und sDongles gibt es ein eigenes Profil. Die Profile füllen nur das Formular —
-bestehende Proxys bleiben unverändert, bis dort ein Profil gewählt wird.
+In the proxy dialog of the web interface, the device profile **SolarEdge / SunSpec** sets these values with one click; for Huawei inverters and sDongles there is a dedicated profile. The profiles only fill the form — existing proxies stay unchanged until a profile is selected there.
 
-Empfohlener Startpunkt für einen SolarEdge-Wechselrichter mit mehreren
-Unit-IDs, abgefragt aus Home Assistant (Client-Timeout dort: 3 s):
+Recommended starting point for a SolarEdge inverter with multiple unit IDs, queried from Home Assistant (client timeout there: 3 s):
 
 ```json
 {
@@ -101,53 +73,34 @@ Unit-IDs, abgefragt aus Home Assistant (Client-Timeout dort: 3 s):
 }
 ```
 
-## Abfragen dauern zig Sekunden, obwohl das Netz gesund ist
+## Queries take tens of seconds although the network is healthy
 
-Typisches Bild: Ein Verbindungstest antwortet in unter einer Sekunde, eine
-vollständige Abfrage braucht aber 30 s. Das ist kein Widerspruch — der Test
-macht eine Handvoll Round-Trips, die Abfrage mehrere hundert.
+Typical picture: a connectivity test answers in under a second, but a full query takes 30 s. That is not a contradiction — the test makes a handful of round trips, the query several hundred.
 
-Rechne nach, statt zu raten. Im Proxy-Status stehen `latency_p50_ms` und
-`latency_p95_ms`; multipliziert mit der Anzahl der Anfragen pro Abfragezyklus
-ergibt das die erwartete Dauer. Kommt dabei ungefähr die beobachtete Zeit
-heraus, ist es schlichte Arithmetik und kein hängendes Gerät.
+Do the math instead of guessing. The proxy status shows `latency_p50_ms` and `latency_p95_ms`; multiplied by the number of requests per query cycle this gives the expected duration. If that roughly matches the observed time, it is plain arithmetic and not a hung device.
 
-Der größte einzelne Posten ist dabei oft `min_request_gap_ms`, denn der Wert
-kostet **pro Anfrage**:
+The largest single factor is often `min_request_gap_ms`, because the cost applies **per request**:
 
-| Abstand | 50 Anfragen | 100 Anfragen | 300 Anfragen |
-|---------|------------|--------------|--------------|
-| 50 ms | 2,5 s | 5 s | 15 s |
+| Gap | 50 requests | 100 requests | 300 requests |
+|-----|------------|--------------|--------------|
+| 50 ms | 2.5 s | 5 s | 15 s |
 | 100 ms | 5 s | 10 s | 30 s |
-| 250 ms | 12,5 s | 25 s | 75 s |
+| 250 ms | 12.5 s | 25 s | 75 s |
 
-Vorgehen in dieser Reihenfolge:
+Proceed in this order:
 
-1. **Abstand prüfen und schrittweise senken** (250 → 100 → 50 ms). Dabei
-   `stale_responses` und die Fehlerzahl beobachten: Steigen sie, war der
-   Abstand nötig, und der letzte funktionierende Wert gilt.
-2. **Cache und Hintergrund-Poller aktivieren.** Damit wird die Abfragedauer
-   beim Client nahezu unabhängig vom Gerät, weil er aus dem Cache bedient
-   wird.
-3. **Abfrageintervall des Clients erhöhen.** Solange eine Abfrage länger
-   dauert als das Intervall, läuft permanent eine — das Gerät kommt nie zur
-   Ruhe und jede einzelne Anfrage wird langsamer. Das ist eine Rückkopplung,
-   die sich selbst verstärkt.
-4. **Prüfen, wer sonst auf den Proxy zugreift.** `active_connections` im
-   Proxy-Status zeigt es. Ein zweiter Client mit ähnlicher Frequenz addiert
-   seine Last auf dasselbe Gerät.
+1. **Check the gap and lower it step by step** (250 → 100 → 50 ms). Watch `stale_responses` and the error count: if they rise, the gap was needed and the last working value applies.
+2. **Enable the cache and the background poller.** This makes the query duration at the client nearly independent of the device, because it is served from the cache.
+3. **Increase the client's query interval.** As long as a query takes longer than the interval, one is permanently running — the device never comes to rest and every single request gets slower. That is a feedback loop that reinforces itself.
+4. **Check who else accesses the proxy.** `active_connections` in the proxy status shows it. A second client with a similar frequency adds its load to the same device.
 
-Läuft der Hintergrund-Poller, protokolliert ModBridge außerdem, wenn eine
-Aktualisierungsrunde länger dauert als das eingestellte Intervall. Diese
-Meldung bedeutet dasselbe wie Punkt 3, nur auf der Proxy-Seite: Es wird
-durchgehend abgefragt und die Werte im Cache sind älter, als das Intervall
-vermuten lässt.
+While the background poller is running, ModBridge also logs when a refresh round takes longer than the configured interval. That message means the same as point 3, just on the proxy side: queries are running continuously and the values in the cache are older than the interval suggests.
 
-## Admin-Passwort vergessen
+## Forgot the admin password
 
-### Benutzername und Passwort über die WebUI neu vergeben
+### Reset username and password via the WebUI
 
-Stoppen Sie ModBridge und schalten Sie die WebUI-Wiederherstellung einmalig frei:
+Stop ModBridge and enable the WebUI recovery once:
 
 ```bash
 sudo systemctl stop modbridge.service
@@ -155,17 +108,17 @@ sudo -u modbridge ./modbridge --enable-account-recovery
 sudo systemctl start modbridge.service
 ```
 
-Öffnen Sie anschließend die Anmeldung und wählen Sie **„Zugangsdaten vergessen?“**. Mit dem ausgegebenen, 15 Minuten gültigen Wiederherstellungscode können Sie einen neuen Benutzernamen und ein neues Passwort vergeben. Der Code ist nur einmal verwendbar.
+Then open the login page and choose **"Forgot credentials?"**. With the printed recovery code (valid for 15 minutes) you can set a new username and password. The code can be used only once.
 
-Existieren mehrere Administratoren, geben Sie das Zielkonto explizit an:
+If multiple administrators exist, specify the target account explicitly:
 
 ```bash
-sudo -u modbridge ./modbridge --enable-account-recovery --recovery-user bisheriger-name
+sudo -u modbridge ./modbridge --enable-account-recovery --recovery-user existing-name
 ```
 
-### Nur das Passwort per Konsole zurücksetzen
+### Reset only the password via the console
 
-Stoppen Sie ModBridge und erzeugen Sie lokal ein neues einmaliges Passwort für den Admin-Benutzer:
+Stop ModBridge and generate a new one-time password for the admin user locally:
 
 ```bash
 sudo systemctl stop modbridge.service
@@ -173,16 +126,16 @@ sudo -u modbridge ./modbridge --reset-password admin
 sudo systemctl start modbridge.service
 ```
 
-Der Befehl gibt ein zufälliges Einmalpasswort aus. Nach dem Login muss es sofort geändert werden. Führen Sie den Befehl nur lokal auf dem ModBridge-Host aus.
+The command prints a random one-time password. It must be changed immediately after login. Run this command only locally on the ModBridge host.
 
-## Docker Container startet nicht
+## Docker container does not start
 
 ```bash
 docker logs modbridge
 docker ps -a
 ```
 
-## systemd-Service Probleme
+## systemd service problems
 
 ```bash
 sudo bash scripts/modbridge.sh status

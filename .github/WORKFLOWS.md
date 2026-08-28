@@ -1,173 +1,117 @@
 # GitHub Actions Workflows
 
-Dieses Repository nutzt GitHub Actions für automatische Builds, Tests und Releases.
+This repository uses GitHub Actions for automated builds, tests, and releases.
 
 ---
 
-## Workflows Übersicht
+## Workflow Overview
 
 ### 1. CI (Continuous Integration)
-**Datei**: `.github/workflows/ci.yml`
+**File**: `.github/workflows/ci.yml`
 
-**Trigger**:
-- Push auf `main`, `master`, `develop`
-- Pull Requests auf `main`, `master`, `develop`
+**Triggers**:
+- Push to `main`
+- Pull requests to `main`
+- Manual dispatch
 
-**Was es macht**:
-- **Tests**: Führt alle Go-Tests aus (mit Go 1.21, 1.22, 1.23)
-- **Lint**: Führt golangci-lint aus
-- **Build**: Kompiliert das Binary
-- **Coverage**: Lädt Test-Coverage zu Codecov hoch
+**What it does**:
+- **Code quality**: format check, `go vet`, linting
+- **Tests**: runs all Go tests
+- **Build**: compiles the binaries and Docker image
+- **Auto-release**: bumps the version and tags releases from `main`
 
-**Status**: ✅ Aktiv
+**Status**: ✅ Active
 
 ---
 
 ### 2. Release
-**Datei**: `.github/workflows/release.yml`
+**File**: `.github/workflows/release.yml`
 
-**Trigger**:
-- Push eines Tags (z.B. `v0.1.0`)
+**Triggers**:
+- Push of a tag (e.g. `v0.1.0`)
+- Manual dispatch
 
-**Was es macht**:
-1. **Tests**: Führt alle Tests aus
-2. **Binaries**: Baut für alle Plattformen:
+**What it does**:
+1. **Tests**: runs all tests
+2. **Binaries**: builds for all platforms:
    - Linux (AMD64, ARM64)
    - Windows (AMD64)
    - macOS (AMD64, ARM64)
-3. **Docker Image**: Baut und pusht Multi-Arch Image zu `ghcr.io`:
+3. **Docker image**: builds and pushes a multi-arch image to `ghcr.io`:
    - `ghcr.io/xerolux/modbridge:latest`
    - `ghcr.io/xerolux/modbridge:v0.1.0`
    - `ghcr.io/xerolux/modbridge:0.1`
    - `ghcr.io/xerolux/modbridge:0`
-4. **GitHub Release**: Erstellt Release mit:
-   - Allen Binaries
-   - Automatischen Release Notes
-   - Installations-Anleitung
+4. **GitHub Release**: creates a release with:
+   - All binaries
+   - Automatic release notes
+   - Installation instructions
 
-**Status**: ✅ Aktiv
+**Status**: ✅ Active
 
-**Beispiel-Nutzung**:
+**Example usage**:
 ```bash
-# Release erstellen
+# Create a release
 git tag v0.2.0
 git push origin v0.2.0
 
-# Warten, bis Workflow fertig ist (~5-10 Minuten)
-# Release ist dann verfügbar unter:
+# Wait for the workflow to finish (~5-10 minutes)
+# The release is then available at:
 # https://github.com/Xerolux/modbridge/releases/tag/v0.2.0
 ```
 
 ---
 
-### 3. Docker Publish
-**Datei**: `.github/workflows/docker-publish.yml`
+### 3. GitHub Pages
+**File**: `.github/workflows/pages.yml`
 
-**Trigger**:
-- Push auf `main`, `master`, `develop`
-- Pull Requests auf `main`, `master`
+**Triggers**:
+- Push to `main`
+- Manual dispatch
 
-**Was es macht**:
-1. **Docker Image**: Baut Multi-Arch Image (AMD64 + ARM64)
-2. **Push zu ghcr.io**: Nur bei Push (nicht bei PRs)
-3. **Tags**:
-   - `ghcr.io/xerolux/modbridge:main` - Main branch
-   - `ghcr.io/xerolux/modbridge:edge` - Neueste Version
-   - `ghcr.io/xerolux/modbridge:main-abc1234` - Commit SHA
+**What it does**:
+- Builds and deploys the documentation site to GitHub Pages
 
-**Status**: ✅ Aktiv
-
-**Verwendung**:
-```bash
-# Neuestes Image pullen
-docker pull ghcr.io/xerolux/modbridge:edge
-
-# Spezifischen Branch pullen
-docker pull ghcr.io/xerolux/modbridge:main
-```
+**Status**: ✅ Active
 
 ---
 
-### 4. PR Check
-**Datei**: `.github/workflows/pr-check.yml`
+### 4. Wiki Sync
+**File**: `.github/workflows/wiki-sync.yml`
 
-**Trigger**:
-- Pull Requests
+**Triggers**:
+- Push to `main` with changes under `docs/**`
+- Manual dispatch
 
-**Was es macht**:
-- Prüft Code-Qualität
-- Führt Tests aus
-- Validiert Änderungen
+**What it does**:
+- Copies all markdown files from `docs/` to the GitHub Wiki
 
-**Status**: ✅ Aktiv
-
----
-
-### 5. Security
-**Datei**: `.github/workflows/security.yml`
-
-**Trigger**:
-- Schedule (wöchentlich)
-- Manuell
-
-**Was es macht**:
-- Scannt Code auf Sicherheitslücken
-- Prüft Abhängigkeiten
-- CodeQL-Analyse
-
-**Status**: ✅ Aktiv
+**Status**: ✅ Active
 
 ---
 
-### 6. Stale Issues/PRs
-**Datei**: `.github/workflows/stale.yml`
+## Release Process
 
-**Trigger**:
-- Schedule (täglich)
+### Create a release (automatically)
 
-**Was es macht**:
-- Markiert inaktive Issues/PRs als "stale"
-- Schließt sie nach Wartezeit
-
-**Status**: ✅ Aktiv
-
----
-
-### 7. Labeler
-**Datei**: `.github/workflows/labeler.yml`
-
-**Trigger**:
-- Pull Requests
-
-**Was es macht**:
-- Fügt automatisch Labels basierend auf geänderten Dateien hinzu
-
-**Status**: ✅ Aktiv
-
----
-
-## Veröffentlichungs-Prozess
-
-### Release erstellen (automatisch)
-
-1. **Version vorbereiten**:
+1. **Prepare the version**:
    ```bash
-   # Version in version.txt setzen
+   # Set the version in version.txt
    echo "0.2.0" > version.txt
    git add version.txt
    git commit -m "Bump version to 0.2.0"
    git push
    ```
 
-2. **Tag erstellen**:
+2. **Create the tag**:
    ```bash
    git tag v0.2.0
    git push origin v0.2.0
    ```
 
-3. **Warten**: Workflow läuft automatisch (~5-10 Minuten)
+3. **Wait**: the workflow runs automatically (~5-10 minutes)
 
-4. **Fertig**: Release ist verfügbar unter:
+4. **Done**: the release is available at:
    - GitHub Releases: `https://github.com/Xerolux/modbridge/releases`
    - Docker: `ghcr.io/xerolux/modbridge:v0.2.0`
 
@@ -177,171 +121,164 @@ docker pull ghcr.io/xerolux/modbridge:main
 
 ### GitHub Container Registry (ghcr.io)
 
-**Public Registry**: Jeder kann Images pullen (kein Login erforderlich)
+**Public registry**: anyone can pull the images (no login required)
 
-**Verfügbare Images**:
+**Available images**:
 ```bash
-# Stabile Releases
-ghcr.io/xerolux/modbridge:latest        # Neueste Version
-ghcr.io/xerolux/modbridge:v0.1.0        # Spezifische Version
-ghcr.io/xerolux/modbridge:0.1           # Major.Minor
-ghcr.io/xerolux/modbridge:0             # Major
+# Stable releases
+ghcr.io/xerolux/modbridge:latest        # newest version
+ghcr.io/xerolux/modbridge:v0.1.0        # specific version
+ghcr.io/xerolux/modbridge:0.1           # major.minor
+ghcr.io/xerolux/modbridge:0             # major
 
 # Development
-ghcr.io/xerolux/modbridge:main          # Main branch
-ghcr.io/xerolux/modbridge:edge          # Bleeding edge
-ghcr.io/xerolux/modbridge:develop       # Develop branch
+ghcr.io/xerolux/modbridge:main          # main branch
 ```
 
-**Architektur-Support**:
+**Architecture support**:
 - ✅ AMD64 (x86_64)
 - ✅ ARM64 (aarch64)
 
-**Image-Details**:
+**Image details**:
 ```bash
-# Image-Info anzeigen
+# Show image info
 docker image inspect ghcr.io/xerolux/modbridge:latest
 
-# Unterstützte Plattformen
+# Supported platforms
 docker manifest inspect ghcr.io/xerolux/modbridge:latest
 ```
 
 ---
 
-## Secrets und Permissions
+## Secrets and Permissions
 
-### Benötigte Secrets
+### Required secrets
 
 **GITHUB_TOKEN**:
-- ✅ Automatisch verfügbar
-- Keine Konfiguration nötig
-- Wird für folgendes verwendet:
-  - GitHub Releases erstellen
-  - Docker Images zu ghcr.io pushen
-  - Code scannen
+- ✅ Automatically available
+- No configuration needed
+- Used for:
+  - Creating GitHub releases
+  - Pushing Docker images to ghcr.io
+  - Scanning code
 
 ### Permissions
 
-Die Workflows benötigen folgende Permissions (bereits konfiguriert):
+The workflows require the following permissions (already configured):
 
 **release.yml**:
-- `contents: write` - Release erstellen
-- `packages: write` - Docker Images pushen
-
-**docker-publish.yml**:
-- `contents: read` - Code auschecken
-- `packages: write` - Docker Images pushen
+- `contents: write` - create releases
+- `packages: write` - push Docker images
 
 **ci.yml**:
-- `contents: read` - Code auschecken
+- `contents: read` - check out code
 
 ---
 
-## Lokal testen
+## Testing locally
 
-### Release-Workflow lokal simulieren
+### Simulate the release workflow locally
 
 ```bash
-# Docker Image bauen
+# Build the Docker image
 docker build -t modbus-proxy-manager:test .
 
-# Multi-Arch Build (erfordert buildx)
+# Multi-arch build (requires buildx)
 docker buildx build --platform linux/amd64,linux/arm64 -t modbus-proxy-manager:test .
 ```
 
-### CI-Workflow lokal simulieren
+### Simulate the CI workflow locally
 
 ```bash
-# Tests ausführen
+# Run tests
 go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
 # Lint
 golangci-lint run --timeout=5m
 
 # Build
-go build -v -o modbusmanager ./main.go
+go build -v -o modbridge .
 ```
 
 ---
 
-## Workflow-Logs ansehen
+## Viewing workflow logs
 
-1. **GitHub Actions Tab öffnen**:
+1. **Open the GitHub Actions tab**:
    `https://github.com/Xerolux/modbridge/actions`
 
-2. **Workflow auswählen**:
+2. **Select the workflow**:
    - Release
-   - Docker
    - CI
 
-3. **Run auswählen**: Klicke auf einen spezifischen Workflow-Run
+3. **Select a run**: click a specific workflow run
 
-4. **Logs ansehen**: Klicke auf einzelne Steps
+4. **View logs**: click the individual steps
 
 ---
 
 ## Troubleshooting
 
-### Docker Push schlägt fehl
+### Docker push fails
 
 **Problem**: `permission denied while trying to connect to the Docker daemon socket`
 
-**Lösung**:
-- Permissions in Repository-Settings überprüfen
-- `packages: write` Permission aktivieren
+**Solution**:
+- Check permissions in the repository settings
+- Enable the `packages: write` permission
 
 ---
 
-### Release wird nicht erstellt
+### Release is not created
 
-**Problem**: Tag wurde gepusht, aber kein Release
+**Problem**: the tag was pushed, but no release appeared
 
-**Lösung**:
-1. Tag-Format prüfen: `v*` (z.B. `v0.1.0`)
-2. Workflow-Logs prüfen
-3. Permissions überprüfen
+**Solution**:
+1. Check the tag format: `v*` (e.g. `v0.1.0`)
+2. Check the workflow logs
+3. Verify the permissions
 
 ---
 
 ## Best Practices
 
-### Version Tagging
+### Version tagging
 
 **Format**: `vMAJOR.MINOR.PATCH`
 
-**Beispiele**:
-- ✅ `v0.1.0` - Korrektes Format
-- ✅ `v1.0.0` - Major Release
-- ✅ `v0.2.1` - Patch Release
-- ❌ `0.1.0` - Fehlt 'v' Prefix
-- ❌ `v0.1` - Fehlt Patch-Version
+**Examples**:
+- ✅ `v0.1.0` - correct format
+- ✅ `v1.0.0` - major release
+- ✅ `v0.2.1` - patch release
+- ❌ `0.1.0` - missing 'v' prefix
+- ❌ `v0.1` - missing patch version
 
-### Commit Messages für Releases
+### Commit messages for releases
 
 ```bash
-# Gute Commit-Message
+# Good commit message
 git commit -m "Release v0.2.0: Add feature X, fix bug Y"
 
-# Release-Tag
+# Release tag
 git tag -a v0.2.0 -m "Release v0.2.0"
 git push origin v0.2.0
 ```
 
-### Docker Image Tags
+### Docker image tags
 
-- **Stabil**: Verwende `latest` oder spezifische Version (z.B. `v0.1.0`)
-- **Testing**: Verwende `edge` oder `main`
-- **Development**: Verwende Branch-Namen
+- **Stable**: use `latest` or a specific version (e.g. `v0.1.0`)
+- **Testing**: use `main`
+- **Development**: use branch names
 
 ---
 
-## Weitere Ressourcen
+## Additional resources
 
-- **GitHub Actions Docs**: https://docs.github.com/actions
+- **GitHub Actions docs**: https://docs.github.com/actions
 - **Docker Buildx**: https://docs.docker.com/buildx/
 - **GitHub Container Registry**: https://docs.github.com/packages/working-with-a-github-packages-registry/working-with-the-container-registry
 
 ---
 
 **Version**: 0.1.0
-**Letzte Aktualisierung**: 31. Dezember 2025
+**Last updated**: August 2026

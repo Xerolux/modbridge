@@ -10,7 +10,7 @@
         <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div>
             <h1 class="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{{ t('nav.users') }}</h1>
-            <p class="mt-1 text-sm text-[var(--text-secondary)]">Accounts, Rollen und Berechtigungen verwalten</p>
+            <p class="mt-1 text-sm text-[var(--text-secondary)]">{{ t('usersView.subtitle') }}</p>
           </div>
           <div class="flex items-center gap-2">
             <div v-if="lastRefreshed" class="hidden sm:flex items-center gap-1.5 text-xs text-[var(--text-muted)] mr-1">
@@ -316,27 +316,27 @@ const defaultFormData = () => ({
 const formData = ref(defaultFormData());
 
 const roles = [
-  { label: 'Admin - Vollzugriff', value: 'admin' },
-  { label: 'Techniker - Proxies anlegen und bearbeiten', value: 'techniker' },
-  { label: 'Benutzer - Ansehen, starten/stoppen', value: 'benutzer' },
-  { label: 'Auditor - Audit-Logs einsehen', value: 'auditor' }
+  { label: t('usersView.roleAdmin'), value: 'admin' },
+  { label: t('usersView.roleTechniker'), value: 'techniker' },
+  { label: t('usersView.roleBenutzer'), value: 'benutzer' },
+  { label: t('usersView.roleAuditor'), value: 'auditor' }
 ]
 
 const roleMeta = {
   admin: {
-    description: 'Vollständige Administration',
+    description: t('usersView.roleAdminDesc'),
     permissions: ['proxy:*', 'device:*', 'config:*', 'system:*', 'user:*', 'audit:*', 'logs:*']
   },
   techniker: {
-    description: 'Proxies anlegen, bearbeiten, löschen; keine Admin-Einstellungen',
+    description: t('usersView.roleTechnikerDesc'),
     permissions: ['proxy:view', 'proxy:create', 'proxy:edit', 'proxy:delete', 'proxy:control', 'device:view', 'device:edit', 'config:view', 'system:view', 'logs:view']
   },
   benutzer: {
-    description: 'Proxies ansehen, starten/stoppen; keine Änderungen',
+    description: t('usersView.roleBenutzerDesc'),
     permissions: ['proxy:view', 'proxy:control', 'device:view', 'config:view', 'system:view', 'logs:view']
   },
   auditor: {
-    description: 'Audit- und Compliance-Einsicht',
+    description: t('usersView.roleAuditorDesc'),
     permissions: ['proxy:view', 'device:view', 'config:view', 'system:view', 'audit:view', 'audit:export', 'logs:view', 'logs:export']
   }
 }

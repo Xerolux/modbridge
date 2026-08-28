@@ -2,7 +2,7 @@
 
 ## Quick Install
 
-Für die schnellste Installation auf einem Linux-System (Ubuntu/Debian) können Sie das offizielle Installationsskript verwenden:
+For the fastest installation on a Linux system (Ubuntu/Debian), use the official install script:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/Xerolux/modbridge/main/scripts/modbridge.sh | sudo bash -s install
@@ -10,43 +10,43 @@ curl -sSL https://raw.githubusercontent.com/Xerolux/modbridge/main/scripts/modbr
 
 ---
 
-## Methode 1: modbridge.sh (empfohlen)
+## Method 1: modbridge.sh (recommended)
 
-Das Skript `scripts/modbridge.sh` ist der einfachste Weg, ModBridge zu installieren, zu aktualisieren und als systemd-Service zu verwalten.
+The script `scripts/modbridge.sh` is the easiest way to install ModBridge, update it, and manage it as a systemd service.
 
-### Schritt 1: Repository klonen
+### Step 1: Clone the repository
 ```bash
 git clone https://github.com/Xerolux/modbridge.git
 cd modbridge
 ```
 
-### Schritt 2: Skript ausführen
+### Step 2: Run the script
 ```bash
 sudo bash scripts/modbridge.sh install
 ```
 
-Das Skript fragt Sie:
-1. **Download Binary** (empfohlen, schnell) oder **Aus Quellcode kompilieren** (erfordert Go)
-2. Möchten Sie ModBridge als systemd-Service einrichten? (empfohlen für Autostart)
+The script will ask you:
+1. **Download binary** (recommended, fast) or **compile from source** (requires Go)
+2. Whether to set up ModBridge as a systemd service (recommended for autostart)
 
-### Weitere Befehle:
-* `sudo bash scripts/modbridge.sh update` (Auf neue Version aktualisieren)
-* `sudo bash scripts/modbridge.sh status` (Service-Status prüfen)
-* `sudo bash scripts/modbridge.sh logs` (Letzte Logs anzeigen)
-* `sudo bash scripts/modbridge.sh uninstall` (Komplett deinstallieren)
+### Additional commands:
+* `sudo bash scripts/modbridge.sh update` (update to a new version)
+* `sudo bash scripts/modbridge.sh status` (check service status)
+* `sudo bash scripts/modbridge.sh logs` (show recent logs)
+* `sudo bash scripts/modbridge.sh uninstall` (uninstall completely)
 
 ---
 
-## Methode 2: Docker / Docker Compose
+## Method 2: Docker / Docker Compose
 
-ModBridge ist vollständig Docker-kompatibel.
+ModBridge is fully Docker-compatible.
 
-### Vorgefertigtes Image
+### Prebuilt image
 
 ```bash
 docker pull ghcr.io/xerolux/modbridge:latest
 
-# Container starten
+# Start the container
 docker run -d \
   --name modbridge \
   -p 8080:8080 \
@@ -58,7 +58,7 @@ docker run -d \
 
 ### Docker Compose
 
-Erstellen Sie eine `docker-compose.yml`:
+Create a `docker-compose.yml`:
 
 ```yaml
 version: '3.8'
@@ -70,7 +70,7 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
-      - "5020-5030:5020-5030" # Port-Range für Proxies
+      - "5020-5030:5020-5030" # Port range for proxies
     volumes:
       - ./config.json:/app/config.json
       - ./data:/app/data
@@ -80,32 +80,32 @@ services:
       - TZ=Europe/Berlin
 ```
 
-Dann ausführen:
+Then run:
 ```bash
 docker-compose up -d
 ```
 
 ---
 
-## Methode 3: Aus Quellcode kompilieren
+## Method 3: Compile from source
 
-Wenn Sie Entwickler sind oder eine spezielle Architektur nutzen:
+If you are a developer or use a special architecture:
 
-**Voraussetzungen:**
-* Go 1.22 oder höher
-* Node.js 20 oder höher (für das Frontend)
+**Prerequisites:**
+* Go 1.26 or later
+* Node.js 24 or later (for the frontend)
 
 ```bash
 git clone https://github.com/Xerolux/modbridge.git
 cd modbridge
 
-# Baut das Frontend und das Go-Binary
+# Builds the frontend and the Go binary
 make build
 
-# Oder alternativ:
+# Alternatively:
 ./build.sh
 go build -o modbridge .
 
-# Starten
+# Start
 ./modbridge
 ```

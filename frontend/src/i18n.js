@@ -438,7 +438,108 @@ const de = {
     exportConfig: 'Konfiguration exportieren',
     importConfig: 'Konfiguration importieren',
     restartSystem: 'System neu starten',
-    changePassword: 'Passwort ändern'
+    changePassword: 'Passwort ändern',
+    loadError: 'Konfiguration konnte nicht geladen werden',
+    passwordErrorMinLength: 'Das Passwort muss mindestens 8 Zeichen lang sein',
+    passwordErrorComplexity: 'Das Passwort muss mindestens 3 dieser Zeichenarten enthalten: Großbuchstaben, Kleinbuchstaben, Zahlen, Sonderzeichen',
+    passwordErrorTooCommon: 'Das Passwort ist zu einfach oder häufig verwendet'
+  },
+
+  // Proxy studio (ConfigForm)
+  configForm: {
+    heroTitle: 'Glass WebUI mit Drag and Drop',
+    heroSubtitle: 'Reordne Proxies per Drag-and-Drop, bearbeite Parameter direkt in Karten und speichere nur die Einträge, die sich wirklich geändert haben.',
+    listTitle: 'Proxy-Liste',
+    listHint: 'Ziehe die Karten an der Griffleiste, um deine Arbeitsreihenfolge visuell zu organisieren.',
+    addProxy: 'Proxy hinzufügen',
+    emptyTitle: 'Noch keine Proxies angelegt',
+    emptyHint: 'Lege deinen ersten Proxy an und verwalte danach Reihenfolge, Status und Zeitlimits direkt in dieser Oberfläche.',
+    moveProxy: 'Proxy verschieben',
+    pillNew: 'Neu',
+    pillChanged: 'Geändert',
+    tagsCount: '{n} Tags',
+    showMore: 'Mehr',
+    showLess: 'Weniger',
+    create: 'Erstellen',
+    paused: 'Pausiert',
+    noTags: 'Keine Tags gesetzt',
+    descriptionPlaceholder: 'Optionaler Hinweis zur Anlage',
+    webInterface: 'Weboberfläche',
+    portTitle: 'Port und Zugriff',
+    portHint: 'Eine Port-Änderung benötigt einen Neustart des Dienstes. Die Eingabe akzeptiert `:8080` oder `host:8080`.',
+    workflowTitle: 'Workflow',
+    workflow1: 'Karten verschieben, um deine bevorzugte Arbeitsreihenfolge zu setzen.',
+    workflow2: 'Änderungen pro Karte prüfen und nur betroffene Einträge speichern.',
+    workflow3: 'Erweiterte Timeout- und Retry-Werte bei Bedarf ausklappen.',
+    confirmRemoveMessage: 'Möchtest du diesen Proxy wirklich entfernen?',
+    confirmRemoveHeader: 'Proxy entfernen',
+    confirmPortMessage: 'Eine Port-Änderung erfordert einen Neustart. Fortfahren?',
+    confirmPortHeader: 'Port speichern'
+  },
+
+  // Floating proxy configuration panel
+  configPanel: {
+    title: 'Proxy-Konfiguration',
+    expand: 'Erweitern',
+    minimize: 'Minimieren',
+    close: 'Schließen',
+    selectProxies: 'Proxies auswählen',
+    batchTitle: 'Batch-Konfiguration',
+    selectedCount: '{n} ausgewählt',
+    connTimeout: 'Verbindungstimeout (s)',
+    readTimeout: 'Read Timeout (s)',
+    maxRetries: 'Max Retries',
+    maxReadSize: 'Max Read Size',
+    maxReadSizeHint: 'Max Read Size (0=unbegrenzt)',
+    connectDelay: 'Connect Delay (ms)',
+    enabled: 'Aktiviert',
+    paused: 'Pausiert',
+    apply: 'Konfiguration anwenden',
+    startAll: 'Alle starten',
+    stopAll: 'Alle stoppen',
+    emptyHint: 'Wähle Proxies aus, um sie zu konfigurieren',
+    applied: 'Konfiguration angewendet',
+    confirmBatchTitle: 'Batch-Aktion bestätigen',
+    confirmStartAll: 'Sollen wirklich alle {n} ausgewählten Proxies gestartet werden?',
+    confirmStopAll: 'Sollen wirklich alle {n} ausgewählten Proxies gestoppt werden?',
+    actionExecuted: 'Aktion "{action}" ausgeführt'
+  },
+
+  // Logs view
+  logs: {
+    refresh: 'Aktualisieren',
+    loading: 'Logs werden geladen…',
+    emptyTitle: 'Keine Logs vorhanden',
+    emptyHint: 'Es wurden noch keine Log-Einträge empfangen.'
+  },
+
+  // Devices view
+  devices: {
+    macAddress: 'MAC-Adresse',
+    ipAddress: 'IP-Adresse',
+    macUnknownTooltip: 'N/A (TCP Remote - MAC nur im lokalen Netzwerk direkt ermittelbar)',
+    firstSeen: 'Erstmals gesehen',
+    lastSeen: 'Letzte Verbindung:',
+    totalConnections: 'Gesamtverbindungen:',
+    deviceDetails: 'Geräte-Details',
+    sortNameAsc: 'Name (A-Z)',
+    sortNameDesc: 'Name (Z-A)',
+    sortIpAsc: 'IP (A-Z)',
+    sortConnectionsDesc: 'Verbindungen (Höchste)',
+    sortFirstSeenDesc: 'Zuerst gesehen'
+  },
+
+  // Users view
+  usersView: {
+    subtitle: 'Accounts, Rollen und Berechtigungen verwalten',
+    roleAdmin: 'Admin - Vollzugriff',
+    roleTechniker: 'Techniker - Proxies anlegen und bearbeiten',
+    roleBenutzer: 'Benutzer - Ansehen, starten/stoppen',
+    roleAuditor: 'Auditor - Audit-Logs einsehen',
+    roleAdminDesc: 'Vollständige Administration',
+    roleTechnikerDesc: 'Proxies anlegen, bearbeiten, löschen; keine Admin-Einstellungen',
+    roleBenutzerDesc: 'Proxies ansehen, starten/stoppen; keine Änderungen',
+    roleAuditorDesc: 'Audit- und Compliance-Einsicht'
   },
 
   // Widget
@@ -938,7 +1039,108 @@ const en = {
     exportConfig: 'Export Configuration',
     importConfig: 'Import Configuration',
     restartSystem: 'Restart System',
-    changePassword: 'Change Password'
+    changePassword: 'Change Password',
+    loadError: 'Configuration could not be loaded',
+    passwordErrorMinLength: 'The password must be at least 8 characters long',
+    passwordErrorComplexity: 'The password must contain at least 3 of the following character types: uppercase letters, lowercase letters, numbers, special characters',
+    passwordErrorTooCommon: 'The password is too simple or commonly used'
+  },
+
+  // Proxy studio (ConfigForm)
+  configForm: {
+    heroTitle: 'Glass WebUI with Drag and Drop',
+    heroSubtitle: 'Reorder proxies via drag-and-drop, edit parameters directly on cards, and save only the entries that actually changed.',
+    listTitle: 'Proxy List',
+    listHint: 'Drag the cards by the handle bar to visually organize your working order.',
+    addProxy: 'Add Proxy',
+    emptyTitle: 'No proxies created yet',
+    emptyHint: 'Create your first proxy, then manage order, status, and time limits directly in this interface.',
+    moveProxy: 'Move proxy',
+    pillNew: 'New',
+    pillChanged: 'Changed',
+    tagsCount: '{n} tags',
+    showMore: 'More',
+    showLess: 'Less',
+    create: 'Create',
+    paused: 'Paused',
+    noTags: 'No tags set',
+    descriptionPlaceholder: 'Optional note about the system',
+    webInterface: 'Web Interface',
+    portTitle: 'Port and Access',
+    portHint: 'Changing the port requires a service restart. The input accepts `:8080` or `host:8080`.',
+    workflowTitle: 'Workflow',
+    workflow1: 'Move cards to set your preferred working order.',
+    workflow2: 'Review changes per card and save only the affected entries.',
+    workflow3: 'Expand advanced timeout and retry values as needed.',
+    confirmRemoveMessage: 'Do you really want to remove this proxy?',
+    confirmRemoveHeader: 'Remove Proxy',
+    confirmPortMessage: 'Changing the port requires a restart. Continue?',
+    confirmPortHeader: 'Save Port'
+  },
+
+  // Floating proxy configuration panel
+  configPanel: {
+    title: 'Proxy Configuration',
+    expand: 'Expand',
+    minimize: 'Minimize',
+    close: 'Close',
+    selectProxies: 'Select Proxies',
+    batchTitle: 'Batch Configuration',
+    selectedCount: '{n} selected',
+    connTimeout: 'Connection Timeout (s)',
+    readTimeout: 'Read Timeout (s)',
+    maxRetries: 'Max Retries',
+    maxReadSize: 'Max Read Size',
+    maxReadSizeHint: 'Max Read Size (0=unlimited)',
+    connectDelay: 'Connect Delay (ms)',
+    enabled: 'Enabled',
+    paused: 'Paused',
+    apply: 'Apply Configuration',
+    startAll: 'Start All',
+    stopAll: 'Stop All',
+    emptyHint: 'Select proxies to configure them',
+    applied: 'Configuration applied',
+    confirmBatchTitle: 'Confirm Batch Action',
+    confirmStartAll: 'Really start all {n} selected proxies?',
+    confirmStopAll: 'Really stop all {n} selected proxies?',
+    actionExecuted: 'Action "{action}" executed'
+  },
+
+  // Logs view
+  logs: {
+    refresh: 'Refresh',
+    loading: 'Loading logs…',
+    emptyTitle: 'No logs available',
+    emptyHint: 'No log entries have been received yet.'
+  },
+
+  // Devices view
+  devices: {
+    macAddress: 'MAC Address',
+    ipAddress: 'IP Address',
+    macUnknownTooltip: 'N/A (TCP remote — MAC only resolvable in the local network)',
+    firstSeen: 'First Seen',
+    lastSeen: 'Last connection:',
+    totalConnections: 'Total connections:',
+    deviceDetails: 'Device Details',
+    sortNameAsc: 'Name (A-Z)',
+    sortNameDesc: 'Name (Z-A)',
+    sortIpAsc: 'IP (A-Z)',
+    sortConnectionsDesc: 'Connections (Peak)',
+    sortFirstSeenDesc: 'First seen'
+  },
+
+  // Users view
+  usersView: {
+    subtitle: 'Manage accounts, roles, and permissions',
+    roleAdmin: 'Admin - Full access',
+    roleTechniker: 'Technician - Create and edit proxies',
+    roleBenutzer: 'User - View, start/stop',
+    roleAuditor: 'Auditor - View audit logs',
+    roleAdminDesc: 'Full administration',
+    roleTechnikerDesc: 'Create, edit, and delete proxies; no admin settings',
+    roleBenutzerDesc: 'View proxies, start/stop; no changes',
+    roleAuditorDesc: 'Audit and compliance visibility'
   },
 
   // Widget
@@ -1000,7 +1202,7 @@ const en = {
   }
 };
 
-// Get saved language preference, falling back to browser language, then German
+// Get saved language preference, falling back to browser language, then English
 function getSavedLanguage() {
   const saved = localStorage.getItem('modbridge_language');
   if (saved && (saved === 'de' || saved === 'en')) {
@@ -1008,10 +1210,10 @@ function getSavedLanguage() {
   }
   // Auto-detect from browser/system language
   const browserLang = (navigator.language || navigator.userLanguage || '').toLowerCase();
-  if (browserLang.startsWith('en')) {
-    return 'en';
+  if (browserLang.startsWith('de')) {
+    return 'de';
   }
-  return 'de';
+  return 'en';
 }
 
 // Save language preference
@@ -1023,7 +1225,7 @@ function saveLanguage(lang) {
 const i18n = createI18n({
   legacy: false,
   locale: getSavedLanguage(),
-  fallbackLocale: 'de',
+  fallbackLocale: 'en',
   messages: {
     de,
     en

@@ -24,6 +24,8 @@ jobs:
 
       - name: Copy wiki files and assets
         run: |
+          # Remove stale markdown pages first so renamed/deleted docs disappear from the wiki
+          find /tmp/wiki -maxdepth 1 -name '*.md' -delete
           cp docs/*.md /tmp/wiki/
           if [ -d docs/assets ]; then
             cp -r docs/assets /tmp/wiki/assets

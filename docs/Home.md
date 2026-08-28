@@ -1,14 +1,14 @@
 # ModBridge Wiki
 
-Willkommen im ModBridge Wiki. ModBridge ist ein moderner, robuster Modbus TCP Proxy Manager mit einer eleganten Web-Oberfläche.
+Welcome to the ModBridge Wiki. ModBridge is a modern, robust Modbus TCP proxy manager with an elegant web interface.
 
-In diesem Wiki finden Sie alle wichtigen Informationen:
+Here you will find all the important information:
 * [Installation](Installation)
-* [Erste Schritte](Erste-Schritte)
-* [Konfiguration](Konfiguration)
-* [Features & API](Features-und-API)
+* [Getting Started](Getting-Started)
+* [Configuration](Configuration)
+* [Features & API](Features-and-API)
 * [Troubleshooting](Troubleshooting)
 
-* [Systemanforderungen](Systemanforderungen)
-* [Entwicklung & CI/CD](Entwicklung)
-* [Bilder & Screenshots](Images)
+* [System Requirements](System-Requirements)
+* [Development & CI/CD](Development)
+* [Screenshots](Screenshots)

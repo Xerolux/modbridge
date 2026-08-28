@@ -1,4 +1,5 @@
 <template>
+import { useI18n } from 'vue-i18n';
     <div class="p-2 sm:p-4 flex flex-col gap-4">
         <h1 class="text-xl sm:text-2xl font-bold mb-2 sm:mb-4 text-gray-800 dark:text-gray-200">Configuration</h1>
 
@@ -321,6 +322,7 @@
 
  const loading = ref(true);
  const toast = useToast();
+const { t } = useI18n();
  const confirm = useConfirm();
  const store = useAppStore();
 
@@ -389,7 +391,7 @@
          const res = await axios.get('/api/config/system');
          config.value = { ...config.value, ...res.data };
      } catch (e) {
-         toast.add({ severity: 'error', summary: 'Fehler', detail: 'Konfiguration konnte nicht geladen werden', life: 5000 });
+         toast.add({ severity: 'error', summary: t('common.error'), detail: t('config.loadError'), life: 5000 });
      }
  };
 
@@ -423,11 +425,11 @@
          // Provide user-friendly error messages for common password validation errors
          if (typeof errorMsg === 'string') {
              if (errorMsg.includes('at least 8 characters')) {
-                 errorMsg = 'Das Passwort muss mindestens 8 Zeichen lang sein';
+                 errorMsg = t('config.passwordErrorMinLength');
              } else if (errorMsg.includes('at least 3 of')) {
-                 errorMsg = 'Das Passwort muss mindestens 3 dieser Zeichenarten enthalten: Großbuchstaben, Kleinbuchstaben, Zahlen, Sonderzeichen';
+                 errorMsg = t('config.passwordErrorComplexity');
              } else if (errorMsg.includes('too common')) {
-                 errorMsg = 'Das Passwort ist zu einfach oder häufig verwendet';
+                 errorMsg = t('config.passwordErrorTooCommon');
              }
          }
          toast.add({ severity: 'error', summary: 'Error', detail: errorMsg, life: 5000 });

@@ -10,20 +10,20 @@
     <div class="panel-header" @mousedown="startDrag">
       <div class="header-content">
         <i class="pi pi-cog text-lg animate-spin-slow"></i>
-        <span class="font-semibold">Proxy-Konfiguration</span>
+        {{ t('configPanel.title') }}
       </div>
       <div class="header-actions">
         <button
           @click="toggleMinimize"
           class="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center hover:bg-white/10 rounded transition-colors"
-          :title="minimized ? 'Erweitern' : 'Minimieren'"
+          :title="minimized ? t('configPanel.expand') : t('configPanel.minimize')"
         >
           <i :class="minimized ? 'pi pi-chevron-down' : 'pi pi-chevron-up'"></i>
         </button>
         <button
           @click="close"
           class="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center hover:bg-red-500/30 rounded transition-colors text-red-400"
-          title="Schließen"
+          :title="t('configPanel.close')"
         >
           <i class="pi pi-times"></i>
         </button>
@@ -34,7 +34,7 @@
     <div v-if="!minimized" class="panel-content">
       <!-- Proxy Selection -->
       <div class="section">
-        <h3 class="section-title">Proxies auswählen</h3>
+        <h3 class="section-title">{{ t('configPanel.selectProxies') }}</h3>
         <div class="proxy-list">
           <div
             v-for="proxy in proxies"
@@ -56,14 +56,14 @@
       <!-- Batch Configuration -->
       <div v-if="selectedProxies.length > 0" class="section">
         <h3 class="section-title">
-          Batch-Konfiguration
-          <span class="text-sm font-normal text-gray-500 dark:text-gray-400">({{ selectedProxies.length }} ausgewählt)</span>
+          {{ t('configPanel.batchTitle') }}
+          <span class="text-sm font-normal text-gray-500 dark:text-gray-400">({{ t('configPanel.selectedCount', { n: selectedProxies.length }) }})</span>
         </h3>
 
         <div class="config-form">
           <!-- Connection Settings -->
           <div class="config-group">
-            <label class="config-label">Verbindungstimeout (s)</label>
+            <label class="config-label">{{ t('configPanel.connTimeout') }}</label>
             <InputNumber
               v-model="batchConfig.connection_timeout"
               :min="1"
@@ -74,7 +74,7 @@
           </div>
 
           <div class="config-group">
-            <label class="config-label">Read Timeout (s)</label>
+            <label class="config-label">{{ t('configPanel.readTimeout') }}</label>
             <InputNumber
               v-model="batchConfig.read_timeout"
               :min="1"
@@ -85,7 +85,7 @@
           </div>
 
           <div class="config-group">
-            <label class="config-label">Max Retries</label>
+            <label class="config-label">{{ t('configPanel.maxRetries') }}</label>
             <InputNumber
               v-model="batchConfig.max_retries"
               :min="0"
@@ -96,7 +96,7 @@
           </div>
 
           <div class="config-group">
-            <label class="config-label">Max Read Size (0=unbegrenzt)</label>
+            <label class="config-label">{{ t('configPanel.maxReadSizeHint') }}</label>
             <InputNumber
               v-model="batchConfig.max_read_size"
               :min="0"
@@ -107,7 +107,7 @@
           </div>
 
           <div class="config-group">
-            <label class="config-label">Connect Delay (ms)</label>
+            <label class="config-label">{{ t('configPanel.connectDelay') }}</label>
             <InputNumber
               v-model="batchConfig.connect_delay_ms"
               :min="0"
@@ -153,14 +153,14 @@
           <div class="config-group checkbox-group">
             <div class="flex items-center gap-2">
               <Checkbox v-model="batchConfig.enabled" binary />
-              <span class="text-sm">Aktiviert</span>
+              <span class="text-sm">{{ t('configPanel.enabled') }}</span>
             </div>
           </div>
 
           <div class="config-group checkbox-group">
             <div class="flex items-center gap-2">
               <Checkbox v-model="batchConfig.paused" binary />
-              <span class="text-sm">Pausiert</span>
+              <span class="text-sm">{{ t('configPanel.paused') }}</span>
             </div>
           </div>
         </div>
@@ -168,21 +168,21 @@
         <!-- Actions -->
         <div class="actions">
           <Button
-            label="Konfiguration anwenden"
+            :label="t('configPanel.apply')"
             icon="pi pi-check"
             @click="applyBatchConfig"
             :loading="applying"
             class="flex-1"
           />
           <Button
-            label="Alle starten"
+            :label="t('configPanel.startAll')"
             icon="pi pi-play"
             severity="success"
             @click="batchAction('start_all')"
             :loading="applying"
           />
           <Button
-            label="Alle stoppen"
+            :label="t('configPanel.stopAll')"
             icon="pi pi-stop"
             severity="danger"
             @click="batchAction('stop_all')"
@@ -194,7 +194,7 @@
       <!-- Empty State -->
       <div v-else class="empty-state">
          <i class="pi pi-arrow-left text-4xl text-gray-400 dark:text-gray-500 mb-3"></i>
-         <p class="text-gray-500 dark:text-gray-400">Wähle Proxies aus, um sie zu konfigurieren</p>
+         <p class="text-gray-500 dark:text-gray-400">{{ t('configPanel.emptyHint') }}</p>
       </div>
     </div>
   </div>
@@ -203,6 +203,7 @@
 
 <script setup>
 import { ref, reactive, onUnmounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import InputNumber from 'primevue/inputnumber';
 import Checkbox from 'primevue/checkbox';
 import Button from 'primevue/button';
@@ -229,6 +230,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close', 'refresh']);
+const { t } = useI18n();
 const toast = useToast();
 const confirm = useConfirm();
 
@@ -356,11 +358,11 @@ const applyBatchConfig = async () => {
     });
 
     await Promise.all(promises);
-    toast.add({ severity: 'success', summary: 'Erfolg', detail: 'Konfiguration angewendet', life: 3000 });
+    toast.add({ severity: 'success', summary: t('common.success'), detail: t('configPanel.applied'), life: 3000 });
     emit('refresh');
     selectedProxies.value = [];
   } catch (error) {
-    toast.add({ severity: 'error', summary: 'Fehler', detail: error.response?.data || error.message, life: 5000 });
+    toast.add({ severity: 'error', summary: t('common.error'), detail: error.response?.data || error.message, life: 5000 });
   } finally {
     applying.value = false;
   }
@@ -368,20 +370,20 @@ const applyBatchConfig = async () => {
 
 const batchAction = async (action) => {
   const message = action === 'start_all'
-    ? `Sollen wirklich alle ${selectedProxies.value.length} ausgewählten Proxies gestartet werden?`
-    : `Sollen wirklich alle ${selectedProxies.value.length} ausgewählten Proxies gestoppt werden?`;
+    ? t('configPanel.confirmStartAll', { n: selectedProxies.value.length })
+    : t('configPanel.confirmStopAll', { n: selectedProxies.value.length });
   confirm.require({
     message,
-    header: 'Batch-Aktion bestätigen',
+    header: t('configPanel.confirmBatchTitle'),
     icon: 'pi pi-exclamation-triangle',
     accept: async () => {
       applying.value = true;
       try {
         await axios.post('/api/proxies/control', { action, ids: selectedProxies.value });
-        toast.add({ severity: 'success', summary: 'Erfolg', detail: `Aktion "${action}" ausgeführt`, life: 3000 });
+        toast.add({ severity: 'success', summary: t('common.success'), detail: t('configPanel.actionExecuted', { action }), life: 3000 });
         emit('refresh');
       } catch (error) {
-        toast.add({ severity: 'error', summary: 'Fehler', detail: error.response?.data || error.message, life: 5000 });
+        toast.add({ severity: 'error', summary: t('common.error'), detail: error.response?.data || error.message, life: 5000 });
       } finally {
         applying.value = false;
       }

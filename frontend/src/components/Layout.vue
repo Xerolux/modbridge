@@ -194,7 +194,7 @@ onUnmounted(() => {
     </div>
 
     <Transition name="fade">
-      <button v-if="mobileMenuOpen" type="button" class="mobile-backdrop lg:hidden" aria-label="Navigation schließen" @click="closeMobileMenu"></button>
+      <button v-if="mobileMenuOpen" type="button" class="mobile-backdrop lg:hidden" :aria-label="t('nav.closeNavigation')" @click="closeMobileMenu"></button>
     </Transition>
     <Transition name="slide">
       <aside ref="mobileDrawer" v-if="mobileMenuOpen" class="mobile-drawer lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">

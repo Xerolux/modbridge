@@ -1,6 +1,6 @@
 # ModBridge - Modbus TCP Proxy Manager
 
-**Version:** v2.0.4
+**Version:** v2.0.10
 
 [![GitHub Release](https://img.shields.io/github/release/xerolux/modbridge.svg?style=for-the-badge)](https://github.com/xerolux/modbridge/releases)
 [![Downloads](https://img.shields.io/github/downloads/xerolux/modbridge/latest/total.svg?style=for-the-badge)](https://github.com/xerolux/modbridge/releases)
@@ -16,210 +16,192 @@
 
 ![ModBridge — Modbus TCP Proxy Manager](./assets/banner.svg)
 
-**ModBridge** ist ein moderner, robuster Modbus TCP Proxy Manager mit einer eleganten Web-Oberfläche. Er ermöglicht das Multiplexing und Management von Modbus-Verbindungen und bietet detailliertes Monitoring, Logging und Sicherheit in einem kompakten, einfach bereitzustellenden Paket.
+**ModBridge** is a modern, robust Modbus TCP proxy manager with an elegant web interface. It multiplexes and manages Modbus connections and provides detailed monitoring, logging, and security in a compact, easy-to-deploy package.
 
-## 📖 Ausführliche Dokumentation (Wiki)
+## 📖 Full Documentation (Wiki)
 
-Alle ausführlichen Informationen zu Konfiguration (Web-UI & Headless) und Nutzung finden Sie in unserem **[GitHub Wiki](https://github.com/Xerolux/modbridge/wiki)**.
+All detailed information about configuration (Web UI & headless) and usage can be found in the **[GitHub Wiki](https://github.com/Xerolux/modbridge/wiki)**.
 
-### Schnellzugriff:
-- ⚙️ **[Konfiguration (WebUI & Headless)](https://github.com/Xerolux/modbridge/wiki/Konfiguration)**
-- 🔧 **[Features & API](https://github.com/Xerolux/modbridge/wiki/Features-und-API)**
+### Quick access:
+- ⚙️ **[Configuration (WebUI & Headless)](https://github.com/Xerolux/modbridge/wiki/Configuration)**
+- 🔧 **[Features & API](https://github.com/Xerolux/modbridge/wiki/Features-and-API)**
 - 🩺 **[Troubleshooting](https://github.com/Xerolux/modbridge/wiki/Troubleshooting)**
 
 ---
 
-## ⚙️ Was ModBridge zwischen Client und Gerät tut
+## ⚙️ What ModBridge does between client and device
 
-Ein Proxy ist kein Kabel. ModBridge sitzt zwischen deinem Client (Home
-Assistant, SCADA, eigenes Skript) und dem Modbus-Gerät und löst die Probleme,
-die dort entstehen:
+A proxy is not a cable. ModBridge sits between your client (Home Assistant, SCADA, your own script) and the Modbus device and solves the problems that arise there:
 
-![Wie ModBridge zwischen Clients und Modbus-Geräten sitzt](./docs/assets/diagrams/uebersicht.svg)
+![How ModBridge sits between clients and Modbus devices](./docs/assets/diagrams/uebersicht.svg)
 
-**Ohne Konfiguration, immer aktiv:**
+**Always active, no configuration needed:**
 
-- **Transaktions-Zuordnung** — zum Gerät hin vergibt ModBridge eigene
-  Transaktions-IDs und verwirft Antworten, die nicht zur laufenden Anfrage
-  gehören. Ohne das wird eine verspätete Antwort zur Antwort auf die *nächste*
-  Anfrage, und ab da schlägt jede Abfrage fehl.
-- **Zeitbudget pro Anfrage** — läuft es ab, kommt eine saubere Modbus-Exception
-  statt einer verspäteten Antwort, auf die niemand mehr wartet.
+- **Transaction matching** — towards the device, ModBridge assigns its own transaction IDs and discards responses that do not belong to the current request. Without this, a late response becomes the answer to the *next* request, and from then on every query fails.
+- **Time budget per request** — when it expires, the client gets a clean Modbus exception instead of a late response nobody is waiting for anymore.
 
-**Pro Proxy einstellbar, standardmäßig aus:**
+**Configurable per proxy, off by default:**
 
-| Option | Wofür |
-|--------|-------|
-| `max_target_conns` | Geräte, die nur eine Modbus-Sitzung bedienen (SolarEdge/SunSpec und viele Wechselrichter) |
-| `min_request_gap_ms` | Geräte, die Anfragen ohne Pause verwerfen. Achtung: der Wert kostet **pro Anfrage** |
-| `request_timeout_ms` | Harte Obergrenze inklusive Wiederholungen |
-| `cache_enabled` + `poll_interval_ms` | Register im Hintergrund warm halten, damit der Client nicht auf ein träges Gerät wartet |
+| Option | Purpose |
+|--------|---------|
+| `max_target_conns` | Devices that serve only one Modbus session (SolarEdge/SunSpec and many inverters) |
+| `min_request_gap_ms` | Devices that discard requests sent without a pause. Note: this cost applies **per request** |
+| `request_timeout_ms` | Hard upper bound including retries |
+| `cache_enabled` + `poll_interval_ms` | Keep registers warm in the background so the client never waits for a sluggish device |
 
-**In der Oberfläche:**
+**In the web interface:**
 
-- **Geräte-Profile** — rund 60 Einträge in sieben Kategorien (Wechselrichter,
-  Wärmepumpen, Lüftung, Zähler, Speicher, Wallboxen, Allgemein). Sie füllen das
-  Formular mit Werten, die zur Geräteklasse passen, und ändern sonst nichts.
-- **Gerät vermessen** — tastet Abstand, Verbindungen und Antwortzeit am echten
-  Gerät ab und schlägt Werte vor, statt sie zu schätzen. Nur Lesezugriffe,
-  höchstens 90 Sekunden, und übernommen wird erst auf Klick. Für die Dauer
-  trennt der Proxy verbundene Clients und nimmt keine neuen an; sie verbinden
-  sich danach von selbst wieder.
+- **Device profiles** — about 60 entries in seven categories (inverters, heat pumps, ventilation, meters, storage, wallboxes, general). They fill the form with values that fit the device class and change nothing else.
+- **Measure the device** — probes gap, connections, and response time on the real device and suggests values instead of guessing. Read access only, 90 seconds at most, and nothing is applied until you click. For the duration, the proxy disconnects connected clients and accepts no new ones; they reconnect on their own afterwards.
 
-Details dazu im [Wiki](https://github.com/Xerolux/modbridge/wiki):
-[Konfiguration](https://github.com/Xerolux/modbridge/wiki/Konfiguration) und
+Details in the [Wiki](https://github.com/Xerolux/modbridge/wiki):
+[Configuration](https://github.com/Xerolux/modbridge/wiki/Configuration) and
 [Troubleshooting](https://github.com/Xerolux/modbridge/wiki/Troubleshooting).
 
-### Cache und Hintergrund-Abfrage
+### Cache and background polling
 
-Ein träges Gerät lässt jeden Client warten. Der Cache hält die Register warm,
-die tatsächlich abgefragt werden, und die Hintergrund-Abfrage frischt sie im
-eigenen Takt auf — der Client bekommt seine Antwort sofort, das Gerät wird
-seltener gefragt.
+A sluggish device makes every client wait. The cache keeps exactly the registers that are actually queried warm, and the background poller refreshes them on its own schedule — the client gets its answer immediately, and the device is asked less often.
 
-![Cache und Hintergrund-Abfrage im Zusammenspiel](./docs/assets/diagrams/cache-und-poller.svg)
+![Cache and background polling working together](./docs/assets/diagrams/cache-und-poller.svg)
 
-Beides ist standardmäßig aus, denn der Kompromiss will bewusst gewählt sein:
-**ein Wert aus dem Cache ist nicht der Live-Wert.** Schreibzugriffe laufen nie
-über den Cache und verwerfen den betroffenen Eintrag.
+Both are off by default, because the trade-off should be a deliberate choice:
+**a cached value is not the live value.** Writes never go through the cache and invalidate the affected entries.
 
-### Gerät vermessen
+### Measuring the device
 
-Statt Werte zu schätzen, misst ModBridge sie am Gerät vor dir: der Abstand
-zwischen Anfragen wird schrittweise verkürzt, bis das Gerät Anfragen verwirft,
-und der letzte saubere Schritt bekommt eine Reserve.
+Instead of estimating values, ModBridge measures them on the device in front of you: the gap between requests is shortened step by step until the device starts discarding requests, and the last clean step gets a safety margin.
 
-![Wie die Kalibrierung misst](./docs/assets/diagrams/kalibrierung.svg)
+![How the calibration measures](./docs/assets/diagrams/kalibrierung.svg)
 
-## 🚀 Installation mit `modbridge` (empfohlen)
+## 🚀 Installation with `modbridge` (recommended)
 
-Das Installationsskript übernimmt alles: Binary-Download, systemd-Service mit Autostart und Einrichtung als systemweites CLI-Kommando (`modbridge`).
+The install script handles everything: binary download, systemd service with autostart, and setup as a system-wide CLI command (`modbridge`).
 
-### Quick Install (einzeilig)
+### Quick Install (one-liner)
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/Xerolux/modbridge/main/scripts/modbridge.sh | sudo bash -s install
 ```
 
-### Schritt für Schritt
+### Step by step
 
 ```bash
-# 1. Skript herunterladen
+# 1. Download the script
 curl -sSL -o modbridge.sh https://raw.githubusercontent.com/Xerolux/modbridge/main/scripts/modbridge.sh
 chmod +x modbridge.sh
 
-# 2. Installieren (interaktiv mit Menü)
+# 2. Install (interactive, with menus)
 sudo bash modbridge.sh install
 
-# 3. Danach ist 'modbridge' systemweit verfügbar
+# 3. Afterwards 'modbridge' is available system-wide
 sudo modbridge status
 ```
 
-### Was passiert bei der Installation?
+### What happens during installation?
 
-| Schritt | Beschreibung |
-|---------|-------------|
-| Architektur erkennen | amd64, arm64 oder arm automatisch erkannt |
-| Variante wählen | Full (mit WebUI) oder Headless (ohne WebUI) |
-| Version wählen | Neueste Release von GitHub, oder ältere wählen |
-| Binary download | Passende Binary nach `/opt/modbridge/modbridge` |
-| Script installieren | Skript nach `/usr/local/bin/modbridge` kopiert |
-| systemd-Service | Service mit Autostart erstellt und gestartet |
+| Step | Description |
+|------|-------------|
+| Detect architecture | amd64, arm64, or arm detected automatically |
+| Choose variant | Full (with WebUI) or Headless (without WebUI) |
+| Choose version | Latest release from GitHub, or pick an older one |
+| Download binary | Matching binary to `/opt/modbridge/modbridge` |
+| Install script | Script copied to `/usr/local/bin/modbridge` |
+| systemd service | Service created with autostart and started |
 
-Nach der Installation startet ModBridge automatisch bei jedem Systemstart. Alle konfigurierten Proxies werden automatisch mitgestartet.
+After installation, ModBridge starts automatically on every system boot. All configured proxies are started automatically as well.
 
-### Alle Befehle
+### All commands
 
 ```bash
-modbridge                          # Interaktives TUI-Menü (whiptail)
-modbridge install [--auto]         # Installieren (oder Neuinstallation)
-modbridge update [--auto]          # Aktualisieren
-modbridge start                    # Service starten
-modbridge stop                     # Service stoppen
-modbridge restart                  # Service neustarten
-modbridge status                   # Status anzeigen
-modbridge logs [-f]                # Logs (live mit -f)
-modbridge health                   # Health-Check
-modbridge config                   # Config bearbeiten (nano/vi)
-modbridge backup                   # Config + DB sichern
-modbridge version                  # Version anzeigen
-modbridge uninstall                # Vollständig entfernen
+modbridge                          # Interactive TUI menu (whiptail)
+modbridge install [--auto]         # Install (or reinstall)
+modbridge update [--auto]          # Update
+modbridge start                    # Start the service
+modbridge stop                     # Stop the service
+modbridge restart                  # Restart the service
+modbridge status                   # Show status
+modbridge logs [-f]                # Logs (live with -f)
+modbridge health                   # Health check
+modbridge config                   # Edit config (nano/vi)
+modbridge backup                   # Back up config + DB
+modbridge version                  # Show version
+modbridge uninstall                # Remove completely
 ```
 
-### Optionen
+### Options
 
-| Option | Beschreibung |
+| Option | Description |
 |--------|-------------|
-| `--auto` | Automatischer Modus: neueste Version, WebUI, keine Dialoge |
-| `--headless` | Automatischer Modus, Headless-Variante |
-| `--force` | Installation erzwingen (überschreibt bestehende) |
-| `NO_UPDATE=1` | Script-Auto-Update überspringen |
+| `--auto` | Automatic mode: latest version, WebUI, no dialogs |
+| `--headless` | Automatic mode, headless variant |
+| `--force` | Force installation (overwrites existing one) |
+| `NO_UPDATE=1` | Skip the script self-update |
 
-### Selbst-Update
+### Self-update
 
-Das Skript prüft bei **jedem Aufruf** automatisch auf eine neuere Version. Falls verfügbar, lädt es die neue Version herunter und startet sich selbst neu. Kein manuelles Eingreifen nötig.
+The script automatically checks for a newer version on **every invocation**. If one is available, it downloads the new version and restarts itself. No manual intervention required.
 
 ```bash
-# Prüft automatisch auf Script-Updates, dann installieren
+# Checks for script updates automatically, then installs
 sudo modbridge install
 
-# Update-Prüfung überspringen
+# Skip the update check
 NO_UPDATE=1 sudo modbridge install
 ```
 
-### Update & Neuinstallation — Daten bleiben erhalten
+### Update & reinstall — your data is preserved
 
-ModBridge schützt Ihre Daten bei Updates und Neuinstallationen:
+ModBridge protects your data during updates and reinstalls:
 
-| Aktion | Config (`config.json`) | Datenbank (`modbridge.db`) | Proxies |
-|--------|----------------------|---------------------------|---------|
-| `modbridge update` | **Erhalten** + Backup | **Erhalten** | **Erhalten**, Service wird neugestartet |
-| `modbridge install` (bereits installiert) | **Erhalten** — bietet Update an | **Erhalten** | **Erhalten** |
-| `modbridge install --force` | **Erhalten** + Backup | **Erhalten** | **Erhalten**, Neuinstallation |
-| `modbridge uninstall` | Gelöscht (Backup optional) | Gelöscht (Backup optional) | Gelöscht |
+| Action | Config (`config.json`) | Database (`modbridge.db`) | Proxies |
+|--------|------------------------|---------------------------|---------|
+| `modbridge update` | **Preserved** + backup | **Preserved** | **Preserved**, service is restarted |
+| `modbridge install` (already installed) | **Preserved** — offers an update | **Preserved** | **Preserved** |
+| `modbridge install --force` | **Preserved** + backup | **Preserved** | **Preserved**, reinstall |
+| `modbridge uninstall` | Deleted (backup optional) | Deleted (backup optional) | Deleted |
 
-**Update-Prozess im Detail:**
-1. Service wird gestoppt
-2. Config wird automatisch nach `/opt/modbridge/backups/` gesichert
-3. Alte Binary wird als `modbridge.backup.ZEITSTEMPEL` behalten
-4. Neue Binary wird heruntergeladen
-5. Service wird neugestartet
-6. Falls der Start fehlschlägt → automatisches Rollback auf die vorherige Binary
+**Update process in detail:**
+1. Service is stopped
+2. Config is automatically backed up to `/opt/modbridge/backups/`
+3. Old binary is kept as `modbridge.backup.TIMESTAMP`
+4. New binary is downloaded
+5. Service is restarted
+6. If startup fails → automatic rollback to the previous binary
 
-**Neuinstallation** (z.B. nach Versionswechsel Full ↔ Headless):
+**Reinstall** (e.g. after switching variants Full ↔ Headless):
 ```bash
 sudo modbridge install --force
-# Config und DB bleiben erhalten, nur Binary wird ausgetauscht
+# Config and DB are preserved, only the binary is replaced
 ```
 
-### Manuelle Backup-Verwaltung
+### Manual backup management
 
 ```bash
-# Backup erstellen
+# Create a backup
 sudo modbridge backup
 # → /opt/modbridge/backups/config-20260401_120000.json
 # → /opt/modbridge/backups/db-20260401_120000.db
 
-# Config bearbeiten
+# Edit the config
 sudo modbridge config
 
-# Nach Config-Änderungen Service neustarten
+# Restart the service after config changes
 sudo modbridge restart
 ```
 
-### Unterstützte Architekturen
+### Supported architectures
 
-| Architektur | System |
-|------------|--------|
-| `amd64` | Intel/AMD 64-bit (Standard Server, PC) |
-| `arm64` | ARM 64-bit (Raspberry Pi 4/5, ARM Server) |
+| Architecture | System |
+|--------------|--------|
+| `amd64` | Intel/AMD 64-bit (standard servers, PCs) |
+| `arm64` | ARM 64-bit (Raspberry Pi 4/5, ARM servers) |
 | `arm` | ARM 32-bit (Raspberry Pi Zero/1/2/3, 32-bit OS) |
 
 ---
 
 ## 🐳 Docker Deployment
 
-Alternative Installation via Docker Compose:
+Alternative installation via Docker Compose:
 
 ```yaml
 version: '3.8'
@@ -231,7 +213,7 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
-      - "5020-5030:5020-5030" # Port-Range für Proxies
+      - "5020-5030:5020-5030" # Port range for proxies
     volumes:
       - ./config.json:/app/config.json
       - ./data:/app/data
@@ -243,40 +225,40 @@ docker-compose up -d
 
 ---
 
-## 💻 Web-UI
+## 💻 Web UI
 
-Nach der Installation (Full-Variante) ist die Web-UI erreichbar unter:
+After installation (Full variant), the web UI is available at:
 
 ```
-http://<IP-DES-SERVERS>:8080
+http://<SERVER-IP>:8080
 ```
 
-Das Admin-Passwort wird beim ersten Start automatisch generiert und in den Logs angezeigt:
+The admin password is generated automatically on first start and printed to the logs:
 
 ```bash
 modbridge logs | grep -i password
 ```
 
-### So sieht das aus
+### What it looks like
 
 | | |
 |---|---|
-| ![Dashboard](./docs/assets/screenshots/dashboard.png) | ![Proxy-Steuerung](./docs/assets/screenshots/proxies.png) |
-| **Dashboard** — Zustand aller Proxys auf einen Blick | **Steuerung** — Proxys anlegen, starten, gruppieren |
-| ![Proxy bearbeiten](./docs/assets/screenshots/proxy-dialog.png) | ![Letzte Messung](./docs/assets/screenshots/calibration-report.png) |
-| **Proxy-Dialog** — Profil, Abstand, Cache, Protokoll | **Messbericht** — jeder Schritt nachvollziehbar, Übernahme auf Klick |
+| ![Dashboard](./docs/assets/screenshots/dashboard.png) | ![Proxy control](./docs/assets/screenshots/proxies.png) |
+| **Dashboard** — the state of all proxies at a glance | **Control** — create, start, and group proxies |
+| ![Edit proxy](./docs/assets/screenshots/proxy-dialog.png) | ![Last measurement](./docs/assets/screenshots/calibration-report.png) |
+| **Proxy dialog** — profile, gap, cache, protocol | **Measurement report** — every step traceable, applied on click |
 
-Weitere Ansichten — Geräte, Logs, dunkles Design und Handy-Format — im
-[Wiki](https://github.com/Xerolux/modbridge/wiki/Images).
+More views — devices, logs, dark theme, and mobile format — in the
+[Wiki](https://github.com/Xerolux/modbridge/wiki/Screenshots).
 
 ---
 
-## 🛠️ Entwicklung & Build
+## 🛠️ Development & Build
 
-Möchten Sie selbst Hand anlegen oder das Projekt aus den Quellen kompilieren?
-Informationen zu `make`-Befehlen, Frontend-Build und mehr finden Sie im Wiki.
+Want to get your hands dirty or compile the project from source?
+See the Wiki for `make` commands, frontend builds, and more.
 
-Lokaler Build:
+Local build:
 ```bash
 make build
 ./modbridge
@@ -284,14 +266,14 @@ make build
 
 ---
 
-## 🤝 Beitragen
-Beiträge sind willkommen! Bitte lesen Sie [CONTRIBUTING.md](CONTRIBUTING.md) für Details.
+## 🤝 Contributing
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
-## 📄 Lizenz
-MIT License - siehe [LICENSE](LICENSE) für Details.
+## 📄 License
+MIT License — see [LICENSE](LICENSE) for details.
 
-## ✍️ Autor
+## ✍️ Author
 - **Xerolux** - [GitHub](https://github.com/Xerolux)
 
 ---
-**Version**: 1.0.17 | **Status**: Beta | **Letzte Aktualisierung**: April 2026
+**Version**: 2.0.10 | **Status**: Beta | **Last updated**: August 2026
