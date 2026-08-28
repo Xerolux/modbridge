@@ -2,4 +2,8 @@ url: "https://xerolux.github.io"
 baseurl: "/modbridge"
 theme: jekyll-theme-cayman
 title: ModBridge Documentation
-description: Ein moderner, robuster Modbus TCP Proxy Manager mit eleganter Web-Oberfläche.
+description: A modern, robust Modbus TCP proxy manager with an elegant web interface.
+# Internal AI-assistant planning docs: not published, and their embedded
+# Vue/JS snippets contain Liquid-unparseable template literals.
+exclude:
+  - superpowers
