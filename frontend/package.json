@@ -18,7 +18,7 @@
     "primevue": "^5.0.1",
     "vue": "^3.5.41",
     "vue-draggable-plus": "^0.6.1",
-    "vue-i18n": "^11.4.8",
+    "vue-i18n": "^11.4.10",
     "vue-router": "^5.2.0"
   },
   "devDependencies": {
