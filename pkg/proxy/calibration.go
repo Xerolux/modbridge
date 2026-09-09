@@ -514,7 +514,13 @@ func (p *ProxyInstance) measureGap(ctx context.Context, probe ProbeSpec, gapMs, 
 	// would then close the first socket and leak the second. On a device that
 	// serves one session that leak holds the session for the rest of the run,
 	// so every later step measures a device that is busy with us.
-	defer func() { conn.Close() }()
+	// The nil check matters: a failed reconnect leaves conn nil and this
+	// would otherwise panic on the way out.
+	defer func() {
+		if conn != nil {
+			conn.Close()
+		}
+	}()
 
 	latencies := make([]float64, 0, requests)
 	gap := time.Duration(gapMs) * time.Millisecond

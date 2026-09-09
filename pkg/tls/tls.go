@@ -119,6 +119,10 @@ func (m *Manager) LoadCertificates() error {
 
 // GetTLSConfig creates a tls.Config from the manager
 func (m *Manager) GetTLSConfig() (*tls.Config, error) {
+	if m.cert == nil {
+		return nil, fmt.Errorf("no certificate loaded: call LoadCertificates first")
+	}
+
 	cfg := &tls.Config{
 		Certificates: []tls.Certificate{*m.cert},
 		MinVersion:   m.parseTLSVersion(m.config.MinVersion),
@@ -147,6 +151,11 @@ func (m *Manager) GetTLSConfig() (*tls.Config, error) {
 		// Use custom verification so we can enforce ExtKeyUsageClientAuth
 		// and support intermediate CAs in the peer chain.
 		cfg.VerifyPeerCertificate = m.VerifyClientCertificate
+	} else if cfg.ClientAuth == tls.VerifyClientCertIfGiven || cfg.ClientAuth == tls.RequireAndVerifyClientCert {
+		// Without a pool Go verifies client certificates against the host's
+		// root store, so any publicly signed certificate would be accepted.
+		// Refuse to serve rather than accept that silently.
+		return nil, fmt.Errorf("client certificate verification requested but no client CA configured (set client_ca_file)")
 	}
 
 	// Enable session tickets
@@ -462,13 +471,18 @@ func trimSpace(s string) string {
 	return s[start:end]
 }
 
-// MutualTLSConfig provides mutual TLS configuration
+// MutualTLSConfig provides mutual TLS configuration. The CA is set as the
+// client CA: with ClientAuth requiring verification, an empty ClientCAs pool
+// makes Go fall back to the host's root store, which would accept any
+// publicly signed client certificate. CAFile is set as well so the same CA
+// is trusted when this config is reused for outbound connections.
 func MutualTLSConfig(certFile, keyFile, caFile string) (*Config, error) {
 	config := &Config{
-		CertFile:   certFile,
-		KeyFile:    keyFile,
-		ClientAuth: "verify-cert",
-		CAFile:     caFile,
+		CertFile:     certFile,
+		KeyFile:      keyFile,
+		ClientAuth:   "verify-cert",
+		CAFile:       caFile,
+		ClientCAFile: caFile,
 	}
 	return config, nil
 }

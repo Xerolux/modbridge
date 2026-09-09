@@ -1,0 +1,41 @@
+# Version control
+.git
+.github
+.gitignore
+
+# Build output
+bin/
+modbridge
+modbridge-*
+coverage.*
+*.test
+
+# Frontend dependencies and build output. The Dockerfile builds the frontend
+# from source in its own stage, so neither is needed in the build context.
+frontend/node_modules
+frontend/dist
+frontend/test-results
+frontend/playwright-report
+pkg/web/dist
+
+# Local runtime state. Copying these would bake an operator's database or logs
+# into the image.
+*.db
+*.db-shm
+*.db-wal
+config.json
+proxy.log
+proxy.log.old
+logs/
+data/
+backups/
+
+# Editor and OS noise
+.idea/
+.vscode/
+.DS_Store
+
+# Docs are not needed to build the binary
+docs/
+*.md
+!README.md

@@ -12,7 +12,10 @@ services:
       - "5020-5030:5020-5030"  # Modbus proxy ports
 
     volumes:
-      - ./config.json:/app/config.json:rw
+      # The config directory is mounted, not config.json itself: saving from
+      # the UI replaces the file, and a bind-mounted single file cannot be
+      # replaced.
+      - modbridge-config:/app/config
       - modbridge-data:/app/data
       - modbridge-logs:/app/logs
 
@@ -20,12 +23,17 @@ services:
       - WEB_PORT=0.0.0.0:8080
       - LOG_LEVEL=INFO
       - TZ=UTC
-      - MODBRIDGE_MAX_CONNECTIONS=10000
-      - MODBRIDGE_CIRCUIT_BREAKER_ENABLED=true
-      - MODBRIDGE_CACHE_ENABLED=true
-      - MODBRIDGE_CACHE_TTL=5s
-      - MODBRIDGE_HEALTH_CHECK_INTERVAL=30s
-      - MODBRIDGE_ALERTING_ENABLED=true
+      # Where the database, the logs and config.json live. These have to match
+      # the volumes above, otherwise the state is written into the container
+      # layer and lost on recreate.
+      - MODBRIDGE_DATA_DIR=/app/data
+      - MODBRIDGE_LOG_DIR=/app/logs
+      - MODBRIDGE_CONFIG=/app/config/config.json
+      # Set this when ModBridge runs behind a reverse proxy, so that
+      # X-Forwarded-For is only trusted from those addresses.
+      # - MODBRIDGE_TRUSTED_PROXIES=172.16.0.0/12
+      # Required in production; keeps CSRF tokens valid across restarts.
+      # - MODBRIDGE_CSRF_SECRET=change-me
 
     restart: unless-stopped
 
@@ -58,5 +66,6 @@ services:
         max-file: "5"
 
 volumes:
+  modbridge-config:
   modbridge-data:
   modbridge-logs:

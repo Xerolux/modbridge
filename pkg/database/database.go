@@ -8,9 +8,18 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+)
+
+const (
+	// SQLite serialises writes; a single connection keeps them queued in the
+	// process rather than failing with SQLITE_BUSY.
+	maxOpenConns = 1
+
+	connMaxLifetime = time.Hour
 )
 
 // DB wraps the SQLite database connection.
@@ -19,63 +28,74 @@ type DB struct {
 }
 
 // NewDB creates a new database connection and initializes the schema.
+//
+// The pragmas below are per-connection in SQLite, so they are passed through
+// the DSN rather than executed once: database/sql keeps a pool and opens more
+// connections on demand, and a connection opened later would otherwise run
+// with foreign keys off and no busy timeout.
 func NewDB(path string) (*DB, error) {
-	conn, err := sql.Open("sqlite3", path)
+	conn, err := sql.Open("sqlite3", buildDSN(path))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Ensure connection is closed on error
+	// Ensure the connection is closed when initialization fails. Assigning to
+	// the named variable is what arms this, so every error path below assigns
+	// to initErr rather than shadowing it.
+	var initErr error
 	defer func() {
-		if err != nil {
+		if initErr != nil {
 			conn.Close()
 		}
 	}()
 
-	// Test connection
-	if err := conn.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
+	// SQLite allows a single writer. Capping the pool keeps concurrent writes
+	// queued inside the process instead of surfacing as SQLITE_BUSY, while WAL
+	// still lets readers proceed.
+	conn.SetMaxOpenConns(maxOpenConns)
+	conn.SetMaxIdleConns(maxOpenConns)
+	conn.SetConnMaxLifetime(connMaxLifetime)
 
-	// Enable WAL mode for better concurrent access
-	if _, err := conn.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		return nil, fmt.Errorf("failed to enable WAL mode: %w", err)
-	}
-
-	// Enable foreign keys
-	// synchronous=NORMAL together with WAL is the setting that matters for
-	// installations on SD cards and cheap SSDs. The default (FULL) forces an
-	// fsync on every commit, and this database records a row per client
-	// connection — on a reconnecting client that is a flush per reconnect.
-	// NORMAL keeps the write-ahead log crash-safe; the exposure is that the
-	// last few committed transactions can be lost on a power cut. For
-	// connection history and audit trails that is the right trade.
-	if _, err := conn.Exec("PRAGMA synchronous=NORMAL"); err != nil {
-		return nil, fmt.Errorf("failed to set synchronous mode: %w", err)
-	}
-
-	// Wait rather than fail when another writer holds the lock.
-	if _, err := conn.Exec("PRAGMA busy_timeout=5000"); err != nil {
-		return nil, fmt.Errorf("failed to set busy timeout: %w", err)
-	}
-
-	if _, err := conn.Exec("PRAGMA foreign_keys=ON"); err != nil {
-		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
+	if initErr = conn.Ping(); initErr != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", initErr)
 	}
 
 	db := &DB{conn: conn}
 
 	// Initialize schema
-	if err := db.initExtendedSchema(); err != nil {
-		return nil, fmt.Errorf("failed to initialize extended schema: %w", err)
+	if initErr = db.initExtendedSchema(); initErr != nil {
+		return nil, fmt.Errorf("failed to initialize extended schema: %w", initErr)
 	}
-	if err := db.initSchema(); err != nil {
-		return nil, fmt.Errorf("failed to initialize schema: %w", err)
+	if initErr = db.initSchema(); initErr != nil {
+		return nil, fmt.Errorf("failed to initialize schema: %w", initErr)
 	}
 
-	// Clear defer error since we succeeded
-	err = nil
 	return db, nil
+}
+
+// buildDSN turns a database path into a go-sqlite3 DSN carrying the pragmas
+// that have to hold on every pooled connection.
+//
+// journal_mode=WAL keeps readers from blocking the writer. synchronous=NORMAL
+// is the setting that matters on SD cards and cheap SSDs: the default (FULL)
+// forces an fsync on every commit, and this database records a row per client
+// connection, so a reconnecting client would cost a flush per reconnect.
+// NORMAL keeps the write-ahead log crash-safe; the exposure is that the last
+// few committed transactions can be lost on a power cut, which is the right
+// trade for connection history and audit trails.
+func buildDSN(path string) string {
+	// An existing query string is kept, so callers can still pass a full DSN
+	// (":memory:" with parameters, for instance).
+	sep := "?"
+	if strings.Contains(path, "?") {
+		sep = "&"
+	}
+	return path + sep + strings.Join([]string{
+		"_journal_mode=WAL",
+		"_synchronous=NORMAL",
+		"_busy_timeout=5000",
+		"_foreign_keys=on",
+	}, "&")
 }
 
 // initSchema creates the database tables if they don't exist.
