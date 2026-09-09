@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -39,7 +40,7 @@ var version = "headless-dev"
 var startTime = time.Now()
 
 func main() {
-	configFile := flag.String("config", "config.json", "Path to configuration file")
+	configFile := flag.String("config", config.ConfigPath(), "Path to configuration file")
 	verbose := flag.Bool("v", false, "Verbose logging (debug level)")
 	showVersion := flag.Bool("version", false, "Print version and exit")
 	httpAddr := flag.String("http-addr", "", "Override the read-only HTTP listen address (defaults to config web_port)")
@@ -64,17 +65,26 @@ func main() {
 		log.Fatal("No proxies defined in config. Exiting.")
 	}
 
-	logLevel := "INFO"
-	if *verbose {
-		logLevel = "DEBUG"
-	}
-	_ = logLevel
-
-	l, err := logger.NewLogger("proxy.log", 1000)
+	l, err := logger.NewLogger(config.LogDir(), 1000)
 	if err != nil {
 		log.Fatalf("Failed to init logger: %v", err)
 	}
 	defer l.Close()
+
+	// -v was parsed but never applied, so debug output never appeared.
+	if *verbose {
+		l.SetLogLevel(logger.DEBUG)
+	} else if cfg.LogLevel != "" {
+		switch logger.LogLevel(strings.ToUpper(cfg.LogLevel)) {
+		case logger.DEBUG, logger.INFO, logger.WARN, logger.ERROR:
+			l.SetLogLevel(logger.LogLevel(strings.ToUpper(cfg.LogLevel)))
+		}
+	}
+	l.SetRotation(logger.RotationConfig{
+		MaxSizeMB:  cfg.LogMaxSize,
+		MaxFiles:   cfg.LogMaxFiles,
+		MaxAgeDays: cfg.LogMaxAgeDays,
+	})
 
 	mgr := manager.NewManager(cfgMgr, l, nil)
 

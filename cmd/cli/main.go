@@ -23,8 +23,12 @@ import (
 	"time"
 )
 
+// version is stamped in at build time with
+// -ldflags "-X main.version=$(cat version.txt)"; it is not the hardcoded
+// release number it used to be.
 var (
-	version = "1.0.0"
+	version   = "dev"
+	buildTime = "unknown"
 )
 
 func main() {
@@ -76,12 +80,12 @@ func runServer(configFile string, port int) {
 	fmt.Printf("Starting ModBridge server on port %d\n", port)
 
 	if configFile == "" {
-		configFile = "config.json"
+		configFile = config.ConfigPath()
 	}
 	fmt.Printf("Using config: %s\n", configFile)
 
 	// Initialize database
-	db, err := database.NewDB("modbridge.db")
+	db, err := database.NewDB(config.DatabasePath())
 	if err != nil {
 		log.Printf("Warning: Failed to init database: %v. Database features will be disabled.", err)
 		db = nil
@@ -94,13 +98,24 @@ func runServer(configFile string, port int) {
 	if err := cfgMgr.Load(); err != nil {
 		log.Printf("Starting with empty config: %v", err)
 	}
+	if err := cfgMgr.Validate(); err != nil {
+		log.Printf("Warning: configuration has validation errors: %v", err)
+	}
 
-	// Initialize logger
-	l, err := logger.NewLogger("logs", 1000)
+	// Initialize logger. The directory matches main.go, so both entry points
+	// write to the same place.
+	l, err := logger.NewLogger(config.LogDir(), 1000)
 	if err != nil {
 		log.Fatalf("Failed to init logger: %v", err)
 	}
 	defer l.Close()
+
+	cfg := cfgMgr.Get()
+	l.SetRotation(logger.RotationConfig{
+		MaxSizeMB:  cfg.LogMaxSize,
+		MaxFiles:   cfg.LogMaxFiles,
+		MaxAgeDays: cfg.LogMaxAgeDays,
+	})
 
 	// Initialize proxy manager
 	mgr := manager.NewManager(cfgMgr, l, db)
@@ -113,7 +128,7 @@ func runServer(configFile string, port int) {
 	go authenticator.CleanupExpiredSessions(authCtx)
 
 	// Initialize API server
-	apiServer := api.NewServer(cfgMgr, mgr, authenticator, l, db, version, "unknown")
+	apiServer := api.NewServer(cfgMgr, mgr, authenticator, l, db, version, buildTime)
 
 	// Setup HTTP router
 	mux := http.NewServeMux()

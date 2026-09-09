@@ -29,7 +29,10 @@ type RateLimiter struct {
 }
 
 type clientLimiter struct {
-	tokens     int
+	// lastSeen is guarded by RateLimiter.mu and drives LRU eviction.
+	lastSeen time.Time
+
+	tokens     float64
 	lastRefill time.Time
 	mu         sync.Mutex
 }
@@ -88,9 +91,17 @@ func parseTrustedProxies() []*net.IPNet {
 	return result
 }
 
-// isTrustedProxy reports whether addr belongs to a configured trusted proxy.
-func (rl *RateLimiter) isTrustedProxy(addr string) bool {
-	if len(rl.trustedProxies) == 0 {
+// TrustedProxiesFromEnv returns the proxy networks configured via
+// MODBRIDGE_TRUSTED_PROXIES (comma-separated IPs or CIDRs). It returns nil when
+// the variable is unset, meaning no proxy headers may be trusted.
+func TrustedProxiesFromEnv() []*net.IPNet {
+	return parseTrustedProxies()
+}
+
+// IsTrustedProxy reports whether addr (a host or host:port address such as
+// http.Request.RemoteAddr) belongs to one of the given trusted proxy networks.
+func IsTrustedProxy(trusted []*net.IPNet, addr string) bool {
+	if len(trusted) == 0 {
 		return false
 	}
 
@@ -104,12 +115,17 @@ func (rl *RateLimiter) isTrustedProxy(addr string) bool {
 		return false
 	}
 
-	for _, n := range rl.trustedProxies {
+	for _, n := range trusted {
 		if n.Contains(ip) {
 			return true
 		}
 	}
 	return false
+}
+
+// isTrustedProxy reports whether addr belongs to a configured trusted proxy.
+func (rl *RateLimiter) isTrustedProxy(addr string) bool {
+	return IsTrustedProxy(rl.trustedProxies, addr)
 }
 
 // Middleware returns a rate limiting middleware
@@ -126,39 +142,56 @@ func (rl *RateLimiter) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// evictOldestLocked removes the least recently seen client. Callers must hold
+// rl.mu. Evicting one entry keeps the map bounded without locking out every
+// new client once the capacity is reached.
+func (rl *RateLimiter) evictOldestLocked() {
+	var oldestIP string
+	var oldest time.Time
+	for ip, c := range rl.clients {
+		if oldestIP == "" || c.lastSeen.Before(oldest) {
+			oldestIP = ip
+			oldest = c.lastSeen
+		}
+	}
+	if oldestIP != "" {
+		delete(rl.clients, oldestIP)
+	}
+}
+
 // allow checks if the request is allowed
 func (rl *RateLimiter) allow(ip string) bool {
+	now := time.Now()
+
 	rl.mu.Lock()
 	limiter, exists := rl.clients[ip]
 	if !exists {
-		// Reject new clients when the map is at capacity to prevent memory exhaustion.
 		if len(rl.clients) >= maxClients {
-			rl.mu.Unlock()
-			return false
+			rl.evictOldestLocked()
 		}
 		limiter = &clientLimiter{
-			tokens:     rl.burst,
-			lastRefill: time.Now(),
+			tokens:     float64(rl.burst),
+			lastRefill: now,
 		}
 		rl.clients[ip] = limiter
 	}
+	limiter.lastSeen = now
 	rl.mu.Unlock()
 
 	limiter.mu.Lock()
 	defer limiter.mu.Unlock()
 
-	// Refill tokens
-	now := time.Now()
-	elapsed := now.Sub(limiter.lastRefill).Seconds()
-	tokensToAdd := int(elapsed * float64(rl.rate))
-
-	limiter.tokens += tokensToAdd
-	if limiter.tokens > rl.burst {
-		limiter.tokens = rl.burst
+	// Refill tokens. Fractional tokens are kept so a rate below one token per
+	// call interval still accumulates instead of being rounded away.
+	if elapsed := now.Sub(limiter.lastRefill).Seconds(); elapsed > 0 {
+		limiter.tokens += elapsed * float64(rl.rate)
+		if limiter.tokens > float64(rl.burst) {
+			limiter.tokens = float64(rl.burst)
+		}
+		limiter.lastRefill = now
 	}
-	limiter.lastRefill = now
 
-	if limiter.tokens > 0 {
+	if limiter.tokens >= 1 {
 		limiter.tokens--
 		return true
 	}

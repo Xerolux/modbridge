@@ -8,9 +8,12 @@ This file describes the codebase structure, development workflows, and conventio
 
 **ModBridge** is a Modbus TCP Proxy Manager with a web UI. It proxies Modbus TCP traffic, exposing a REST API and Vue.js frontend for configuration and monitoring. The application is written in Go (backend) with a Vue.js 3 frontend embedded into the binary.
 
-**Current version:** 1.0.12
-**Go version:** 1.26.1 (see `go.mod`)
+**Current version:** see `version.txt`
+**Go version:** see the `go` directive in `go.mod` (currently 1.26.5)
 **Node version:** 24 (CI/CD, `frontend/`)
+
+Version numbers are deliberately not repeated here — read them from
+`version.txt`, `go.mod` and `frontend/package.json`.
 
 ---
 
@@ -24,7 +27,7 @@ modbridge/
 ├── Makefile                   # All build/test/lint/docker targets
 ├── Dockerfile                 # Multi-stage Docker build
 ├── docker-compose.yml         # Container orchestration
-├── config.json                # Default runtime configuration
+├── config.example.json        # Example runtime configuration (copy to config.json)
 ├── version.txt                # Current version string
 ├── .env.example               # Environment variable template
 ├── pkg/                       # All Go packages (35+, ~26k lines)
@@ -46,9 +49,16 @@ modbridge/
 │   ├── tls/                   # mTLS certificate handling
 │   ├── devices/               # Device tracking
 │   ├── pool/                  # Connection pooling
-│   ├── mapping/               # Register transformations — NOT WIRED UP
+│   ├── batch/                 # Batched register reads (used by pkg/proxy poller)
+│   ├── cache/                 # Response cache — NOT WIRED UP
 │   ├── cluster/               # HA coordination — NOT WIRED UP
-│   ├── batch/                 # Batched register reads — NOT WIRED UP
+│   ├── converter/             # Value conversion — NOT WIRED UP
+│   ├── degradation/           # Graceful degradation — NOT WIRED UP
+│   ├── mapping/               # Register transformations — NOT WIRED UP
+│   ├── rtu/                   # Modbus RTU support — NOT WIRED UP
+│   ├── sanitize/              # Input sanitizing — NOT WIRED UP
+│   ├── timeseries/            # Metric history — NOT WIRED UP
+│   ├── transform/             # Register transforms — NOT WIRED UP
 │   ├── portmanager/           # Dynamic port allocation
 │   ├── web/                   # Embedded frontend assets (dist/ copied here at build time)
 │   └── testing/               # Test utilities: mockmodbus/, integration/, performance/
@@ -107,7 +117,7 @@ All development tasks go through `make`. Run `make help` to see all targets.
 ```bash
 make build            # Build frontend then compile Go binary (./modbridge)
 make build-frontend   # Vue.js only: npm install + vite build → pkg/web/dist/
-make build-all        # Cross-compile: linux-amd64/arm64/arm, windows-amd64, darwin-amd64/arm64
+make build-all        # Cross-compile the released targets: linux amd64/arm64/arm (needs cross-toolchains)
 make run              # Build and run locally
 make dev              # Live reload with `air` (requires: go install github.com/air-verse/air)
 make test             # Run all tests with race detector + coverage
@@ -126,6 +136,7 @@ make update-deps      # Update Go dependencies
 
 - **Go 1.26.1+** with `CGO_ENABLED=1` (required for `go-sqlite3`)
 - **GCC** (for SQLite CGO compilation; cross-compilers for arm: `gcc-aarch64-linux-gnu`, `gcc-arm-linux-gnueabihf`)
+- Cross-compiling always needs `CGO_ENABLED=1` plus a matching `CC`; a CGO-less build compiles but fails at runtime with "Binary was compiled with CGO_ENABLED=0"
 - **Node 24+** (frontend build)
 - **npm** (frontend dependency management)
 
@@ -170,44 +181,73 @@ go test -run TestFunctionName  # Single test
 
 ### config.json
 
-Primary configuration file. Key fields:
+Primary configuration file. `config.example.json` in the repo root is a
+complete, valid example — copy it to `config.json` rather than writing one from
+scratch. The keys are flat and come straight from the `Config` struct in
+`pkg/config/config.go`:
 
 ```json
 {
   "web_port": ":8080",
-  "admin_password_hash": "<bcrypt>",
-  "tls": { "enabled": false, "cert_file": "", "key_file": "" },
+  "admin_pass_hash": "<bcrypt>",
+  "multi_user": true,
+  "log_level": "INFO",
+  "log_max_size": 100,
+  "log_max_files": 10,
+  "log_max_age_days": 30,
+  "tls_enabled": false,
+  "tls_cert_file": "",
+  "tls_key_file": "",
+  "session_timeout": 24,
+  "cors_allowed_origins": ["http://localhost:8080"],
+  "rate_limit_enabled": true,
+  "rate_limit_requests": 60,
+  "rate_limit_burst": 100,
+  "max_connections": 1000,
   "proxies": [
     {
       "id": "uuid",
       "name": "Proxy Name",
       "listen_addr": ":5020",
       "target_addr": "192.168.1.100:502",
-      "timeout": 30,
-      "retries": 3
+      "enabled": true,
+      "connection_timeout": 10,
+      "read_timeout": 5,
+      "max_retries": 3,
+      "max_target_conns": 1
     }
-  ],
-  "logging": { "level": "INFO", "rotation": true, "retention_days": 7 },
-  "cors": { "allowed_origins": ["*"] },
-  "rate_limit": { "enabled": true, "requests_per_minute": 100 },
-  "session_timeout_hours": 24,
-  "max_connections": 1000
+  ]
 }
 ```
 
+A key that is absent keeps its compiled-in default (`config.DefaultConfig`);
+only keys actually present in the file override it. Saving through the API
+rejects a change that would make the configuration invalid.
+
+`log_max_size` (MB), `log_max_files` and `log_max_age_days` drive log rotation
+in `pkg/logger`. Rotation is off when `log_max_size` is 0.
+
 ### Environment Variables
+
+Only these are read by the code. Anything else found in an older
+`docker-compose.yml` or README is a no-op.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `WEB_PORT` | `:8080` | HTTP bind address |
-| `LOG_LEVEL` | `INFO` | `DEBUG`/`INFO`/`WARN`/`ERROR` |
-| `TZ` | `UTC` | Timezone |
-| `VERSION` | `dev` | Version string (injected at build) |
+| `LOG_LEVEL` | `INFO` | `DEBUG`/`INFO`/`WARN`/`ERROR`; overrides `log_level` |
+| `MODBRIDGE_DATA_DIR` | `.` | Directory for `modbridge.db` |
+| `MODBRIDGE_LOG_DIR` | `proxy.log` | Directory for log files |
+| `MODBRIDGE_CONFIG` | `config.json` | Path of the config file |
+| `MODBRIDGE_CSRF_SECRET` | — | CSRF token secret; required in production |
+| `MODBRIDGE_MULTI_USER` | — | Force multi-user auth on/off |
+| `MODBRIDGE_TRUSTED_PROXIES` | — | CIDRs whose `X-Forwarded-For` is trusted |
+| `MODBRIDGE_ENV` / `GO_ENV` | — | `production` enables production checks |
 | `DEBUG` | — | Enable pprof endpoints |
-| `MODBRIDGE_MAX_CONNECTIONS` | `10000` | Global connection limit |
-| `MODBRIDGE_CIRCUIT_BREAKER_ENABLED` | `true` | Circuit breaker toggle |
-| `MODBRIDGE_HEALTH_CHECK_INTERVAL` | `30s` | Health check frequency |
-| `MODBRIDGE_ALERTING_ENABLED` | `true` | Webhook alerting toggle |
+| `TZ` | `UTC` | Timezone (read by the Go runtime, not by ModBridge) |
+
+Everything else is configured in `config.json`, per proxy where it belongs
+(connection limits, circuit breaker, health checks, response cache).
 
 **Configuration priority:** Environment variables > `config.json` > compiled defaults
 
@@ -300,24 +340,27 @@ npm run dev   # Starts Vite dev server with API proxy to :8080
 
 ## CI/CD Pipelines
 
-Located in `.github/workflows/`:
+Four workflows in `.github/workflows/`:
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `main.yml` | push/PR to main, tags | Primary: format check, vet, test, build binaries, Docker push, releases |
-| `release.yml` | tag `v*` | GitHub release with cross-platform binaries and checksums |
-| `docker.yml` | push to main | Docker Hub push (legacy) |
-| `headless.yml` | push to main | Build variant without WebUI |
+| `ci.yml` | push/PR to main | Version stamp, quality (fmt/vet/lint), tests, benchmark guardrails, frontend build, E2E, binaries, headless binaries, auto-release |
+| `release.yml` | tag `v*` | GitHub release with binaries, headless variants and checksums |
 | `pages.yml` | push to main | GitHub Pages docs site |
 | `wiki-sync.yml` | push to main | Sync GitHub Wiki |
 
-**Release process:** Push a tag matching `v*` → CI builds all platforms → creates GitHub release with checksums.
+Released platforms are `linux/amd64` and `linux/arm64` (plus `linux/arm` for
+the headless variant). There are no Windows or macOS builds: CGO is required
+for `go-sqlite3`, so every target needs a matching cross-toolchain.
+
+**Release process:** Push a tag matching `v*` → CI builds the released platforms → creates a GitHub release with checksums.
 
 ---
 
 ## Database
 
 - **SQLite3** via `github.com/mattn/go-sqlite3` (requires CGO)
+- Pragmas (`journal_mode=WAL`, `synchronous=NORMAL`, `busy_timeout`, `foreign_keys`) are passed through the DSN, because they are per-connection; the pool is capped at one connection since SQLite serialises writers
 - Database file: `modbridge.db` (auto-created on first run)
 - Fallback mode: If DB initialization fails, the app runs without persistence (`pkg/database/fallback.go`)
 - Schema defined in `pkg/database/schema_extended.go`
@@ -352,19 +395,24 @@ Default ports:
 2. **Frontend must be built before Go binary:** `make build` handles this, but `go build` alone won't include updated frontend assets.
 3. **Admin password:** On first run with no config, a random admin password is generated and printed to stdout. Check logs.
 4. **Version injection:** The `Version` and `BuildTime` variables in `main.go` are only populated via `ldflags`. `go run main.go` shows `dev`/empty.
-5. **SQLite fallback:** If the database fails to initialize, the app continues in fallback (in-memory/no-persistence) mode — check startup logs.
+5. **No database:** If the database fails to initialize, the app continues without persistence (`db` is nil; users, audit and device history are unavailable) — check startup logs. `pkg/database/fallback.go` contains an unused circuit breaker, it is not wired into this path.
 6. **Frontend output sanitization:** Vite config strips underscore-prefixed filenames from `dist/` to avoid Go embed issues.
+7. **Data locations:** By default the database and logs are written relative to the working directory. In a container set `MODBRIDGE_DATA_DIR`, `MODBRIDGE_LOG_DIR` and `MODBRIDGE_CONFIG` to the mounted volumes, or the state is lost when the container is recreated (`docker-compose.yml` does this).
+8. **Second entry point:** `cmd/modbridge-headless/` builds the WebUI-less variant. `cmd/cli/` is a separate, less complete bootstrap — prefer `main.go` when changing startup behaviour.
 
 ---
 
 ## Dependencies
 
 ### Go (minimal)
-| Module | Version | Purpose |
-|--------|---------|---------|
-| `github.com/google/uuid` | v1.6.0 | UUID generation |
-| `golang.org/x/crypto` | v0.48.0 | bcrypt password hashing |
-| `github.com/mattn/go-sqlite3` | v1.14.37 | SQLite3 (CGO) |
+
+Versions live in `go.mod`; this table only says what each module is for.
+
+| Module | Purpose |
+|--------|---------|
+| `github.com/google/uuid` | UUID generation |
+| `golang.org/x/crypto` | bcrypt password hashing |
+| `github.com/mattn/go-sqlite3` | SQLite3 (CGO) |
 
 ### Frontend (key)
 | Package | Purpose |

@@ -7,11 +7,13 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 // FlexibleTags is a custom type that can unmarshal both string and array for tags
@@ -165,40 +167,47 @@ type Manager struct {
 func NewManager(path string) *Manager {
 	return &Manager{
 		path: path,
-		cfg: Config{
-			WebPort:             ":8080",
-			Proxies:             []ProxyConfig{},
-			LogLevel:            "INFO",
-			LogMaxSize:          100,
-			LogMaxFiles:         10,
-			LogMaxAgeDays:       30,
-			TLSEnabled:          false,
-			SessionTimeout:      24,
-			CORSAllowedOrigins:  []string{"http://localhost:3000", "http://localhost:8080"}, // Default local dev origins
-			CORSAllowedMethods:  []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			CORSAllowedHeaders:  []string{"Content-Type", "Authorization"},
-			RateLimitEnabled:    true,
-			RateLimitRequests:   60,
-			RateLimitBurst:      100,
-			IPWhitelistEnabled:  false,
-			IPBlacklistEnabled:  false,
-			EmailEnabled:        false,
-			EmailAlertOnError:   true,
-			EmailAlertOnWarning: false,
-			BackupEnabled:       true,
-			BackupInterval:      "daily",
-			BackupRetention:     7,
-			BackupPath:          "./backups",
-			BackupDatabase:      true,
-			BackupConfig:        true,
-			MetricsEnabled:      true,
-			MetricsPort:         ":9090",
-			DebugMode:           false,
-			MaxConnections:      1000,
-			// Multi-user (DB-backed auth) is the default mode. Operators can opt
-			// out explicitly via {"multi_user": false} in config.json.
-			MultiUser: true,
-		},
+		cfg:  DefaultConfig(),
+	}
+}
+
+// DefaultConfig returns the compiled-in defaults. Load starts from these, so a
+// config.json that omits a key keeps the default instead of falling back to
+// the zero value.
+func DefaultConfig() Config {
+	return Config{
+		WebPort:             ":8080",
+		Proxies:             []ProxyConfig{},
+		LogLevel:            "INFO",
+		LogMaxSize:          100,
+		LogMaxFiles:         10,
+		LogMaxAgeDays:       30,
+		TLSEnabled:          false,
+		SessionTimeout:      24,
+		CORSAllowedOrigins:  []string{"http://localhost:3000", "http://localhost:8080"}, // Default local dev origins
+		CORSAllowedMethods:  []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		CORSAllowedHeaders:  []string{"Content-Type", "Authorization"},
+		RateLimitEnabled:    true,
+		RateLimitRequests:   60,
+		RateLimitBurst:      100,
+		IPWhitelistEnabled:  false,
+		IPBlacklistEnabled:  false,
+		EmailEnabled:        false,
+		EmailAlertOnError:   true,
+		EmailAlertOnWarning: false,
+		BackupEnabled:       true,
+		BackupInterval:      "daily",
+		BackupRetention:     7,
+		BackupPath:          "./backups",
+		BackupDatabase:      true,
+		BackupConfig:        true,
+		MetricsEnabled:      true,
+		MetricsPort:         ":9090",
+		DebugMode:           false,
+		MaxConnections:      1000,
+		// Multi-user (DB-backed auth) is the default mode. Operators can opt
+		// out explicitly via {"multi_user": false} in config.json.
+		MultiUser: true,
 	}
 }
 
@@ -221,24 +230,13 @@ func (m *Manager) Load() error {
 		return err
 	}
 
-	// Detect which top-level keys were explicitly present so we can apply
-	// defaults only for truly-absent keys (bool's zero value is false, so we
-	// cannot otherwise distinguish "absent" from "explicitly false").
-	var keySet map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &keySet); err != nil {
-		return err
-	}
-
-	var cfg Config
+	// Unmarshal into the defaults rather than into a zero Config: a key that
+	// config.json omits then keeps its default instead of becoming 0 or "".
+	// This also settles the bool case — an explicit {"multi_user": false}
+	// overwrites the default, an absent key does not.
+	cfg := DefaultConfig()
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		return err
-	}
-
-	// Multi-user (DB-backed auth) is the default mode. An operator can opt out
-	// explicitly via {"multi_user": false} in config.json; that explicit value
-	// is honored because the key is present. An absent key defaults to true.
-	if _, ok := keySet["multi_user"]; !ok {
-		cfg.MultiUser = true
 	}
 
 	m.cfg = cfg
@@ -249,16 +247,27 @@ func (m *Manager) Load() error {
 // fsyncs it, and renames it over the target. A crash mid-write would
 // otherwise truncate config.json in place, and the next successful save
 // would permanently overwrite the operator's config with compiled defaults.
+//
+// The rename can fail on a path that is not a plain file in a plain
+// directory. Bind-mounting config.json into a container is the case that
+// shows up in practice: the mount point cannot be replaced, and rename
+// returns EBUSY (or EXDEV when the temp file and the target end up on
+// different filesystems). Falling back to an in-place write keeps the UI
+// working there; it gives up atomicity, which is the lesser problem.
 func (m *Manager) writeConfigFile() error {
+	data, err := json.MarshalIndent(m.cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+
 	tmp := m.path + ".tmp"
 	f, err := os.Create(tmp)
 	if err != nil {
 		return err
 	}
 
-	enc := json.NewEncoder(f)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(m.cfg); err != nil {
+	if _, err := f.Write(data); err != nil {
 		f.Close()
 		os.Remove(tmp)
 		return err
@@ -272,7 +281,40 @@ func (m *Manager) writeConfigFile() error {
 		os.Remove(tmp)
 		return err
 	}
-	return os.Rename(tmp, m.path)
+
+	if err := os.Rename(tmp, m.path); err != nil {
+		os.Remove(tmp)
+		if !isReplaceUnsupported(err) {
+			return err
+		}
+		return m.writeInPlace(data)
+	}
+	return nil
+}
+
+// writeInPlace overwrites the target without replacing the directory entry.
+func (m *Manager) writeInPlace(data []byte) error {
+	f, err := os.OpenFile(m.path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if _, err := f.Write(data); err != nil {
+		return err
+	}
+	return f.Sync()
+}
+
+// isReplaceUnsupported reports whether a rename failed because the target
+// cannot be replaced, rather than because of a genuine I/O problem.
+func isReplaceUnsupported(err error) bool {
+	return errors.Is(err, syscall.EBUSY) ||
+		errors.Is(err, syscall.EXDEV) ||
+		errors.Is(err, syscall.EPERM) ||
+		errors.Is(err, syscall.EACCES) ||
+		errors.Is(err, syscall.EISDIR) ||
+		errors.Is(err, syscall.ENOTDIR)
 }
 
 // Save writes config to disk.
@@ -344,6 +386,16 @@ func (m *Manager) Update(fn func(*Config) error) error {
 
 	if err := fn(&newCfg); err != nil {
 		return err
+	}
+
+	// Reject an update that would make the config invalid. The comparison
+	// against the current config matters: an install whose config.json is
+	// already invalid must still be able to change proxy state, so only newly
+	// introduced validation errors are refused.
+	if err := NewValidator().Validate(&newCfg); err != nil {
+		if NewValidator().Validate(&m.cfg) == nil {
+			return fmt.Errorf("refusing invalid configuration: %w", err)
+		}
 	}
 
 	m.previous = &prev

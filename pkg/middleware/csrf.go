@@ -6,7 +6,9 @@
 package middleware
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"net/http"
@@ -59,12 +61,16 @@ func (m *CSRFMiddleware) GenerateToken(sessionID string) string {
 		return entry.token
 	}
 
-	token := generateRandomToken(32)
+	token := m.deriveToken(sessionID)
 	if token == "" {
 		// Retry once — if crypto/rand fails twice the system has a serious problem.
-		token = generateRandomToken(32)
+		token = m.deriveToken(sessionID)
 	}
-	// If both attempts failed, return empty string; the caller must handle this.
+	// If both attempts failed, return an empty string without storing it; the
+	// caller must treat that as an error.
+	if token == "" {
+		return ""
+	}
 	m.csrfTokens[sessionID] = csrfEntry{
 		token:     token,
 		createdAt: time.Now(),
@@ -72,10 +78,36 @@ func (m *CSRFMiddleware) GenerateToken(sessionID string) string {
 	return token
 }
 
+// deriveToken derives a token from the configured secret, the session ID and a
+// fresh random nonce, so MODBRIDGE_CSRF_SECRET actually influences the issued
+// tokens instead of being ignored. Returns "" when crypto/rand fails.
+func (m *CSRFMiddleware) deriveToken(sessionID string) string {
+	nonce := generateRandomToken(32)
+	if nonce == "" {
+		return ""
+	}
+	mac := hmac.New(sha256.New, m.secret)
+	mac.Write([]byte(sessionID))
+	mac.Write([]byte{0})
+	mac.Write([]byte(nonce))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// ClearSession drops the CSRF token bound to a session. Call it when the
+// session ends so logged-out sessions leave no reusable token behind.
+func (m *CSRFMiddleware) ClearSession(sessionID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.csrfTokens, sessionID)
+}
+
 // ValidateToken validates a CSRF token
 func (m *CSRFMiddleware) ValidateToken(sessionID, token string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if token == "" {
+		return false
+	}
 	entry, exists := m.csrfTokens[sessionID]
 	if !exists {
 		return false
@@ -106,6 +138,10 @@ func (m *CSRFMiddleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 		if r.Method == "GET" {
 			// Generate and set CSRF token cookie
 			token := m.GenerateToken(sessionCookie.Value)
+			if token == "" {
+				http.Error(w, "Failed to issue CSRF token", http.StatusInternalServerError)
+				return
+			}
 			// Only set Secure flag if connection is HTTPS
 			isSecure := r.TLS != nil
 			http.SetCookie(w, &http.Cookie{

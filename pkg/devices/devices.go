@@ -278,14 +278,69 @@ func (t *Tracker) GetAllConnectionHistory(proxyID string, limit int) ([]*databas
 	return t.db.GetAllConnectionHistory(proxyID, limit)
 }
 
-// getMACAddress attempts to get the MAC address for an IP.
-// Note: This is limited and may not work in all scenarios.
-func getMACAddress(ip string) string {
-	interfaces, err := net.Interfaces()
-	if err != nil {
-		return "unknown"
+// localMACTTL bounds how long the host's interface table is reused.
+const localMACTTL = 5 * time.Minute
+
+// localMACs caches the host's own IP-to-MAC mapping. Building it walks every
+// interface and every address on it, which getMACAddress used to do on each new
+// client connection although the table changes only when an interface does.
+var localMACs struct {
+	mu       sync.Mutex
+	byIP     map[string]string
+	loadedAt time.Time
+}
+
+// localMACFor looks ip up in the host's interface table, refreshing the cached
+// table when it has aged out.
+func localMACFor(ip net.IP) (string, bool) {
+	localMACs.mu.Lock()
+	defer localMACs.mu.Unlock()
+
+	if localMACs.byIP == nil || time.Since(localMACs.loadedAt) > localMACTTL {
+		localMACs.byIP = buildLocalMACs()
+		localMACs.loadedAt = time.Now()
 	}
 
+	mac, ok := localMACs.byIP[ip.String()]
+	return mac, ok
+}
+
+// buildLocalMACs enumerates the host's interfaces once.
+func buildLocalMACs() map[string]string {
+	byIP := make(map[string]string)
+
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return byIP
+	}
+
+	for _, iface := range interfaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		hw := iface.HardwareAddr.String()
+		for _, addr := range addrs {
+			var netIP net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				netIP = v.IP
+			case *net.IPAddr:
+				netIP = v.IP
+			}
+			if netIP != nil {
+				byIP[netIP.String()] = hw
+			}
+		}
+	}
+
+	return byIP
+}
+
+// getMACAddress attempts to get the MAC address for an IP.
+// Note: This is limited and may not work in all scenarios — only addresses that
+// belong to the host itself can be resolved, everything else is "unknown".
+func getMACAddress(ip string) string {
 	parsedIP := net.ParseIP(ip)
 	if parsedIP == nil {
 		return "unknown"
@@ -296,29 +351,10 @@ func getMACAddress(ip string) string {
 		return "localhost"
 	}
 
-	// Try to find MAC from ARP (limited, mainly works for local network)
-	for _, iface := range interfaces {
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-
-		for _, addr := range addrs {
-			var netIP net.IP
-			switch v := addr.(type) {
-			case *net.IPNet:
-				netIP = v.IP
-			case *net.IPAddr:
-				netIP = v.IP
-			}
-
-			if netIP != nil && netIP.Equal(parsedIP) {
-				return iface.HardwareAddr.String()
-			}
-		}
+	if mac, ok := localMACFor(parsedIP); ok {
+		return mac
 	}
 
-	// If we can't find it, return unknown
 	// In production, you might want to use ARP table parsing or
 	// external tools for more accurate MAC resolution
 	return "unknown"

@@ -36,9 +36,16 @@ func Handler() (http.Handler, error) {
 		}
 
 		// Try to open the file
-		f, err := distRoot.Open(path)
-		if err == nil {
+		isFile := false
+		if f, err := distRoot.Open(path); err == nil {
+			// Opening a directory succeeds but fs.ReadFile on it fails, so only
+			// regular files may take the serve-the-asset path.
+			if info, statErr := f.Stat(); statErr == nil && !info.IsDir() {
+				isFile = true
+			}
 			_ = f.Close() // Ignore close error
+		}
+		if isFile {
 			// File exists, serve it
 			// Manually set content type to be safe, as http.FileServer might guess wrong on embedded sometimes
 			ctype := mime.TypeByExtension(filepath.Ext(path))

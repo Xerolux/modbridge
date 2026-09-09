@@ -58,7 +58,7 @@ jobs:
       prerelease: ${{ steps.compute.outputs.prerelease }}
       valid: ${{ steps.compute.outputs.valid }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Validate & compute release info
         id: compute
@@ -189,8 +189,8 @@ jobs:
     needs: [prepare, resolve-tag]
     if: always() && (needs.prepare.outputs.valid == 'true' || needs.resolve-tag.outputs.valid == 'true')
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -206,8 +206,8 @@ jobs:
     needs: [prepare, resolve-tag]
     if: always() && (needs.prepare.outputs.valid == 'true' || needs.resolve-tag.outputs.valid == 'true')
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -217,7 +217,7 @@ jobs:
         env:
           VITE_PRIMEVUE_LICENSE: ${{ secrets.VITE_PRIMEVUE_LICENSE }}
         run: npm ci && npm run build
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: frontend-dist
           path: frontend/dist/
@@ -244,15 +244,15 @@ jobs:
             packages: gcc-aarch64-linux-gnu
             cc: aarch64-linux-gnu-gcc
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
       - name: Install cross-compiler
         if: matrix.packages != ''
         run: sudo apt-get update && sudo apt-get install -y ${{ matrix.packages }}
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: frontend-dist
           path: frontend/dist/
@@ -274,7 +274,7 @@ jobs:
             -trimpath \
             -o "modbridge-${{ matrix.suffix }}" \
             .
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: modbridge-${{ matrix.suffix }}
           path: modbridge-${{ matrix.suffix }}
@@ -307,8 +307,8 @@ jobs:
             packages: gcc-arm-linux-gnueabihf
             cc: arm-linux-gnueabihf-gcc
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -333,7 +333,7 @@ jobs:
             -trimpath \
             -o "modbridge-${{ matrix.suffix }}" \
             ./cmd/modbridge-headless
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: modbridge-${{ matrix.suffix }}
           path: modbridge-${{ matrix.suffix }}
@@ -346,9 +346,9 @@ jobs:
     needs: [prepare, resolve-tag, build-binaries, build-headless]
     if: always() && needs.build-binaries.result == 'success' && needs.build-headless.result == 'success'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Download all artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: artifacts/
           pattern: modbridge-*
@@ -359,7 +359,7 @@ jobs:
           find artifacts -type f -name 'modbridge*' -exec cp {} release/ \;
           cd release && sha256sum modbridge-* > checksums.txt && ls -lh
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@5113cdc90fd4d541c801c55356214017bf5ae34b # v3
         with:
           tag_name: ${{ needs.prepare.outputs.tag || needs.resolve-tag.outputs.tag || github.ref_name }}
           name: "ModBridge ${{ needs.prepare.outputs.tag || needs.resolve-tag.outputs.tag || github.ref_name }}"

@@ -85,8 +85,11 @@ func (p *ProxyInstance) requestBudget() time.Duration {
 		return p.RequestTimeout
 	}
 
-	readTimeout, _ := p.currentTimeouts()
-	return time.Duration(p.MaxRetries+1)*readTimeout + 2*time.Second
+	// Deliberately the configured read timeout, not the adaptive one: the
+	// adaptive value may grow to a multiple of the base, and multiplying that
+	// by the retry count again would let a single client request occupy the
+	// proxy for minutes.
+	return time.Duration(p.MaxRetries+1)*p.ReadTimeout + 2*time.Second
 }
 
 // currentTimeouts returns the read and connect timeouts in effect, preferring

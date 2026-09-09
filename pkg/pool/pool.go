@@ -80,19 +80,17 @@ func NewPool(cfg Config) (*Pool, error) {
 	}
 	p.ctx, p.cancel = context.WithCancel(context.Background())
 
-	// Pre-populate pool
+	// Pre-populate pool. A dial failure here is not fatal: the target may be
+	// offline, and the pool's owner must still come up — a proxy that refuses
+	// to listen leaves its clients with connection-refused instead of a Modbus
+	// exception. The pool dials again on the next Get.
 	for i := 0; i < cfg.InitialSize; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		conn, err := p.factory(ctx)
 		cancel()
 
 		if err != nil {
-			close(p.conns)
-			for pc := range p.conns {
-				pc.conn.Close()
-			}
-			p.cancel()
-			return nil, err
+			break
 		}
 
 		p.conns <- &poolConn{
@@ -146,7 +144,7 @@ func (p *Pool) Get(ctx context.Context) (net.Conn, error) {
 				continue
 			}
 
-			if !isConnHealthy(pc.conn) {
+			if !ConnHealthy(pc.conn) {
 				pc.conn.Close()
 				p.mu.Lock()
 				p.size--
@@ -211,7 +209,7 @@ func (p *Pool) Get(ctx context.Context) (net.Conn, error) {
 				p.mu.Unlock()
 				continue
 			}
-			if !isConnHealthy(pc.conn) {
+			if !ConnHealthy(pc.conn) {
 				pc.conn.Close()
 				p.mu.Lock()
 				p.size--
@@ -448,22 +446,17 @@ func (w *WrappedConn) Close() error {
 	return nil
 }
 
-func isConnHealthy(conn net.Conn) bool {
+// ConnHealthy reports whether a connection still has a live peer.
+//
+// The check peeks at the receive queue without consuming from it and without
+// blocking, so a half-open connection (the peer sent FIN or RST while the
+// connection sat idle in the pool) is recognised while a Modbus frame already
+// waiting in the buffer is left intact. On platforms where the socket cannot be
+// inspected this way the connection is reported healthy.
+func ConnHealthy(conn net.Conn) bool {
 	if conn == nil {
 		return false
 	}
-	// Check connection health non-destructively.
-	// Reading data from the connection to test liveness destroys pending
-	// Modbus frames. Instead, rely on TCP keepalive probes and let the
-	// pool detect broken connections on the next read/write attempt.
-	// Set a short deadline to validate the write side of the connection.
-	tcpConn, ok := conn.(*net.TCPConn)
-	if !ok {
-		return true
-	}
-	if err := tcpConn.SetWriteDeadline(time.Now().Add(1 * time.Millisecond)); err != nil {
-		return false
-	}
-	_ = tcpConn.SetWriteDeadline(time.Time{})
-	return true
+	alive, ok := connLiveness(conn)
+	return !ok || alive
 }

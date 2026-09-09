@@ -88,20 +88,30 @@ func (s *Server) requirePermission(w http.ResponseWriter, r *http.Request, permi
 	return session
 }
 
+// auditTrustedProxies holds the proxy networks whose forwarding headers may be
+// believed when attributing a request to a client address. It uses the same
+// MODBRIDGE_TRUSTED_PROXIES configuration as the rate limiter.
+var auditTrustedProxies = middleware.TrustedProxiesFromEnv()
+
 // requestMeta extracts the actor identity (IP, User-Agent) from a request for
-// audit logging. IP prefers X-Forwarded-For (first hop), falls back to the
-// host portion of RemoteAddr.
+// audit logging. X-Forwarded-For is only believed when the peer is a configured
+// trusted proxy; otherwise the host portion of RemoteAddr is used, so a client
+// cannot forge the address recorded in the audit log.
 func requestMeta(r *http.Request) (ip, userAgent string) {
 	userAgent = r.UserAgent()
 	ip = r.RemoteAddr
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		ip = host
+	}
+	if !middleware.IsTrustedProxy(auditTrustedProxies, r.RemoteAddr) {
+		return
+	}
 	if h := r.Header.Get("X-Forwarded-For"); h != "" {
 		if idx := strings.Index(h, ","); idx > 0 {
 			ip = strings.TrimSpace(h[:idx])
 		} else {
 			ip = strings.TrimSpace(h)
 		}
-	} else if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		ip = host
 	}
 	return
 }
@@ -175,11 +185,25 @@ func NewServer(cfg *config.Manager, mgr *manager.Manager, a *auth.Authenticator,
 		corsAllowedOrigins = cfg.Get().CORSAllowedOrigins
 	}
 
+	// A wildcard origin combined with cookie auth lets any site issue
+	// credentialed requests. It is a supported setting, but it should not go
+	// unnoticed.
+	for _, origin := range corsAllowedOrigins {
+		if origin == "*" {
+			if l != nil {
+				l.Log(logger.WARN, "SYSTEM", "cors_allowed_origins contains \"*\": any website may issue credentialed requests to this API")
+			}
+			break
+		}
+	}
+
 	// Initialize middlewares
 	corsMW := middleware.NewCORSMiddleware(corsAllowedOrigins)
 	secMW := middleware.NewSecurityMiddleware()
 	rateLimiter := middleware.NewRateLimiter(60, 100)
-	loginRateLimiter := middleware.NewRateLimiter(5, 10)
+	// bcrypt cost 14 makes every login attempt expensive, so the login chain is
+	// limited far more tightly than the general API to avoid a CPU DoS.
+	loginRateLimiter := middleware.NewRateLimiter(1, 5)
 	csrfMW := middleware.NewCSRFMiddleware(csrfSecret)
 	validator := middleware.NewValidator()
 
@@ -272,22 +296,22 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	}
 
 	publicMW := compose(s.cors.Middleware, s.security.Middleware, s.rateLimiter.Middleware)
-	authMW := compose(s.cors.Middleware, s.security.Middleware, authMiddleware)
-	csrfMW := compose(s.cors.Middleware, s.security.Middleware, authMiddleware, csrfMiddleware)
+	authMW := compose(s.cors.Middleware, s.security.Middleware, s.rateLimiter.Middleware, authMiddleware)
+	csrfMW := compose(s.cors.Middleware, s.security.Middleware, s.rateLimiter.Middleware, authMiddleware, csrfMiddleware)
 
 	// Public routes
 	mux.HandleFunc("/api/health", publicMW(s.handleHealth))
 	mux.HandleFunc("/api/ready", publicMW(s.handleReady))
 	mux.HandleFunc("/api/status", publicMW(s.handleStatus))
-	mux.HandleFunc("/api/metrics", s.cors.Middleware(s.handleMetrics))
+	mux.HandleFunc("/api/metrics", s.cors.Middleware(s.rateLimiter.Middleware(s.handleMetrics)))
 	mux.HandleFunc("/api/login", s.cors.Middleware(s.security.Middleware(s.loginRateLimiter.Middleware(s.handleLogin))))
 	mux.HandleFunc("/api/account-recovery", s.cors.Middleware(s.security.Middleware(s.loginRateLimiter.Middleware(s.handleAccountRecovery))))
 	mux.HandleFunc("/api/logout", csrfMW(s.handleLogout))
-	mux.HandleFunc("/api/setup", s.cors.Middleware(s.security.Middleware(s.handleSetup)))
+	mux.HandleFunc("/api/setup", s.cors.Middleware(s.security.Middleware(s.rateLimiter.Middleware(s.handleSetup))))
 
 	// Pprof endpoints (debug mode only)
 	if os.Getenv("DEBUG") == "true" {
-		debugMW := compose(s.cors.Middleware, s.security.Middleware, authMiddleware)
+		debugMW := compose(s.cors.Middleware, s.security.Middleware, s.rateLimiter.Middleware, authMiddleware)
 		mux.Handle("/debug/pprof/", debugMW(pprof.Index))
 		mux.Handle("/debug/pprof/cmdline", debugMW(pprof.Cmdline))
 		mux.Handle("/debug/pprof/profile", debugMW(pprof.Profile))
@@ -331,7 +355,8 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/update/status", authMW(s.handleUpdateStatus))
 }
 
-// Stop gracefully shuts down background goroutines owned by the server.
+// Stop gracefully shuts down background goroutines owned by the server and
+// flushes the audit buffer, so buffered entries are not lost on shutdown.
 func (s *Server) Stop() {
 	if s.csrf != nil {
 		s.csrf.Stop()
@@ -341,6 +366,9 @@ func (s *Server) Stop() {
 	}
 	if s.loginRateLimiter != nil {
 		s.loginRateLimiter.Stop()
+	}
+	if s.auditor != nil {
+		s.auditor.Close()
 	}
 }
 
@@ -526,7 +554,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	// names, and traffic counters — for callers holding a session with
 	// proxy-view permission.
 	if s.mgr != nil && s.auth != nil {
-		if cookie, err := r.Cookie("session_token"); err == nil {
+		if cookie, err := r.Cookie("session_token"); err == nil && s.auth.ValidateSession(cookie.Value) {
 			if session := s.auth.GetSession(cookie.Value); session != nil {
 				if rbac.HasPermission(rbac.Role(session.Role), rbac.PermProxyView) {
 					proxies = s.mgr.GetProxies()
@@ -737,6 +765,9 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		s.auth.InvalidateSession(c.Value)
+		if s.csrf != nil {
+			s.csrf.ClearSession(c.Value)
+		}
 	}
 	// Clear cookies defensively even though the client does it too.
 	for _, name := range []string{"session_token", "csrf_token"} {
@@ -1015,28 +1046,10 @@ func (s *Server) requirePermissionForUserRoute(w http.ResponseWriter, r *http.Re
 		return nil, false
 	}
 
-	if s.auth == nil {
-		http.Error(w, "Auth backend unavailable", http.StatusServiceUnavailable)
-		return nil, false
-	}
-
-	cookie, err := r.Cookie("session_token")
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return nil, false
-	}
-
-	session := s.auth.GetSession(cookie.Value)
+	session := s.requirePermission(w, r, permission)
 	if session == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return nil, false
 	}
-
-	if !rbac.HasPermission(rbac.Role(session.Role), permission) {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return nil, false
-	}
-
 	return session, true
 }
 
@@ -1058,6 +1071,12 @@ func (s *Server) handleProxiesStream(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
 		return
+	}
+
+	// The server-wide WriteTimeout would tear down a long-lived stream, so drop
+	// the write deadline for this connection.
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil {
+		s.log.Warn("API", fmt.Sprintf("Could not clear SSE write deadline: %v", err))
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -1223,7 +1242,11 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodDelete {
-		id := r.URL.Query().Get("id")
+		id := strings.TrimSpace(r.URL.Query().Get("id"))
+		if id == "" {
+			http.Error(w, "id query parameter is required", http.StatusBadRequest)
+			return
+		}
 		if err := s.mgr.RemoveProxy(id); err != nil {
 			if s.auditor != nil {
 				s.auditor.LogProxyAction("proxy.deleted", id, session.UserID, session.Username, id, ip, ua, false)
@@ -1481,6 +1504,12 @@ func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
 		return
+	}
+
+	// The server-wide WriteTimeout would tear down a long-lived stream, so drop
+	// the write deadline for this connection.
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil {
+		s.log.Warn("API", fmt.Sprintf("Could not clear SSE write deadline: %v", err))
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")

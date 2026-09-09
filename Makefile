@@ -1,8 +1,9 @@
 .PHONY: help build test clean run lint coverage bench bench-ci openapi openapi-check fmt vet deps update-deps install dev
 
 BINARY_NAME=modbridge
-VERSION?=$(shell cat version.txt 2>/dev/null || echo "1.0.17")
-LDFLAGS=-ldflags "-s -w -X main.Version=$(VERSION)"
+VERSION?=$(shell cat version.txt 2>/dev/null || echo "dev")
+BUILD_TIME?=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS=-ldflags "-s -w -X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME)"
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -22,13 +23,19 @@ build-frontend: ## Build the frontend
 	cp -r frontend/dist pkg/web/dist
 	@echo "Frontend built and copied to pkg/web/dist"
 
-build-all: ## Build for all platforms
+# Cross-compiling needs CGO because of go-sqlite3, so each target needs its
+# own C compiler. These are the targets CI actually releases; other platforms
+# would need a matching cross-toolchain installed.
+#   linux/arm64 -> gcc-aarch64-linux-gnu
+#   linux/arm   -> gcc-arm-linux-gnueabihf
+build-all: ## Build for the released platforms (needs cross-compilers, see comment)
 	@echo "Building for all platforms..."
-	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-linux-amd64 ./main.go
-	GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-linux-arm64 ./main.go
-	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-windows-amd64.exe ./main.go
-	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-darwin-amd64 ./main.go
-	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-darwin-arm64 ./main.go
+	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
+		go build $(LDFLAGS) -trimpath -o bin/$(BINARY_NAME)-linux-amd64 .
+	CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=aarch64-linux-gnu-gcc \
+		go build $(LDFLAGS) -trimpath -o bin/$(BINARY_NAME)-linux-arm64 .
+	CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=7 CC=arm-linux-gnueabihf-gcc \
+		go build $(LDFLAGS) -trimpath -o bin/$(BINARY_NAME)-linux-arm .
 
 test: ## Run tests
 	@echo "Running tests..."

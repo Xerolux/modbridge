@@ -8,26 +8,31 @@ package middleware
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"net"
 	"net/http"
-	"strings"
 	"time"
 )
 
 // SecurityMiddleware adds security headers
-type SecurityMiddleware struct{}
+type SecurityMiddleware struct {
+	trustedProxies []*net.IPNet
+}
 
-// NewSecurityMiddleware creates a new security middleware
+// NewSecurityMiddleware creates a new security middleware. Forwarding headers
+// such as X-Forwarded-Proto are only honoured for peers listed in
+// MODBRIDGE_TRUSTED_PROXIES.
 func NewSecurityMiddleware() *SecurityMiddleware {
-	return &SecurityMiddleware{}
+	return &SecurityMiddleware{trustedProxies: TrustedProxiesFromEnv()}
 }
 
 // Middleware returns a security headers middleware
 func (m *SecurityMiddleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// HSTS (HTTP Strict Transport Security)
-		// Only add if the request is over HTTPS
-		if r.URL.Scheme == "https" || strings.HasPrefix(r.Proto, "HTTPS") ||
-			r.Header.Get("X-Forwarded-Proto") == "https" {
+		// Only add if the request is over HTTPS — either terminated here, or
+		// reported by a proxy we actually trust.
+		if r.TLS != nil || r.URL.Scheme == "https" ||
+			(IsTrustedProxy(m.trustedProxies, r.RemoteAddr) && r.Header.Get("X-Forwarded-Proto") == "https") {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
 		}
 

@@ -244,9 +244,7 @@ func (lb *LoadBalancer) RecordFailure(address string) {
 		defer lb.mu.RUnlock()
 		for _, ep := range lb.endpoints {
 			if ep.Address == address {
-				ep.mu.Lock()
-				ep.FailCount++
-				ep.mu.Unlock()
+				atomic.AddInt64(&ep.FailCount, 1)
 				found = true
 				break
 			}
@@ -265,9 +263,7 @@ func (lb *LoadBalancer) RecordSuccess(address string) {
 		defer lb.mu.RUnlock()
 		for _, ep := range lb.endpoints {
 			if ep.Address == address {
-				ep.mu.Lock()
-				ep.FailCount = 0
-				ep.mu.Unlock()
+				atomic.StoreInt64(&ep.FailCount, 0)
 				found = true
 				break
 			}
@@ -339,14 +335,17 @@ func (lb *LoadBalancer) GetStats() map[string]interface{} {
 // Stop stops the load balancer
 func (lb *LoadBalancer) Stop() {
 	lb.mu.Lock()
-	defer lb.mu.Unlock()
-
 	if !lb.running {
+		lb.mu.Unlock()
 		return
 	}
 
 	lb.running = false
 	lb.cancel()
+	// Release the lock before waiting: healthCheckLoop takes it for reading
+	// while a check is in flight, so holding it across wg.Wait() deadlocks.
+	lb.mu.Unlock()
+
 	lb.wg.Wait()
 }
 
@@ -440,8 +439,8 @@ func (hc *EndpointHealthChecker) markHealthy(address string) {
 			ep.mu.Lock()
 			ep.IsHealthy = true
 			ep.LastCheck = time.Now()
-			ep.FailCount = 0
 			ep.mu.Unlock()
+			atomic.StoreInt64(&ep.FailCount, 0)
 			break
 		}
 	}

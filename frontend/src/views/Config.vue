@@ -46,7 +46,7 @@ import { useI18n } from 'vue-i18n';
                                 </div>
                             </div>
 
-                            <Button @click="saveConfig" label="Save Logging Configuration" icon="pi pi-save" />
+                            <Button @click="saveConfig" :disabled="!configLoaded" label="Save Logging Configuration" icon="pi pi-save" />
                         </div>
                     </TabPanel>
 
@@ -132,7 +132,7 @@ import { useI18n } from 'vue-i18n';
                                 </div>
                             </div>
 
-                            <Button @click="saveConfig" label="Save Security Configuration" icon="pi pi-shield" />
+                            <Button @click="saveConfig" :disabled="!configLoaded" label="Save Security Configuration" icon="pi pi-shield" />
                         </div>
                     </TabPanel>
 
@@ -179,7 +179,7 @@ import { useI18n } from 'vue-i18n';
                                 </div>
                             </div>
 
-                            <Button @click="saveConfig" label="Save Email Configuration" icon="pi pi-envelope" />
+                            <Button @click="saveConfig" :disabled="!configLoaded" label="Save Email Configuration" icon="pi pi-envelope" />
                         </div>
                     </TabPanel>
 
@@ -214,7 +214,7 @@ import { useI18n } from 'vue-i18n';
                                 </div>
                             </div>
 
-                            <Button @click="saveConfig" label="Save Backup Configuration" icon="pi pi-download" />
+                            <Button @click="saveConfig" :disabled="!configLoaded" label="Save Backup Configuration" icon="pi pi-download" />
                         </div>
                     </TabPanel>
 
@@ -281,7 +281,7 @@ import { useI18n } from 'vue-i18n';
                                 </div>
                             </div>
 
-                            <Button @click="saveConfig" label="Save Advanced Configuration" icon="pi pi-cog" />
+                            <Button @click="saveConfig" :disabled="!configLoaded" label="Save Advanced Configuration" icon="pi pi-cog" />
                         </div>
                     </TabPanel>
                 </TabPanels>
@@ -386,11 +386,18 @@ const { t } = useI18n();
 
  const importFile = ref(null);
 
+ // Until the server config has been read once, the values above are only
+ // placeholders. Saving them would overwrite the real configuration — the CORS
+ // origins in particular, which can lock the operator out of the UI.
+ const configLoaded = ref(false);
+
  const fetchConfig = async () => {
      try {
          const res = await axios.get('/api/config/system');
          config.value = { ...config.value, ...res.data };
+         configLoaded.value = true;
      } catch (e) {
+         configLoaded.value = false;
          toast.add({ severity: 'error', summary: t('common.error'), detail: t('config.loadError'), life: 5000 });
      }
  };
@@ -405,6 +412,10 @@ const { t } = useI18n();
  });
 
  const saveConfig = async () => {
+     if (!configLoaded.value) {
+         toast.add({ severity: 'warn', summary: t('common.error'), detail: t('config.loadError'), life: 5000 });
+         return;
+     }
      try {
          await axios.put('/api/config/system', config.value);
          toast.add({ severity: 'success', summary: 'Success', detail: 'Configuration saved', life: 3000 });

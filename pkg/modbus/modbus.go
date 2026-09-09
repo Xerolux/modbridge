@@ -38,6 +38,12 @@ func ReadFrame(r io.Reader) ([]byte, error) {
 		return nil, err
 	}
 
+	// Protocol ID is zero for Modbus; anything else is not a Modbus TCP frame
+	// and must not be forwarded as one.
+	if protocolID := binary.BigEndian.Uint16(header[2:4]); protocolID != 0 {
+		return nil, fmt.Errorf("invalid modbus protocol id: %d", protocolID)
+	}
+
 	length := binary.BigEndian.Uint16(header[4:6])
 	if length < 2 || int(length) > maxPDULength {
 		return nil, fmt.Errorf("invalid modbus length: %d", length)

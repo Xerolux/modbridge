@@ -126,8 +126,10 @@ func TestConfigDeepCopy(t *testing.T) {
 	mgr := NewManager("test.json")
 
 	err := mgr.Update(func(c *Config) error {
+		// Addresses are set because Update rejects a change that would make
+		// the configuration invalid; the deep copy is what this test is about.
 		c.Proxies = []ProxyConfig{
-			{ID: "1", Name: "Test"},
+			{ID: "1", Name: "Test", ListenAddr: ":5020", TargetAddr: "192.0.2.10:502"},
 		}
 		return nil
 	})

@@ -122,8 +122,7 @@ func (pq *PriorityQueue) Enqueue(req *Request) error {
 			dropped := pq.queues[PriorityLow][0]
 			pq.queues[PriorityLow] = pq.queues[PriorityLow][1:]
 			if dropped.ErrorChan != nil {
-				dropped.ErrorChan <- ErrRequestDropped
-				close(dropped.ErrorChan)
+				notifyRequest(dropped.ErrorChan, ErrRequestDropped)
 			}
 		} else {
 			pq.totalRejected++
@@ -214,8 +213,7 @@ func (pq *PriorityQueue) checkTimeouts() {
 			if now.After(req.Deadline) {
 				pq.totalTimeout++
 				if req.ErrorChan != nil {
-					req.ErrorChan <- ErrRequestTimeout
-					close(req.ErrorChan)
+					notifyRequest(req.ErrorChan, ErrRequestTimeout)
 				}
 			} else {
 				newQueue = append(newQueue, req)
@@ -266,8 +264,7 @@ func (pq *PriorityQueue) Stop() {
 	for _, queue := range pq.queues {
 		for _, req := range queue {
 			if req.ErrorChan != nil {
-				req.ErrorChan <- ErrQueueClosed
-				close(req.ErrorChan)
+				notifyRequest(req.ErrorChan, ErrQueueClosed)
 			}
 		}
 	}
@@ -301,6 +298,18 @@ func (pq *PriorityQueue) GetStats() map[string]interface{} {
 		"total_rejected": pq.totalRejected,
 		"total_timeout":  pq.totalTimeout,
 	}
+}
+
+// notifyRequest delivers a final error to a queued request and closes its
+// channel. The send never blocks: every call site holds pq.mu, and a requester
+// that has gone away or reads from an unbuffered channel would otherwise park
+// the whole queue with the lock held.
+func notifyRequest(ch chan error, err error) {
+	select {
+	case ch <- err:
+	default:
+	}
+	close(ch)
 }
 
 // Errors

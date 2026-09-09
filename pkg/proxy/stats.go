@@ -27,6 +27,7 @@ type EnhancedStats struct {
 	lastRequestTime   time.Time
 	requestStartTimes map[int64]time.Time
 	requestsResetTime time.Time
+	lastEviction      time.Time
 
 	activeConnections int
 	maxConns          int
@@ -65,29 +66,29 @@ func NewEnhancedStats(latencyWindow int) *EnhancedStats {
 		requestStartTimes: make(map[int64]time.Time),
 		lastRequestTime:   now,
 		requestsResetTime: now,
+		lastEviction:      now,
 		requestsWindow:    60 * time.Minute,
 	}
 }
 
 // staleRequestAge is the maximum duration a request start entry is kept
 // without a corresponding completion record. Entries older than this are
-// evicted during the next RecordRequestStart call to prevent map growth
-// caused by goroutines that exit without calling RecordRequestComplete.
+// evicted to prevent map growth caused by goroutines that exit without calling
+// RecordRequestComplete.
 const staleRequestAge = 5 * time.Minute
+
+// evictInterval is how often the eviction sweep runs. Sweeping the whole map on
+// every request costs O(entries) under the write lock in the request hot path,
+// and an entry that has been stale for five minutes can wait a few seconds more.
+const evictInterval = 30 * time.Second
 
 // RecordRequestStart records the start of a request.
 func (s *EnhancedStats) RecordRequestStart(requestID int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Evict stale entries (requests that never completed) to prevent map growth.
 	now := time.Now()
-	for id, t := range s.requestStartTimes {
-		if now.Sub(t) > staleRequestAge {
-			delete(s.requestStartTimes, id)
-			s.activeConnections-- // were counted as active; undo
-		}
-	}
+	s.evictStaleLocked(now)
 
 	s.requestStartTimes[requestID] = now
 	s.activeConnections++
@@ -95,6 +96,22 @@ func (s *EnhancedStats) RecordRequestStart(requestID int64) {
 
 	if s.activeConnections > s.maxConns {
 		s.maxConns = s.activeConnections
+	}
+}
+
+// evictStaleLocked drops request start entries whose completion never arrived.
+// Caller must hold the write lock.
+func (s *EnhancedStats) evictStaleLocked(now time.Time) {
+	if now.Sub(s.lastEviction) < evictInterval {
+		return
+	}
+	s.lastEviction = now
+
+	for id, t := range s.requestStartTimes {
+		if now.Sub(t) > staleRequestAge {
+			delete(s.requestStartTimes, id)
+			s.activeConnections-- // were counted as active; undo
+		}
 	}
 }
 
