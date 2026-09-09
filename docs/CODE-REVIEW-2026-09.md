@@ -10,7 +10,7 @@ Reine Bestandsaufnahme, keine Änderungen am Code. Schweregrad: **hoch** = Fehlf
 | `gofmt -l` | sauber |
 | `staticcheck ./...` | sauber |
 | `golangci-lint` | nicht lauffähig: Binary mit Go 1.25 gebaut, Projekt verlangt 1.26.5 (`make lint` schlägt daher in dieser Umgebung fehl) |
-| `go test -race ./...` | siehe Abschnitt „Tests“ am Ende |
+| `go test -race ./...` | alle Pakete bestanden, keine Races |
 
 ## 1. Hoch
 
@@ -124,3 +124,5 @@ Frontend-Stichprobe ohne Befund: keine Tokens in `localStorage`, kein `v-html`, 
 5. Toten Code und Doku bereinigen (Abschnitt 3, M28, M33).
 
 ## Tests
+
+`go test -race -count=1 ./...`: alle Pakete bestanden, keine Race-Meldungen (Laufzeit ca. 25 min, vor allem wegen bcrypt Cost 14 in `api`/`users`-Tests; ein niedrigerer Cost für Tests würde die Laufzeit stark verkürzen).
