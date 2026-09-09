@@ -7,9 +7,13 @@ package alerting
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 )
@@ -211,6 +215,11 @@ func (m *Manager) sendWebhook(webhook *WebhookConfig, alert *Alert) {
 		return
 	}
 
+	if err := validateWebhookURL(webhook.URL); err != nil {
+		log.Printf("ERROR: Refusing to send webhook: %v", err)
+		return
+	}
+
 	req, err := http.NewRequest("POST", webhook.URL, bytes.NewBuffer(data))
 	if err != nil {
 		log.Printf("ERROR: Failed to create webhook request: %v", err)
@@ -226,7 +235,15 @@ func (m *Manager) sendWebhook(webhook *WebhookConfig, alert *Alert) {
 		req.Header.Set("X-Webhook-Secret", webhook.Secret)
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{
+		Timeout:   30 * time.Second,
+		Transport: webhookTransport(),
+		// Refuse redirects: a redirect could send the payload to an internal
+		// address that validateWebhookURL already rejected.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return fmt.Errorf("webhook redirects are not followed")
+		},
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("ERROR: Failed to send webhook: %v", err)
@@ -237,6 +254,50 @@ func (m *Manager) sendWebhook(webhook *WebhookConfig, alert *Alert) {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		log.Printf("WARNING: Webhook returned non-success status: %d", resp.StatusCode)
 	}
+}
+
+// validateWebhookURL rejects webhook targets that are not plain HTTP(S) or that
+// resolve to an address inside the host's own network, which would turn the
+// alerting subsystem into an SSRF proxy.
+func validateWebhookURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("invalid webhook URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("unsupported webhook scheme %q", u.Scheme)
+	}
+
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("webhook URL has no host")
+	}
+
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return fmt.Errorf("cannot resolve webhook host %q: %w", host, err)
+	}
+	for _, ip := range ips {
+		if isBlockedWebhookIP(ip) {
+			return fmt.Errorf("webhook host %q resolves to blocked address %s", host, ip)
+		}
+	}
+	return nil
+}
+
+// isBlockedWebhookIP reports whether ip is loopback, private, link-local (which
+// covers the cloud metadata endpoint), multicast, unspecified, or carrier-grade
+// NAT space.
+func isBlockedWebhookIP(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() ||
+		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsInterfaceLocalMulticast() || ip.IsMulticast() {
+		return true
+	}
+	if v4 := ip.To4(); v4 != nil && v4[0] == 100 && v4[1]&0xc0 == 64 {
+		return true // 100.64.0.0/10
+	}
+	return false
 }
 
 // EvaluateMetric evaluates a metric against alert rules
@@ -285,5 +346,32 @@ func (m *Manager) EvaluateMetric(metricName string, value float64, labels map[st
 				m.TriggerAlert(alert)
 			}
 		}
+	}
+}
+
+// webhookTransport builds a transport that re-checks the address the
+// connection actually goes to. validateWebhookURL resolves the host up front,
+// but the name can resolve differently by the time the dial happens (DNS
+// rebinding), so the decisive check belongs here, after the address is known
+// and before the socket is used.
+func webhookTransport() *http.Transport {
+	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
+
+	return &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, _, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, err
+			}
+			if ip := net.ParseIP(host); ip != nil && isBlockedWebhookIP(ip) {
+				return nil, fmt.Errorf("webhook target resolves to blocked address %s", ip)
+			}
+			return dialer.DialContext(ctx, network, addr)
+		},
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 20 * time.Second,
+		MaxIdleConns:          10,
+		IdleConnTimeout:       30 * time.Second,
 	}
 }

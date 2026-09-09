@@ -7,6 +7,7 @@ package proxy
 
 import (
 	"context"
+	"modbridge/pkg/pool"
 	"net"
 	"sync"
 	"time"
@@ -205,32 +206,17 @@ func (d *DeadConnectionDetector) checkConnections() {
 	}
 }
 
-// isConnectionAlive checks if a connection is still alive
+// isConnectionAlive checks if a connection is still alive.
+//
+// It asks the socket itself rather than touching the connection's deadlines:
+// the handler goroutine is using the same connection, so changing a deadline
+// under it would break the request in flight, and nothing is read either — a
+// Modbus frame waiting in the buffer belongs to the handler.
 func (d *DeadConnectionDetector) isConnectionAlive(conn net.Conn) bool {
-	// Set a very short write deadline to test the connection.
-	// This avoids reading data which would corrupt pending Modbus frames.
-	if err := conn.SetWriteDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
+	if conn == nil {
 		return false
 	}
-	_ = conn.SetWriteDeadline(time.Time{})
-
-	// Check for TCP-specific socket errors without reading data
-	if tcpConn, ok := conn.(*net.TCPConn); ok {
-		rawConn, err := tcpConn.SyscallConn()
-		if err != nil {
-			return false
-		}
-		alive := true
-		ctrlErr := rawConn.Control(func(fd uintptr) {
-			// On Unix, we could use getsockopt SO_ERROR, but for
-			// cross-platform safety just verify the fd is accessible.
-		})
-		if ctrlErr != nil {
-			alive = false
-		}
-		return alive
-	}
-	return true
+	return pool.ConnHealthy(conn)
 }
 
 // GetDeadConnections returns all dead connections

@@ -18,7 +18,14 @@ type AdaptiveTimeout struct {
 	sampleCount    int
 	maxSamples     int
 	scaleFactor    float64
+	sinceRecompute int
 }
+
+// recomputeEvery is how many samples may arrive between two percentile
+// recalculations. Sorting the window on every request is O(n log n) under the
+// write lock and stalls GetReadTimeout for every handler; the p95 of a hundred
+// samples does not move enough between requests to be worth that.
+const recomputeEvery = 10
 
 func NewAdaptiveTimeout(baseRead, baseConnect time.Duration) *AdaptiveTimeout {
 	maxSamples := 100
@@ -43,7 +50,11 @@ func (at *AdaptiveTimeout) Record(latency time.Duration) {
 		at.sampleCount++
 	}
 
-	if at.sampleCount >= 10 {
+	at.sinceRecompute++
+
+	if at.sampleCount >= 10 && at.sinceRecompute >= recomputeEvery {
+		at.sinceRecompute = 0
+
 		sorted := make([]time.Duration, at.sampleCount)
 		copy(sorted, at.samples[:at.sampleCount])
 		sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })

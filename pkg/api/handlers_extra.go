@@ -6,6 +6,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"modbridge/pkg/config"
@@ -254,7 +256,10 @@ func (s *Server) handleSystemConfig(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-var startTime time.Time
+// startTime is fixed at process start so the reported uptime covers the whole
+// run, not just the time since the first /api/system/info call. Assigning it at
+// package initialisation also removes the unsynchronised lazy write.
+var startTime = time.Now()
 
 func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -264,10 +269,6 @@ func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
 
 	if s.requirePermission(w, r, rbac.PermSystemView) == nil {
 		return
-	}
-
-	if startTime.IsZero() {
-		startTime = time.Now()
 	}
 
 	var memStats runtime.MemStats
@@ -460,6 +461,10 @@ func countFreePortsInMap(results map[int]*portmanager.PortInfo) int {
 	return count
 }
 
+// connectivityCheckBudget caps the total time the connectivity probe may take,
+// no matter how many proxies are configured.
+const connectivityCheckBudget = 5 * time.Second
+
 // handleProxyConnectivityCheck checks if target devices are reachable
 func (s *Server) handleProxyConnectivityCheck(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -471,30 +476,48 @@ func (s *Server) handleProxyConnectivityCheck(w http.ResponseWriter, r *http.Req
 	}
 
 	cfg := s.cfgMgr.Get()
-	results := make(map[string]map[string]interface{})
+	results := make(map[string]map[string]interface{}, len(cfg.Proxies))
+
+	// Dial every target in parallel under one overall budget. Probing serially
+	// with a 5s timeout each would exceed the server's WriteTimeout as soon as a
+	// handful of targets are unreachable.
+	ctx, cancel := context.WithTimeout(r.Context(), connectivityCheckBudget)
+	defer cancel()
+
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+	)
+	dialer := &net.Dialer{}
 
 	for _, proxy := range cfg.Proxies {
-		testConn, err := net.DialTimeout("tcp", proxy.TargetAddr, 5*time.Second)
-		isReachable := err == nil
-		var errorMsg string
+		wg.Add(1)
+		go func(proxy config.ProxyConfig) {
+			defer wg.Done()
 
-		if err != nil {
-			errorMsg = err.Error()
-		}
+			testConn, err := dialer.DialContext(ctx, "tcp", proxy.TargetAddr)
+			isReachable := err == nil
+			var errorMsg string
+			if err != nil {
+				errorMsg = err.Error()
+			}
+			if testConn != nil {
+				testConn.Close()
+			}
 
-		if testConn != nil {
-			testConn.Close()
-		}
-
-		results[proxy.ID] = map[string]interface{}{
-			"name":        proxy.Name,
-			"target":      proxy.TargetAddr,
-			"reachable":   isReachable,
-			"error":       errorMsg,
-			"status":      "unknown",
-			"listen_addr": proxy.ListenAddr,
-		}
+			mu.Lock()
+			results[proxy.ID] = map[string]interface{}{
+				"name":        proxy.Name,
+				"target":      proxy.TargetAddr,
+				"reachable":   isReachable,
+				"error":       errorMsg,
+				"status":      "unknown",
+				"listen_addr": proxy.ListenAddr,
+			}
+			mu.Unlock()
+		}(proxy)
 	}
+	wg.Wait()
 
 	w.Header().Set("Content-Type", "application/json")
 	s.writeJSON(w, results)

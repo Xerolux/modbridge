@@ -2,8 +2,8 @@
   "openapi": "3.0.0",
   "info": {
     "title": "ModBridge API",
-    "description": "Modbus TCP Proxy Manager API",
-    "version": "1.0.0"
+    "description": "Modbus TCP Proxy Manager API. All endpoints except the health, readiness, metrics, login, setup and recovery routes require an authenticated session; state-changing requests additionally require a CSRF token.",
+    "version": "dev"
   },
   "servers": [
     {
@@ -11,14 +11,912 @@
     }
   ],
   "paths": {
-    "/api/v1/devices": {
+    "/api/account-recovery": {
       "get": {
-        "summary": "List all devices",
-        "description": "",
-        "operationId": "listDevices",
+        "summary": "Account recovery",
+        "description": "Completes the recovery flow started with --enable-account-recovery.",
+        "operationId": "getAccountRecovery",
         "responses": {
           "200": {
             "description": "Success",
+            "content": null
+          }
+        }
+      },
+      "post": {
+        "summary": "Account recovery",
+        "description": "Completes the recovery flow started with --enable-account-recovery.",
+        "operationId": "postAccountRecovery",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/audit/logs": {
+      "get": {
+        "summary": "Read audit log entries",
+        "description": "",
+        "operationId": "getAuditLogs",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/audit/logs/export": {
+      "get": {
+        "summary": "Export the audit log",
+        "description": "Returns CSV or JSON.",
+        "operationId": "getAuditLogsExport",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/config/export": {
+      "get": {
+        "summary": "Export the configuration",
+        "description": "",
+        "operationId": "getConfigExport",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/config/import": {
+      "post": {
+        "summary": "Import a configuration",
+        "description": "The imported configuration is validated before it is applied.",
+        "operationId": "postConfigImport",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/config/password": {
+      "post": {
+        "summary": "Change the current user's password",
+        "description": "",
+        "operationId": "postConfigPassword",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/config/rollback": {
+      "post": {
+        "summary": "Roll back to the previous configuration",
+        "description": "",
+        "operationId": "postConfigRollback",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/config/system": {
+      "get": {
+        "summary": "Read or update system settings",
+        "description": "",
+        "operationId": "getConfigSystem",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      },
+      "put": {
+        "summary": "Read or update system settings",
+        "description": "",
+        "operationId": "putConfigSystem",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/config/webport": {
+      "get": {
+        "summary": "Read or change the web listen address",
+        "description": "",
+        "operationId": "getConfigWebport",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      },
+      "put": {
+        "summary": "Read or change the web listen address",
+        "description": "",
+        "operationId": "putConfigWebport",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/devices": {
+      "get": {
+        "summary": "List or rename tracked devices",
+        "description": "",
+        "operationId": "getDevices",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      },
+      "put": {
+        "summary": "List or rename tracked devices",
+        "description": "",
+        "operationId": "putDevices",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/devices/history": {
+      "get": {
+        "summary": "Device connection history",
+        "description": "",
+        "operationId": "getDevicesHistory",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "summary": "Liveness probe",
+        "description": "Returns 200 while the process is running.",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/login": {
+      "post": {
+        "summary": "Log in",
+        "description": "Exchanges credentials for a session cookie. Rate limited.",
+        "operationId": "postLogin",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/logout": {
+      "post": {
+        "summary": "Log out",
+        "description": "Invalidates the current session.",
+        "operationId": "postLogout",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/logs": {
+      "get": {
+        "summary": "Read log entries",
+        "description": "",
+        "operationId": "getLogs",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/logs/download": {
+      "get": {
+        "summary": "Download log files",
+        "description": "",
+        "operationId": "getLogsDownload",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/logs/stream": {
+      "get": {
+        "summary": "Log event stream",
+        "description": "Server-sent events carrying live log entries.",
+        "operationId": "getLogsStream",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/me": {
+      "get": {
+        "summary": "Current user",
+        "description": "Returns the authenticated user and its permissions.",
+        "operationId": "getMe",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/metrics": {
+      "get": {
+        "summary": "Prometheus metrics",
+        "description": "Text exposition format.",
+        "operationId": "getMetrics",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/proxies": {
+      "delete": {
+        "summary": "List, create, update or delete proxies",
+        "description": "",
+        "operationId": "deleteProxies",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      },
+      "get": {
+        "summary": "List, create, update or delete proxies",
+        "description": "",
+        "operationId": "getProxies",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      },
+      "post": {
+        "summary": "List, create, update or delete proxies",
+        "description": "",
+        "operationId": "postProxies",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      },
+      "put": {
+        "summary": "List, create, update or delete proxies",
+        "description": "",
+        "operationId": "putProxies",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/proxies/calibrate": {
+      "post": {
+        "summary": "Calibrate a proxy",
+        "description": "Measures the target device and proposes timing settings.",
+        "operationId": "postProxiesCalibrate",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/proxies/control": {
+      "post": {
+        "summary": "Control a proxy",
+        "description": "Starts, stops, pauses or restarts a proxy.",
+        "operationId": "postProxiesControl",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/proxies/stream": {
+      "get": {
+        "summary": "Proxy event stream",
+        "description": "Server-sent events carrying live proxy state.",
+        "operationId": "getProxiesStream",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/ready": {
+      "get": {
+        "summary": "Readiness probe",
+        "description": "Reports whether the proxies and their dependencies are ready to serve.",
+        "operationId": "getReady",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/setup": {
+      "post": {
+        "summary": "Initial setup",
+        "description": "Creates the first administrator on a fresh install.",
+        "operationId": "postSetup",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/status": {
+      "get": {
+        "summary": "Session status",
+        "description": "Returns the proxy inventory for the current session.",
+        "operationId": "getStatus",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/system/diagnostics/connectivity": {
+      "get": {
+        "summary": "Check target connectivity",
+        "description": "Dials every configured target.",
+        "operationId": "getSystemDiagnosticsConnectivity",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/system/info": {
+      "get": {
+        "summary": "System information",
+        "description": "Version, build time, runtime and uptime.",
+        "operationId": "getSystemInfo",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/system/ports/check": {
+      "get": {
+        "summary": "Check the configured proxy ports",
+        "description": "",
+        "operationId": "getSystemPortsCheck",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/system/ports/diagnostics": {
+      "post": {
+        "summary": "Diagnose a port",
+        "description": "Reports what is listening on a port.",
+        "operationId": "postSystemPortsDiagnostics",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/system/ports/release": {
+      "post": {
+        "summary": "Release a port",
+        "description": "Terminates the process holding a port.",
+        "operationId": "postSystemPortsRelease",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/system/restart": {
+      "post": {
+        "summary": "Restart the service",
+        "description": "",
+        "operationId": "postSystemRestart",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/update/check": {
+      "get": {
+        "summary": "Check for a new release",
+        "description": "",
+        "operationId": "getUpdateCheck",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/update/perform": {
+      "post": {
+        "summary": "Install the available update",
+        "description": "",
+        "operationId": "postUpdatePerform",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/update/status": {
+      "get": {
+        "summary": "Report update progress",
+        "description": "",
+        "operationId": "getUpdateStatus",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/users": {
+      "get": {
+        "summary": "List or create users",
+        "description": "",
+        "operationId": "getUsers",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      },
+      "post": {
+        "summary": "List or create users",
+        "description": "",
+        "operationId": "postUsers",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      }
+    },
+    "/api/users/": {
+      "delete": {
+        "summary": "Read, update or delete a user",
+        "description": "The user ID is the trailing path segment.",
+        "operationId": "deleteUserByID",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      },
+      "get": {
+        "summary": "Read, update or delete a user",
+        "description": "The user ID is the trailing path segment.",
+        "operationId": "getUserByID",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
+            "content": null
+          }
+        }
+      },
+      "put": {
+        "summary": "Read, update or delete a user",
+        "description": "The user ID is the trailing path segment.",
+        "operationId": "putUserByID",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": null
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": null
+          },
+          "403": {
+            "description": "Not permitted",
             "content": null
           }
         }
@@ -30,13 +928,55 @@
       "Device": {
         "type": "object",
         "properties": {
-          "id": {
+          "ip": {
+            "type": "string"
+          },
+          "mac": {
             "type": "string"
           },
           "name": {
             "type": "string"
           }
-        }
+        },
+        "required": [
+          "ip"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "Proxy": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "listen_addr": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "target_addr": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "listen_addr",
+          "target_addr"
+        ]
       }
     }
   }

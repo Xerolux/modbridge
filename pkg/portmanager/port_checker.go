@@ -7,11 +7,18 @@ package portmanager
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 )
+
+// pidPattern matches the PID inside the process column of `ss -tlnp`, which
+// looks like `users:(("modbridge",pid=1234,fd=7))` — not a bare number, so a
+// plain Atoi on that field never yields anything but 0.
+var pidPattern = regexp.MustCompile(`pid=(\d+)`)
 
 // ProcessInfo contains information about a process
 type ProcessInfo struct {
@@ -49,39 +56,48 @@ func (pm *PortManager) CheckPort(port int) *PortInfo {
 	}
 
 	output, _ := cmd.Output()
-	portStr := fmt.Sprintf(":%d", port)
-	lines := strings.Split(string(output), "\n")
 
-	for _, line := range lines {
-		if strings.Contains(line, portStr) && strings.Contains(line, "LISTEN") {
-			// Try to extract PID
-			fields := strings.Fields(line)
-			pid := 0
-			if len(fields) >= 7 {
-				if pidStr := fields[6]; pidStr != "" {
-					if p, err := strconv.Atoi(pidStr); err == nil {
-						pid = p
-					}
-				}
-			}
-
-			info := getProcessInfo(pid)
-			return &PortInfo{
-				State:      "LISTEN",
-				IsOpen:     true,
-				Port:       port,
-				ProcessPID: pid,
-				Process:    info.Process,
-				User:       info.User,
-			}
+	pid, listening := findListener(string(output), port)
+	if !listening {
+		return &PortInfo{
+			State:  "FREE",
+			IsOpen: false,
+			Port:   port,
 		}
 	}
 
+	info := getProcessInfo(pid)
 	return &PortInfo{
-		State:  "FREE",
-		IsOpen: false,
-		Port:   port,
+		State:      "LISTEN",
+		IsOpen:     true,
+		Port:       port,
+		ProcessPID: pid,
+		Process:    info.Process,
+		User:       info.User,
 	}
+}
+
+// findListener scans `ss -tlnp` or `netstat -an` output for a listener on port
+// and returns its PID, if the output carries one.
+//
+// The port has to terminate the address: a plain substring search for ":502"
+// also matches the listeners on :5020 and :50200, and would report every one of
+// them as occupying port 502.
+func findListener(output string, port int) (pid int, listening bool) {
+	portPattern := regexp.MustCompile(fmt.Sprintf(`:%d(\s|$)`, port))
+
+	for _, line := range strings.Split(output, "\n") {
+		if !strings.Contains(line, "LISTEN") || !portPattern.MatchString(line) {
+			continue
+		}
+		if m := pidPattern.FindStringSubmatch(line); m != nil {
+			if p, err := strconv.Atoi(m[1]); err == nil {
+				pid = p
+			}
+		}
+		return pid, true
+	}
+	return 0, false
 }
 
 // CheckPorts checks multiple ports
@@ -93,8 +109,19 @@ func (pm *PortManager) CheckPorts(ports []int) map[int]*PortInfo {
 	return results
 }
 
-// KillProcess kills a process by PID
+// KillProcess kills a process by PID.
+//
+// PIDs 0 and 1 are refused: 0 means the port scan found no PID at all and would
+// signal the caller's own process group, 1 is init. So is our own PID — killing
+// it is never what the operator meant by freeing a port.
 func (pm *PortManager) KillProcess(pid int) error {
+	if pid <= 1 {
+		return fmt.Errorf("refusing to kill invalid pid %d", pid)
+	}
+	if pid == os.Getpid() {
+		return fmt.Errorf("refusing to kill own process (pid %d)", pid)
+	}
+
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {

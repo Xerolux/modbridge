@@ -16,6 +16,11 @@ const (
 	FuncReadHoldingRegisters = 0x03
 	FuncReadInputRegisters   = 0x04
 
+	// MaxReadQuantity is the largest number of registers a single read
+	// response can carry: the byte count field is one byte, so 125 registers
+	// (250 bytes) is the protocol limit.
+	MaxReadQuantity = 125
+
 	// Modbus Exceptions
 	ExceptionIllegalFunction    = 0x01
 	ExceptionIllegalDataAddress = 0x02
@@ -284,6 +289,17 @@ func RTUToTCP(rtuFrame []byte, txID uint16) ([]byte, error) {
 	binary.BigEndian.PutUint16(tcp[4:6], pduLen)
 	copy(tcp[6:], payload)
 	return tcp, nil
+}
+
+// SupportsRTUFunction reports whether ReadRTUFrame knows how long a response to
+// fc is. A request with any other function code must be rejected before it is
+// sent: the reply would stay in the socket and desynchronise the connection.
+func SupportsRTUFunction(fc byte) bool {
+	switch fc {
+	case 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x0F, 0x10:
+		return true
+	}
+	return false
 }
 
 // ReadRTUFrame reads one Modbus RTU frame from r, given the expected function

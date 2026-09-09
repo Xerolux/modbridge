@@ -116,29 +116,46 @@ func (m *Manager) CreateUser(req *CreateUserRequest, createdBy string) (*databas
 	return user, nil
 }
 
+// dummyPasswordHash is a fixed bcrypt hash (cost 14, matching auth.HashPassword)
+// compared against when no usable account exists. Running the comparison anyway
+// keeps the cost of a failed login constant, so response timing does not reveal
+// which usernames are registered.
+const dummyPasswordHash = "$2a$14$giT/cogf1hqIOGMhZLRNuuVMHe.pZ170oCjwLIZMl4m.HqZ7MJLIK"
+
+// errInvalidCredentials is the single error every failed authentication returns
+// so callers cannot tell an unknown user from a disabled, expired, or
+// wrong-password one.
+var errInvalidCredentials = errors.New("invalid credentials")
+
+// AuthenticateUser verifies a username/password pair and returns the user on
+// success. Every failure returns errInvalidCredentials after a bcrypt
+// comparison has been performed, regardless of the reason.
 func (m *Manager) AuthenticateUser(username, password string) (*database.User, error) {
 	user, err := m.db.GetUserByUsername(username)
 	if err != nil {
 		return nil, err
 	}
-	if user == nil {
-		return nil, errors.New("invalid credentials")
-	}
 
-	if !user.Enabled {
-		return nil, errors.New("user account is disabled")
-	}
+	usable := user != nil && user.Enabled
 
-	if user.ExpiresAt != nil && time.Now().After(*user.ExpiresAt) {
-		user.Enabled = false
-		if err := m.db.UpdateUser(user); err != nil {
-			return nil, fmt.Errorf("failed to disable expired user: %w", err)
+	if user != nil && user.ExpiresAt != nil && time.Now().After(*user.ExpiresAt) {
+		usable = false
+		if user.Enabled {
+			user.Enabled = false
+			if err := m.db.UpdateUser(user); err != nil {
+				return nil, fmt.Errorf("failed to disable expired user: %w", err)
+			}
 		}
-		return nil, errors.New("user account has expired")
 	}
 
-	if !auth.CheckPasswordHash(password, user.PasswordHash) {
-		return nil, errors.New("invalid credentials")
+	hash := dummyPasswordHash
+	if user != nil && user.PasswordHash != "" {
+		hash = user.PasswordHash
+	}
+	passwordOK := auth.CheckPasswordHash(password, hash)
+
+	if !usable || !passwordOK {
+		return nil, errInvalidCredentials
 	}
 
 	if err := m.db.UpdateUserLastLogin(user.ID); err != nil {

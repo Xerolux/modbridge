@@ -7,6 +7,7 @@ package metrics
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -171,6 +172,7 @@ func (pm *ProxyMetrics) getStats() ProxyStats {
 	if len(pm.latencies) > 0 {
 		sorted := make([]time.Duration, len(pm.latencies))
 		copy(sorted, pm.latencies)
+		sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
 
 		// Simple percentile calculation
 		stats.LatencyP50 = sorted[len(sorted)*50/100]
@@ -240,6 +242,32 @@ func (m *Metrics) currentDiagnostics() map[string]ProxyDiagnostics {
 	return provider()
 }
 
+// proxyMetricFamily describes one per-proxy Prometheus metric family.
+type proxyMetricFamily struct {
+	name string
+	help string
+	kind string
+}
+
+// proxyMetricFamilies lists the per-proxy families exported by
+// GetPrometheusMetrics, so their HELP/TYPE lines can be written exactly once.
+var proxyMetricFamilies = []proxyMetricFamily{
+	{"modbridge_proxy_requests_total", "Total requests for proxy", "counter"},
+	{"modbridge_proxy_errors_total", "Total errors for proxy", "counter"},
+	{"modbridge_proxy_active_connections", "Active connections for proxy", "gauge"},
+	{"modbridge_proxy_stale_responses_total", "Target responses discarded because they belonged to an abandoned request", "counter"},
+	{"modbridge_proxy_cache_hits_total", "Reads answered from the response cache", "counter"},
+	{"modbridge_proxy_cache_misses_total", "Reads that had to reach the target", "counter"},
+	{"modbridge_proxy_cache_entries", "Registers currently held in the response cache", "gauge"},
+	{"modbridge_proxy_polled_requests", "Requests the background poller keeps warm", "gauge"},
+	{"modbridge_proxy_latency_seconds_avg", "Average latency for proxy", "gauge"},
+	{"modbridge_proxy_latency_seconds_p50", "P50 latency for proxy", "gauge"},
+	{"modbridge_proxy_latency_seconds_p95", "P95 latency for proxy", "gauge"},
+	{"modbridge_proxy_latency_seconds_p99", "P99 latency for proxy", "gauge"},
+	{"modbridge_proxy_bytes_in_total", "Total bytes received by proxy", "counter"},
+	{"modbridge_proxy_bytes_out_total", "Total bytes sent by proxy", "counter"},
+}
+
 // GetPrometheusMetrics returns metrics in Prometheus format.
 func (m *Metrics) GetPrometheusMetrics() string {
 	stats := m.GetStats()
@@ -265,65 +293,32 @@ func (m *Metrics) GetPrometheusMetrics() string {
 
 	diagnostics := m.currentDiagnostics()
 
-	// Per-proxy metrics
+	// Per-proxy metrics. HELP/TYPE lines must appear exactly once per metric
+	// family — repeating them for every proxy makes Prometheus reject the scrape.
+	for _, family := range proxyMetricFamilies {
+		output.WriteString(fmt.Sprintf("# HELP %s %s\n", family.name, family.help))
+		output.WriteString(fmt.Sprintf("# TYPE %s %s\n", family.name, family.kind))
+	}
+
 	for proxyID, proxyStats := range stats.ProxyStats {
-		output.WriteString("# HELP modbridge_proxy_requests_total Total requests for proxy\n")
-		output.WriteString("# TYPE modbridge_proxy_requests_total counter\n")
-		output.WriteString(fmt.Sprintf("modbridge_proxy_requests_total{proxy_id=%q} %d\n\n", proxyID, proxyStats.Requests))
-
-		output.WriteString("# HELP modbridge_proxy_errors_total Total errors for proxy\n")
-		output.WriteString("# TYPE modbridge_proxy_errors_total counter\n")
-		output.WriteString(fmt.Sprintf("modbridge_proxy_errors_total{proxy_id=%q} %d\n\n", proxyID, proxyStats.Errors))
-
-		output.WriteString("# HELP modbridge_proxy_active_connections Active connections for proxy\n")
-		output.WriteString("# TYPE modbridge_proxy_active_connections gauge\n")
-		output.WriteString(fmt.Sprintf("modbridge_proxy_active_connections{proxy_id=%q} %d\n\n", proxyID, proxyStats.ActiveConns))
+		output.WriteString(fmt.Sprintf("modbridge_proxy_requests_total{proxy_id=%q} %d\n", proxyID, proxyStats.Requests))
+		output.WriteString(fmt.Sprintf("modbridge_proxy_errors_total{proxy_id=%q} %d\n", proxyID, proxyStats.Errors))
+		output.WriteString(fmt.Sprintf("modbridge_proxy_active_connections{proxy_id=%q} %d\n", proxyID, proxyStats.ActiveConns))
 
 		if d, ok := diagnostics[proxyID]; ok {
-			output.WriteString("# HELP modbridge_proxy_stale_responses_total Target responses discarded because they belonged to an abandoned request\n")
-			output.WriteString("# TYPE modbridge_proxy_stale_responses_total counter\n")
-			output.WriteString(fmt.Sprintf("modbridge_proxy_stale_responses_total{proxy_id=%q} %d\n\n", proxyID, d.StaleResponses))
-
-			output.WriteString("# HELP modbridge_proxy_cache_hits_total Reads answered from the response cache\n")
-			output.WriteString("# TYPE modbridge_proxy_cache_hits_total counter\n")
-			output.WriteString(fmt.Sprintf("modbridge_proxy_cache_hits_total{proxy_id=%q} %d\n\n", proxyID, d.CacheHits))
-
-			output.WriteString("# HELP modbridge_proxy_cache_misses_total Reads that had to reach the target\n")
-			output.WriteString("# TYPE modbridge_proxy_cache_misses_total counter\n")
-			output.WriteString(fmt.Sprintf("modbridge_proxy_cache_misses_total{proxy_id=%q} %d\n\n", proxyID, d.CacheMisses))
-
-			output.WriteString("# HELP modbridge_proxy_cache_entries Registers currently held in the response cache\n")
-			output.WriteString("# TYPE modbridge_proxy_cache_entries gauge\n")
-			output.WriteString(fmt.Sprintf("modbridge_proxy_cache_entries{proxy_id=%q} %d\n\n", proxyID, d.CacheEntries))
-
-			output.WriteString("# HELP modbridge_proxy_polled_requests Requests the background poller keeps warm\n")
-			output.WriteString("# TYPE modbridge_proxy_polled_requests gauge\n")
-			output.WriteString(fmt.Sprintf("modbridge_proxy_polled_requests{proxy_id=%q} %d\n\n", proxyID, d.PolledRequests))
+			output.WriteString(fmt.Sprintf("modbridge_proxy_stale_responses_total{proxy_id=%q} %d\n", proxyID, d.StaleResponses))
+			output.WriteString(fmt.Sprintf("modbridge_proxy_cache_hits_total{proxy_id=%q} %d\n", proxyID, d.CacheHits))
+			output.WriteString(fmt.Sprintf("modbridge_proxy_cache_misses_total{proxy_id=%q} %d\n", proxyID, d.CacheMisses))
+			output.WriteString(fmt.Sprintf("modbridge_proxy_cache_entries{proxy_id=%q} %d\n", proxyID, d.CacheEntries))
+			output.WriteString(fmt.Sprintf("modbridge_proxy_polled_requests{proxy_id=%q} %d\n", proxyID, d.PolledRequests))
 		}
 
-		output.WriteString("# HELP modbridge_proxy_latency_seconds_avg Average latency for proxy\n")
-		output.WriteString("# TYPE modbridge_proxy_latency_seconds_avg gauge\n")
-		output.WriteString(fmt.Sprintf("modbridge_proxy_latency_seconds_avg{proxy_id=%q} %f\n\n", proxyID, proxyStats.LatencyAvg.Seconds()))
-
-		output.WriteString("# HELP modbridge_proxy_latency_seconds_p50 P50 latency for proxy\n")
-		output.WriteString("# TYPE modbridge_proxy_latency_seconds_p50 gauge\n")
-		output.WriteString(fmt.Sprintf("modbridge_proxy_latency_seconds_p50{proxy_id=%q} %f\n\n", proxyID, proxyStats.LatencyP50.Seconds()))
-
-		output.WriteString("# HELP modbridge_proxy_latency_seconds_p95 P95 latency for proxy\n")
-		output.WriteString("# TYPE modbridge_proxy_latency_seconds_p95 gauge\n")
-		output.WriteString(fmt.Sprintf("modbridge_proxy_latency_seconds_p95{proxy_id=%q} %f\n\n", proxyID, proxyStats.LatencyP95.Seconds()))
-
-		output.WriteString("# HELP modbridge_proxy_latency_seconds_p99 P99 latency for proxy\n")
-		output.WriteString("# TYPE modbridge_proxy_latency_seconds_p99 gauge\n")
-		output.WriteString(fmt.Sprintf("modbridge_proxy_latency_seconds_p99{proxy_id=%q} %f\n\n", proxyID, proxyStats.LatencyP99.Seconds()))
-
-		output.WriteString("# HELP modbridge_proxy_bytes_in_total Total bytes received by proxy\n")
-		output.WriteString("# TYPE modbridge_proxy_bytes_in_total counter\n")
-		output.WriteString(fmt.Sprintf("modbridge_proxy_bytes_in_total{proxy_id=%q} %d\n\n", proxyID, proxyStats.BytesIn))
-
-		output.WriteString("# HELP modbridge_proxy_bytes_out_total Total bytes sent by proxy\n")
-		output.WriteString("# TYPE modbridge_proxy_bytes_out_total counter\n")
-		output.WriteString(fmt.Sprintf("modbridge_proxy_bytes_out_total{proxy_id=%q} %d\n\n", proxyID, proxyStats.BytesOut))
+		output.WriteString(fmt.Sprintf("modbridge_proxy_latency_seconds_avg{proxy_id=%q} %f\n", proxyID, proxyStats.LatencyAvg.Seconds()))
+		output.WriteString(fmt.Sprintf("modbridge_proxy_latency_seconds_p50{proxy_id=%q} %f\n", proxyID, proxyStats.LatencyP50.Seconds()))
+		output.WriteString(fmt.Sprintf("modbridge_proxy_latency_seconds_p95{proxy_id=%q} %f\n", proxyID, proxyStats.LatencyP95.Seconds()))
+		output.WriteString(fmt.Sprintf("modbridge_proxy_latency_seconds_p99{proxy_id=%q} %f\n", proxyID, proxyStats.LatencyP99.Seconds()))
+		output.WriteString(fmt.Sprintf("modbridge_proxy_bytes_in_total{proxy_id=%q} %d\n", proxyID, proxyStats.BytesIn))
+		output.WriteString(fmt.Sprintf("modbridge_proxy_bytes_out_total{proxy_id=%q} %d\n", proxyID, proxyStats.BytesOut))
 	}
 
 	return output.String()

@@ -1,6 +1,11 @@
 # Code-Review ModBridge (Stand 2026-09-09, Version 2.0.10.18)
 
-Reine Bestandsaufnahme, keine Änderungen am Code. Schweregrad: **hoch** = Fehlfunktion/Sicherheitslücke im Normalbetrieb, **mittel** = Fehler unter bestimmten Bedingungen oder deutliches Optimierungspotenzial, **niedrig** = Kosmetik, Robustheit, kleinere Performance.
+**Status: abgearbeitet.** Die unten aufgeführten Befunde sind behoben, bis auf
+die in Abschnitt 6 genannten Ausnahmen. Das Dokument bleibt als Nachweis
+stehen: es beschreibt den Zustand *vor* den Korrekturen, Abschnitt 6 sagt, was
+davon offen ist.
+
+Schweregrad: **hoch** = Fehlfunktion/Sicherheitslücke im Normalbetrieb, **mittel** = Fehler unter bestimmten Bedingungen oder deutliches Optimierungspotenzial, **niedrig** = Kosmetik, Robustheit, kleinere Performance.
 
 ## Werkzeug-Ergebnisse
 
@@ -115,13 +120,76 @@ Empfehlung: entfernen oder in einem ADR als „geplant“ dokumentieren. Der tot
 
 Frontend-Stichprobe ohne Befund: keine Tokens in `localStorage`, kein `v-html`, `innerHTML` in `Dashboard.vue` mit Whitelist, alle Intervalle/EventSources werden in `onUnmounted` aufgeräumt, Router-Guard prüft Auth/Permission/Passwortwechsel. Backend: keine String-Konkatenation in SQL, `rows` überall geschlossen.
 
-## 5. Empfohlene Reihenfolge
+## 5. Umsetzung
 
-1. H1 (mTLS), H2 (Panic), H5 (SQLite-Pool) – kleine Fixes, große Wirkung.
-2. H3/M29/H6/H7 – Build und Container-Betrieb.
-3. M25/M26 – Config-Defaults und Validierung.
-4. M14–M18 – Proxy-Robustheit bei Offline-Geräten und Shutdown.
-5. Toten Code und Doku bereinigen (Abschnitt 3, M28, M33).
+Alle Befunde aus den Abschnitten 1, 2 und 4 sind behoben. Die Änderungen liegen
+in drei Commits auf `claude/charming-mccarthy-0lqz8h`.
+
+Schwerpunkte:
+
+- **mTLS** (`pkg/tls`): `ClientCAFile` wird gesetzt; zusätzlich verweigert
+  `GetTLSConfig` jetzt den Dienst, wenn Client-Zertifikate verifiziert werden
+  sollen, aber keine Client-CA konfiguriert ist.
+- **SQLite** (`pkg/database`): Die Pragmas laufen über den DSN und gelten damit
+  für jede Pool-Verbindung; der Pool ist auf eine Verbindung begrenzt.
+- **Log-Rotation** (`pkg/logger`): Größen-, Anzahl- und altersbasierte Rotation,
+  gesteuert über die vorhandenen `log_max_*`-Felder. Rotation ist aus, solange
+  `log_max_size` 0 ist.
+- **Config** (`pkg/config`): `Load` füllt Defaults auf, `Update` weist eine
+  Änderung zurück, die die Konfiguration ungültig machen würde,
+  `writeConfigFile` fällt auf einen In-Place-Write zurück, wenn die Zieldatei
+  nicht ersetzt werden kann. Neue Pfad-Helfer für Daten-, Log- und
+  Konfigurationsverzeichnis.
+- **Datenhaltung**: `MODBRIDGE_DATA_DIR`, `MODBRIDGE_LOG_DIR` und
+  `MODBRIDGE_CONFIG` steuern, wohin geschrieben wird; Compose und Dockerfile
+  setzen sie auf die gemounteten Volumes. Defaults bleiben unverändert, damit
+  bestehende Installationen ihre Dateien weiter finden.
+- **Auth/API**: konstante Login-Laufzeit gegen Username-Enumeration,
+  Rate-Limiter in allen Middleware-Ketten, `X-Forwarded-For` nur hinter
+  vertrauenswürdigen Proxies, Session-Ablauf auf `/api/status`, korrigierte
+  Shutdown-Reihenfolge mit Audit-Flush, SSE ohne Write-Deadline.
+- **Proxy-Kern**: Der Proxy lauscht auch bei offline Target, Write-Deadlines zum
+  Client, ctx-fähige Backoffs, Health-Monitor stört laufende Änderungen nicht
+  mehr, Poller meldet an den Circuit Breaker, Perzentilberechnung aus dem Hot
+  Path genommen.
+- **OpenAPI**: Die Spezifikation beschreibt jetzt alle 37 real registrierten
+  Routen; ein Test vergleicht sie gegen die Routen-Registrierung in `pkg/api`
+  und schlägt bei Drift fehl.
+- **CI**: Alle Actions sind auf Commit-SHAs gepinnt (Versionskommentar bleibt,
+  Dependabot aktualisiert sie weiter).
+
+Neue Tests decken Rotation, Config-Defaults und -Validierung, die
+Beispielkonfiguration, den SSRF-Schutz und die OpenAPI-Konsistenz ab.
+
+## 6. Bewusst nicht umgesetzt
+
+- **Prometheus-Verdrahtung** (`pkg/api/server.go:207`): `metrics.RegisterProxy`
+  und `RecordRequest` haben keinen Aufrufer. `pkg/proxy` führt seine Statistik
+  in `EnhancedStats`; beides zu verbinden wäre eine Erweiterung, kein Fix, und
+  bleibt daher offen. `/api/metrics` liefert für diese Zähler weiterhin 0.
+- **Toter Code** (Abschnitt 3): Die zwölf nicht importierten Pakete sind
+  weiterhin vorhanden. Ob sie entfernt oder angebunden werden, ist eine
+  Produktentscheidung. `CLAUDE.md` listet sie jetzt vollständig und korrekt als
+  nicht verdrahtet, `pkg/tls` und `pkg/alerting` wurden trotzdem repariert, weil
+  ihre Fehler bei einer späteren Anbindung sicherheitsrelevant wären.
+- **Migrationen ohne `user_version`** (`pkg/database/schema_extended.go`): Die
+  Umstellung auf versionierte Migrationen ist ein eigener Umbau mit
+  Migrationspfad für bestehende Datenbanken, nicht Teil dieser Korrekturrunde.
+- **`cmd/cli`**: Nicht entfernt, sondern an `main.go` angeglichen (Pfade,
+  Version, Validierung, Log-Rotation). Ob der zweite Einstiegspunkt bleiben
+  soll, entscheidet das Projekt.
+
+## Verhaltensänderungen
+
+Drei Korrekturen ändern beobachtbares Verhalten:
+
+1. Ein Proxy startet jetzt auch, wenn das Zielgerät offline ist. Clients
+   bekommen dann eine Modbus-Exception statt Connection-Refused.
+2. Der Circuit Breaker kann durch Hintergrund-Refreshes des Pollers öffnen. Das
+   ist beabsichtigt, wirkt sich bei aktiviertem Poller aber auch auf Clients
+   aus.
+3. `"*"` in `cors_allowed_origins` war bisher wirkungslos und erlaubt jetzt
+   tatsächlich jeden Origin. Beim Start wird davor gewarnt.
 
 ## Tests
 

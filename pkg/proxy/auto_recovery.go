@@ -25,6 +25,11 @@ type RecoveryManager struct {
 	wg            sync.WaitGroup
 	running       bool
 	onRecovery    func(string) error
+
+	// wake carries a notification that a task is waiting. Tasks only ever
+	// appear through AddTask, so the processor sleeps until one does instead
+	// of waking once a second forever, per proxy, to find nothing.
+	wake chan struct{}
 }
 
 // RecoveryTask represents a recovery operation
@@ -94,6 +99,7 @@ func NewRecoveryManager(config RecoveryConfig, onRecovery func(string) error) *R
 		cancel:        cancel,
 		running:       true,
 		onRecovery:    onRecovery,
+		wake:          make(chan struct{}, 1),
 	}
 
 	// Start task processor
@@ -129,6 +135,13 @@ func (rm *RecoveryManager) AddTask(target string, priority int) (string, error) 
 
 	rm.recoveryTasks[taskID] = task
 
+	// Buffered and non-blocking: one pending wake-up is enough, the processor
+	// drains every runnable task once it is awake.
+	select {
+	case rm.wake <- struct{}{}:
+	default:
+	}
+
 	return taskID, nil
 }
 
@@ -136,32 +149,59 @@ func (rm *RecoveryManager) AddTask(target string, priority int) (string, error) 
 func (rm *RecoveryManager) taskProcessor() {
 	defer rm.wg.Done()
 
-	for {
-		select {
-		case <-rm.ctx.Done():
-			return
-		default:
-		}
+	// Timer used only while a task is waiting for a concurrency slot: no
+	// notification arrives when a running task finishes, so that one case has
+	// to be re-checked on a timer. Otherwise the processor sleeps until AddTask
+	// wakes it.
+	retry := time.NewTimer(0)
+	if !retry.Stop() {
+		<-retry.C
+	}
+	defer retry.Stop()
 
-		task := rm.getNextTask()
-		if task == nil {
-			time.Sleep(1 * time.Second)
+	for {
+		task, blocked := rm.getNextTask()
+		if task != nil {
+			rm.wg.Add(1)
+			go rm.executeTask(task)
 			continue
 		}
 
-		rm.wg.Add(1)
-		go rm.executeTask(task)
+		if blocked {
+			retry.Reset(1 * time.Second)
+		}
+
+		select {
+		case <-rm.ctx.Done():
+			return
+		case <-rm.wake:
+		case <-retry.C:
+		}
+
+		if blocked && !retry.Stop() {
+			select {
+			case <-retry.C:
+			default:
+			}
+		}
 	}
 }
 
-// getNextTask returns the next task to execute
-func (rm *RecoveryManager) getNextTask() *RecoveryTask {
+// getNextTask returns the next task to execute. blocked reports that a task is
+// waiting but no concurrency slot is free, which is the one case the caller
+// cannot be notified about and has to come back to on its own.
+func (rm *RecoveryManager) getNextTask() (task *RecoveryTask, blocked bool) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
 	// Check if we can start a new task
 	if rm.currentTasks >= rm.maxConcurrent {
-		return nil
+		for _, t := range rm.recoveryTasks {
+			if t.Status == StatusPending {
+				return nil, true
+			}
+		}
+		return nil, false
 	}
 
 	// Find highest priority pending task
@@ -180,7 +220,7 @@ func (rm *RecoveryManager) getNextTask() *RecoveryTask {
 		rm.currentTasks++
 	}
 
-	return selected
+	return selected, false
 }
 
 // executeTask executes a recovery task
@@ -196,8 +236,15 @@ func (rm *RecoveryManager) executeTask(task *RecoveryTask) {
 		// All task field accesses go through rm.mu so they stay consistent
 		// with getNextTask/CancelTask/GetStats which read them under the lock.
 		rm.mu.Lock()
+		cancelled := task.Status == StatusCancelled
 		attemptsExhausted := task.Attempts >= task.MaxAttempts
 		rm.mu.Unlock()
+		// CancelTask only sets the status; this is where it takes effect. Note
+		// the early return: falling out of the loop would overwrite the status
+		// with StatusFailed and hide the cancellation.
+		if cancelled {
+			return
+		}
 		if attemptsExhausted {
 			break
 		}
@@ -258,8 +305,10 @@ func (rm *RecoveryManager) executeTask(task *RecoveryTask) {
 
 // attemptRecovery attempts to recover a target
 func (rm *RecoveryManager) attemptRecovery(ctx context.Context, task *RecoveryTask) error {
-	// Try to connect to target
-	conn, err := net.DialTimeout("tcp", task.Target, 10*time.Second)
+	// Try to connect to target. The context carries the task timeout and the
+	// manager's shutdown, both of which a fixed DialTimeout would ignore.
+	var dialer net.Dialer
+	conn, err := dialer.DialContext(ctx, "tcp", task.Target)
 	if err != nil {
 		return fmt.Errorf("dial failed: %w", err)
 	}

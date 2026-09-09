@@ -96,7 +96,7 @@ func main() {
 	}
 
 	// 1. Database
-	db, err := database.NewDB("modbridge.db")
+	db, err := database.NewDB(config.DatabasePath())
 	if err != nil {
 		log.Printf("Warning: Failed to init database: %v. Database features will be disabled.", err)
 		db = nil
@@ -192,9 +192,15 @@ func main() {
 	}
 
 	// 2. Config
-	cfgMgr := config.NewManager("config.json")
+	cfgMgr := config.NewManager(config.ConfigPath())
 	if err := cfgMgr.Load(); err != nil {
 		log.Printf("Starting with empty config: %v", err)
+	}
+	// Report a config that does not validate rather than running on values
+	// nothing checked. This is deliberately not fatal: an install with one bad
+	// field should still come up so the operator can fix it in the UI.
+	if err := cfgMgr.Validate(); err != nil {
+		log.Printf("Warning: configuration has validation errors: %v", err)
 	}
 
 	// NOTE: The legacy single-user password bootstrap (random password written
@@ -204,11 +210,34 @@ func main() {
 	// pre-existing config.json carries one.
 
 	// 3. Logger
-	l, err := logger.NewLogger("proxy.log", 1000)
+	l, err := logger.NewLogger(config.LogDir(), 1000)
 	if err != nil {
 		log.Fatalf("Failed to init logger: %v", err)
 	}
 	defer l.Close()
+
+	logCfg := cfgMgr.Get()
+	l.SetRotation(logger.RotationConfig{
+		MaxSizeMB:  logCfg.LogMaxSize,
+		MaxFiles:   logCfg.LogMaxFiles,
+		MaxAgeDays: logCfg.LogMaxAgeDays,
+	})
+	// LOG_LEVEL wins over config.json, so an operator can raise verbosity
+	// without editing the file.
+	level := logCfg.LogLevel
+	if env := strings.ToUpper(strings.TrimSpace(os.Getenv("LOG_LEVEL"))); env != "" {
+		level = env
+	}
+	if level != "" {
+		// An unrecognised level would otherwise be treated as ERROR and
+		// silently swallow INFO and WARN.
+		switch logger.LogLevel(strings.ToUpper(level)) {
+		case logger.DEBUG, logger.INFO, logger.WARN, logger.ERROR:
+			l.SetLogLevel(logger.LogLevel(strings.ToUpper(level)))
+		default:
+			log.Printf("Warning: unknown log level %q, keeping INFO", level)
+		}
+	}
 
 	// 4. Manager
 	mgr := manager.NewManager(cfgMgr, l, db)
@@ -290,13 +319,14 @@ func main() {
 	if tlsEnabled {
 		server.TLSConfig = &tls.Config{
 			MinVersion: tls.VersionTLS12,
+			// ECDHE only — the static RSA suites offer no forward secrecy.
 			CipherSuites: []uint16{
-				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-				tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-				tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
 			},
 		}
 	}
@@ -331,19 +361,20 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Stop all proxies
-	mgr.Shutdown()
-
-	// Stop API background goroutines
-	apiServer.Stop()
-
-	// Shutdown HTTP server
+	// Shutdown the HTTP server first so no new request can reach the proxies
+	// or the audit buffer while they are being torn down.
 	if err := server.Shutdown(ctx); err != nil {
 		log.Printf("Server forced to shutdown: %v", err)
 		if closeErr := server.Close(); closeErr != nil {
 			log.Printf("Server close error: %v", closeErr)
 		}
 	}
+
+	// Stop all proxies
+	mgr.Shutdown()
+
+	// Stop API background goroutines and flush the audit buffer
+	apiServer.Stop()
 
 	l.Info("SYSTEM", "Server stopped")
 	log.Println("Server stopped")

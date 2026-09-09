@@ -293,37 +293,13 @@ func (p *ProxyInstance) Start() error {
 	p.enhancedStats = NewEnhancedStats(1000) // Track last 1000 requests
 	p.requestID = 0
 
-	// Initialize health checker
-	p.healthChecker = NewHealthChecker(
-		p.TargetAddr,
-		30*time.Second,
-		p.ConnectionTimeout,
-		func(id, msg string) { p.log.Info(id, msg) },
-	)
-	p.healthChecker.Start()
-
-	p.healthChecker.SetOnUnhealthy(func() {
-		p.log.Info(p.ID, "Health checker detected target failure, triggering recovery")
-		if p.recoveryManager != nil {
-			if _, err := p.recoveryManager.AddTask(p.TargetAddr, 10); err != nil {
-				p.log.Error(p.ID, fmt.Sprintf("failed to schedule recovery task: %v", err))
-			}
-		}
-	})
-
-	p.healthChecker.SetOnRecovery(func() {
-		p.log.Info(p.ID, "Health checker detected target recovery, resetting circuit breaker and pre-warming pool")
-		if p.circuitBreaker != nil {
-			p.circuitBreaker.Reset()
-		}
-		if p.connPool != nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			if err := p.connPool.PreWarm(ctx, 2); err != nil {
-				p.log.Error(p.ID, fmt.Sprintf("Pool pre-warm failed: %v", err))
-			}
-		}
-	})
+	// Initialize health checker. It dials the target on its own, which a
+	// device that accepts a single Modbus session cannot afford: the probe
+	// would take the session away from the pool. Such targets are watched
+	// through the requests that actually flow instead.
+	if maxTargetConns > 1 {
+		p.startHealthChecker()
+	}
 
 	// RecoveryManager already performs a real TCP dial in attemptRecovery.
 	// No additional onRecovery callback is needed here.
@@ -347,7 +323,7 @@ func (p *ProxyInstance) Start() error {
 			p.PollInterval,
 			10*cacheCfg.TTL,
 			512,
-			p.forwardClientRequest,
+			p.refreshForPoller,
 			func(key uint64, unitID uint8, resp []byte) { p.cache.SetForUnit(key, unitID, resp) },
 			func(msg string) { p.log.Debug(p.ID, msg) },
 		)
@@ -618,7 +594,7 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 				clientTxID, _ := modbus.FrameTxID(reqFrame)
 				modbus.SetFrameTxID(cached, clientTxID)
 				p.Stats.Requests.Add(1)
-				if _, err := clientConn.Write(cached); err != nil {
+				if err := p.writeToClient(clientConn, cached); err != nil {
 					p.log.Error(p.ID, fmt.Sprintf("Write cached response error: %v", err))
 					return
 				}
@@ -633,7 +609,7 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 			// Send error response to client
 			// Modbus exception: Gateway Target Device Failed to Respond
 			exceptionResp := modbus.CreateExceptionResponse(reqFrame, 0x0B)
-			if _, writeErr := clientConn.Write(exceptionResp); writeErr != nil {
+			if writeErr := p.writeToClient(clientConn, exceptionResp); writeErr != nil {
 				p.log.Error(p.ID, fmt.Sprintf("Write exception response error: %v", writeErr))
 				return
 			}
@@ -660,8 +636,16 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 			p.Stats.Errors.Add(1)
 			p.circuitBreaker.RecordFailure()
 			p.enhancedStats.RecordRequestComplete(reqID, bytesRead, 0, errFwd)
+			// A write that timed out may still have reached the device, so the
+			// unit's cached reads are no more trustworthy than after a write
+			// that succeeded.
+			if p.cache != nil {
+				if unitID, fc, ok := modbus.FrameUnitAndFunction(reqFrame); ok && modbus.IsWriteFunction(fc) {
+					p.cache.InvalidateUnit(unitID)
+				}
+			}
 			exceptionResp := modbus.CreateExceptionResponse(reqFrame, 0x0B)
-			if _, writeErr := clientConn.Write(exceptionResp); writeErr != nil {
+			if writeErr := p.writeToClient(clientConn, exceptionResp); writeErr != nil {
 				p.log.Error(p.ID, fmt.Sprintf("Write exception response error: %v", writeErr))
 				return
 			}
@@ -692,11 +676,76 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 			p.log.Debug(p.ID, fmt.Sprintf("Sending Modbus response: %X (%d bytes)", respFrame, len(respFrame)))
 		}
 
-		if _, err := clientConn.Write(respFrame); err != nil {
+		if err := p.writeToClient(clientConn, respFrame); err != nil {
 			p.log.Error(p.ID, fmt.Sprintf("Write response error: %v", err))
 			return
 		}
 	}
+}
+
+// writeToClient sends a frame to the client under a write deadline. Without one
+// a client that has stopped reading blocks this handler goroutine — and with it
+// a per-proxy connection slot and a global limiter slot — until Stop().
+func (p *ProxyInstance) writeToClient(conn net.Conn, frame []byte) error {
+	if err := conn.SetWriteDeadline(time.Now().Add(p.ConnectionTimeout)); err != nil {
+		return err
+	}
+	_, err := conn.Write(frame)
+	return err
+}
+
+// startHealthChecker sets up the periodic target probe and its callbacks.
+func (p *ProxyInstance) startHealthChecker() {
+	p.healthChecker = NewHealthChecker(
+		p.TargetAddr,
+		30*time.Second,
+		p.ConnectionTimeout,
+		func(id, msg string) { p.log.Info(id, msg) },
+	)
+	p.healthChecker.Start()
+
+	p.healthChecker.SetOnUnhealthy(func() {
+		p.log.Info(p.ID, "Health checker detected target failure, triggering recovery")
+		if p.recoveryManager != nil {
+			if _, err := p.recoveryManager.AddTask(p.TargetAddr, 10); err != nil {
+				p.log.Error(p.ID, fmt.Sprintf("failed to schedule recovery task: %v", err))
+			}
+		}
+	})
+
+	p.healthChecker.SetOnRecovery(func() {
+		p.log.Info(p.ID, "Health checker detected target recovery, resetting circuit breaker and pre-warming pool")
+		if p.circuitBreaker != nil {
+			p.circuitBreaker.Reset()
+		}
+		if p.connPool != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := p.connPool.PreWarm(ctx, 2); err != nil {
+				p.log.Error(p.ID, fmt.Sprintf("Pool pre-warm failed: %v", err))
+			}
+		}
+	})
+}
+
+// refreshForPoller is the background poller's way to the target. It goes
+// through the circuit breaker like a client request does: against a dead target
+// a refresh round would otherwise fire every tracked request, each with its
+// full retry budget, for as long as the poller runs.
+func (p *ProxyInstance) refreshForPoller(reqFrame []byte) ([]byte, error) {
+	if p.circuitBreaker != nil && !p.circuitBreaker.AllowRequest() {
+		return nil, fmt.Errorf("circuit breaker is open")
+	}
+
+	resp, err := p.forwardClientRequest(reqFrame)
+	if p.circuitBreaker != nil {
+		if err != nil {
+			p.circuitBreaker.RecordFailure()
+		} else {
+			p.circuitBreaker.RecordSuccess()
+		}
+	}
+	return resp, err
 }
 
 // forwardClientRequest routes a client request to the right forwarding path.
@@ -722,6 +771,14 @@ func (p *ProxyInstance) handleSplitRead(reqFrame []byte) ([]byte, error) {
 	if err != nil {
 		// Malformed request, just forward it and let target fail or fail here
 		return p.forwardRequest(reqFrame)
+	}
+
+	// A single Modbus read response cannot carry more than 125 registers, so
+	// the pieces could never be reassembled. Answering now saves the target
+	// every partial read the request would otherwise cause, and gives the
+	// client the exception the spec calls for instead of a gateway failure.
+	if quantity > modbus.MaxReadQuantity {
+		return modbus.CreateExceptionResponse(reqFrame, modbus.ExceptionIllegalDataValue), nil
 	}
 
 	// If quantity is within limits, forward normally
@@ -789,6 +846,21 @@ func (p *ProxyInstance) retryBackoff(attempt int) time.Duration {
 	return base + jitter
 }
 
+// waitBackoff waits out a retry backoff and reports whether it completed. A
+// plain sleep would keep a retry loop running for up to 30 seconds after the
+// proxy has been asked to stop, and Stop() waits for exactly these goroutines.
+func (p *ProxyInstance) waitBackoff(d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		return true
+	case <-p.proxyContext().Done():
+		return false
+	}
+}
+
 // brokenMarker returns a function that flags a pooled connection as unusable
 // so it is closed instead of handed to the next request.
 func brokenMarker(conn net.Conn) func() {
@@ -825,6 +897,11 @@ func (p *ProxyInstance) forwardRequestBefore(req []byte, deadline time.Time) ([]
 	clientTxID, _ := modbus.FrameTxID(req)
 	budget := time.Until(deadline)
 
+	// The outbound frame differs from the client's only in its transaction ID,
+	// so it is built once and re-stamped per attempt instead of copied again.
+	out := make([]byte, len(req))
+	copy(out, req)
+
 	var lastErr error
 	for attempt := 0; attempt <= p.MaxRetries; attempt++ {
 		if attempt > 0 {
@@ -832,7 +909,9 @@ func (p *ProxyInstance) forwardRequestBefore(req []byte, deadline time.Time) ([]
 			if time.Now().Add(backoff).After(deadline) {
 				break
 			}
-			time.Sleep(backoff)
+			if !p.waitBackoff(backoff) {
+				break
+			}
 		}
 
 		remaining := time.Until(deadline)
@@ -840,7 +919,7 @@ func (p *ProxyInstance) forwardRequestBefore(req []byte, deadline time.Time) ([]
 			break
 		}
 
-		resp, err := p.forwardAttempt(req, clientTxID, remaining)
+		resp, err := p.forwardAttempt(out, clientTxID, remaining)
 		if err == nil {
 			return resp, nil
 		}
@@ -859,6 +938,8 @@ func (p *ProxyInstance) forwardRequestBefore(req []byte, deadline time.Time) ([]
 // the target and restored on the response. Responses that do not carry the
 // expected ID are discarded rather than forwarded, so a late answer from an
 // earlier transaction can never be mistaken for the current one.
+// The caller owns req and it is stamped with a fresh transaction ID in place,
+// so it must not be the client's own buffer.
 func (p *ProxyInstance) forwardAttempt(req []byte, clientTxID uint16, remaining time.Duration) ([]byte, error) {
 	readTimeout, connectTimeout := p.currentTimeouts()
 	if readTimeout > remaining {
@@ -881,8 +962,7 @@ func (p *ProxyInstance) forwardAttempt(req []byte, clientTxID uint16, remaining 
 	}
 	markBroken := brokenMarker(rawConn)
 
-	out := make([]byte, len(req))
-	copy(out, req)
+	out := req
 	txID := p.nextTargetTxID()
 	modbus.SetFrameTxID(out, txID)
 
@@ -921,6 +1001,14 @@ func (p *ProxyInstance) forwardRequestRTU(tcpReq []byte) ([]byte, error) {
 	txID := uint16(tcpReq[0])<<8 | uint16(tcpReq[1])
 	fc := tcpReq[7]
 
+	// RTU responses carry no length field, so the reader has to know the frame
+	// layout of the function code in advance. Sending a request it cannot read
+	// back would leave the answer in the socket and desynchronise the pooled
+	// connection, so such a request is refused here instead.
+	if !modbus.SupportsRTUFunction(fc) {
+		return modbus.CreateExceptionResponse(tcpReq, modbus.ExceptionIllegalFunction), nil
+	}
+
 	rtuReq, err := modbus.TCPToRTU(tcpReq)
 	if err != nil {
 		return nil, fmt.Errorf("rtu-tcp: tcp→rtu conversion: %w", err)
@@ -937,7 +1025,9 @@ func (p *ProxyInstance) forwardRequestRTU(tcpReq []byte) ([]byte, error) {
 			if time.Now().Add(backoff).After(deadline) {
 				break
 			}
-			time.Sleep(backoff)
+			if !p.waitBackoff(backoff) {
+				break
+			}
 		}
 
 		remaining := time.Until(deadline)

@@ -539,7 +539,7 @@ func (f *EventFilter) Apply(events []*Event) []*Event {
 // Auditor handles audit logging (legacy database-backed implementation)
 type Auditor struct {
 	db            *database.DB
-	mu            sync.Mutex
+	mu            sync.RWMutex
 	buf           chan *database.AuditLogEntry
 	closed        bool
 	fileLogger    *FileAuditLogger
@@ -625,18 +625,17 @@ func (a *Auditor) LogAction(action, resourceType, resourceID, userID, username, 
 	}
 
 	// Guard the channel send so it cannot race with Close() closing a.buf
-	// (sending on a closed channel panics). The mutex + closed flag make the
-	// check-and-send atomic with respect to Close's check-and-close.
-	a.mu.Lock()
+	// (sending on a closed channel panics). Senders hold the read lock for the
+	// duration of the send while Close takes the write lock, so a blocking send
+	// no longer serialises every other caller behind it.
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 	if a.closed {
-		a.mu.Unlock()
 		return
 	}
 	select {
 	case a.buf <- entry:
-		a.mu.Unlock()
 	case <-time.After(5 * time.Second):
-		a.mu.Unlock()
 		log.Printf("WARNING: Audit log buffer full, dropping entry after 5s timeout")
 	}
 }

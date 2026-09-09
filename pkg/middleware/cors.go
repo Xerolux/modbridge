@@ -14,20 +14,29 @@ import (
 type CORSMiddleware struct {
 	mu             sync.RWMutex
 	allowedOrigins map[string]bool
+	allowAny       bool
 }
 
 // NewCORSMiddleware creates a new CORS middleware with the given allowed origins.
 // Pass an empty slice for no additional origins (all requests without an Origin
 // header are still served — CORS headers are only added for recognised origins).
+// The wildcard "*" allows any origin; because credentials are enabled the
+// requesting origin is echoed back instead of a literal "*".
 func NewCORSMiddleware(allowedOrigins []string) *CORSMiddleware {
 	origins := make(map[string]bool, len(allowedOrigins))
+	allowAny := false
 	for _, origin := range allowedOrigins {
+		if origin == "*" {
+			allowAny = true
+			continue
+		}
 		if origin != "" {
 			origins[origin] = true
 		}
 	}
 	return &CORSMiddleware{
 		allowedOrigins: origins,
+		allowAny:       allowAny,
 	}
 }
 
@@ -37,8 +46,14 @@ func (m *CORSMiddleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 		origin := r.Header.Get("Origin")
 
 		m.mu.RLock()
-		originAllowed := origin != "" && m.allowedOrigins[origin]
+		originAllowed := origin != "" && (m.allowAny || m.allowedOrigins[origin])
 		m.mu.RUnlock()
+
+		// The response body depends on the Origin header whenever the
+		// allowed-origin header is derived from it, so a shared cache must key
+		// on it. Set unconditionally: a cached response from a request without
+		// an Origin must not be replayed for one that has it.
+		w.Header().Add("Vary", "Origin")
 
 		if originAllowed {
 			// Only set CORS headers for allowed origins
@@ -62,17 +77,27 @@ func (m *CORSMiddleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// AddOrigin dynamically adds an origin to the allowed list
+// AddOrigin dynamically adds an origin to the allowed list. "*" switches the
+// middleware to allowing any origin.
 func (m *CORSMiddleware) AddOrigin(origin string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if origin == "*" {
+		m.allowAny = true
+		return
+	}
 	m.allowedOrigins[origin] = true
 }
 
-// RemoveOrigin removes an origin from the allowed list
+// RemoveOrigin removes an origin from the allowed list. "*" revokes the
+// allow-any setting.
 func (m *CORSMiddleware) RemoveOrigin(origin string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if origin == "*" {
+		m.allowAny = false
+		return
+	}
 	delete(m.allowedOrigins, origin)
 }
 
@@ -80,5 +105,5 @@ func (m *CORSMiddleware) RemoveOrigin(origin string) {
 func (m *CORSMiddleware) IsOriginAllowed(origin string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.allowedOrigins[origin]
+	return m.allowAny || m.allowedOrigins[origin]
 }

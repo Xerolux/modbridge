@@ -30,6 +30,13 @@ type Manager struct {
 	broadcaster   *EventBroadcaster
 	healthCancel  context.CancelFunc
 	healthWg      sync.WaitGroup
+
+	// changing counts the lifecycle operations currently in flight per proxy
+	// ID. Between a Stop() and the config or map update that follows it, a
+	// proxy looks "unexpectedly stopped" to the health monitor, which would
+	// restart the very instance that is being replaced or deliberately shut
+	// down. The monitor skips every ID listed here.
+	changing map[string]int
 }
 
 // NewManager creates a manager with database support.
@@ -40,8 +47,27 @@ func NewManager(cfgMgr *config.Manager, log *logger.Logger, db *database.DB) *Ma
 		log:           log,
 		deviceTracker: devices.NewTracker(db),
 		broadcaster:   NewEventBroadcaster(),
+		changing:      make(map[string]int),
 	}
 	return m
+}
+
+// beginChange marks a proxy as being reconfigured and returns the function that
+// releases the mark. Call it before stopping the proxy and defer the result.
+func (m *Manager) beginChange(id string) func() {
+	m.mu.Lock()
+	m.changing[id]++
+	m.mu.Unlock()
+
+	return func() {
+		m.mu.Lock()
+		if m.changing[id] <= 1 {
+			delete(m.changing, id)
+		} else {
+			m.changing[id]--
+		}
+		m.mu.Unlock()
+	}
 }
 
 // Initialize loads config and starts enabled proxies.
@@ -66,6 +92,8 @@ func (m *Manager) Initialize() {
 
 // AddProxy adds a new proxy or updates existing.
 func (m *Manager) AddProxy(cfg config.ProxyConfig, save bool) error {
+	defer m.beginChange(cfg.ID)()
+
 	m.mu.Lock()
 	old, ok := m.proxies[cfg.ID]
 	m.mu.Unlock()
@@ -132,6 +160,8 @@ func (m *Manager) AddProxy(cfg config.ProxyConfig, save bool) error {
 
 // RemoveProxy removes a proxy.
 func (m *Manager) RemoveProxy(id string) error {
+	defer m.beginChange(id)()
+
 	m.mu.RLock()
 	p, ok := m.proxies[id]
 	m.mu.RUnlock()
@@ -202,6 +232,8 @@ func (m *Manager) StartProxy(id string) error {
 
 // StopProxy stops a proxy.
 func (m *Manager) StopProxy(id string) error {
+	defer m.beginChange(id)()
+
 	m.mu.Lock()
 	p, ok := m.proxies[id]
 	m.mu.Unlock()
@@ -258,6 +290,8 @@ func (m *Manager) StopProxies(ids []string) error {
 
 // PauseProxy pauses a running proxy.
 func (m *Manager) PauseProxy(id string) error {
+	defer m.beginChange(id)()
+
 	m.mu.Lock()
 	p, ok := m.proxies[id]
 	m.mu.Unlock()
@@ -307,6 +341,8 @@ func (m *Manager) ResumeProxy(id string) error {
 
 // UpdateProxy updates an existing proxy configuration.
 func (m *Manager) UpdateProxy(cfg config.ProxyConfig) error {
+	defer m.beginChange(cfg.ID)()
+
 	m.mu.Lock()
 	old, ok := m.proxies[cfg.ID]
 	m.mu.Unlock()
@@ -619,6 +655,9 @@ func (m *Manager) checkAndRestartProxies() {
 	var toRestart []string
 	for id, p := range m.proxies {
 		pCfg := cfgMap[id]
+		if m.changing[id] > 0 {
+			continue // Being reconfigured or deliberately stopped right now
+		}
 		if pCfg.Enabled && !pCfg.Paused && p.Stats.GetStatus() != "Running" {
 			toRestart = append(toRestart, id)
 		}
@@ -628,8 +667,9 @@ func (m *Manager) checkAndRestartProxies() {
 	for _, id := range toRestart {
 		m.mu.RLock()
 		p, ok := m.proxies[id]
+		stillChanging := m.changing[id] > 0
 		m.mu.RUnlock()
-		if !ok {
+		if !ok || stillChanging {
 			continue
 		}
 
