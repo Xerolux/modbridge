@@ -5,7 +5,7 @@
       <div class="relative z-[1] flex flex-col gap-3">
         <div class="inline-flex items-center gap-3 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-panel-item)] px-3 py-1 text-xs uppercase tracking-[0.28em] text-[var(--text-muted)]">
           <i class="pi pi-users"></i>
-          User Management
+          {{ t('usersView.badge') }}
         </div>
         <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div>
@@ -24,7 +24,7 @@
               @click="refreshNow"
               v-tooltip="t('common.refreshNow')"
             />
-            <Button v-if="canCreateUsers" @click="openCreateModal" icon="pi pi-plus" label="Add User" class="w-full sm:w-auto" />
+            <Button v-if="canCreateUsers" @click="openCreateModal" icon="pi pi-plus" :label="t('usersView.addUser')" class="w-full sm:w-auto" />
           </div>
         </div>
       </div>
@@ -40,7 +40,7 @@
       <div class="relative z-[1] flex min-h-[280px] flex-col items-center justify-center text-center">
         <i class="pi pi-exclamation-triangle text-4xl text-[var(--danger)] mb-4"></i>
         <p class="text-[var(--text-secondary)]">{{ error }}</p>
-        <Button @click="loadUsers" label="Retry" class="mt-4" />
+        <Button @click="loadUsers" :label="t('common.retry')" class="mt-4" />
       </div>
     </div>
 
@@ -54,30 +54,30 @@
         responsiveLayout="scroll"
         class="p-datatable-sm"
       >
-        <Column field="username" header="Username" sortable>
+        <Column field="username" :header="t('usersView.colUsername')" sortable>
           <template #body="{ data }">
             <div class="flex items-center gap-2">
                <i class="pi pi-user text-[var(--text-muted)]"></i>
-               <span class="text-[var(--text-primary)] font-medium">{{ data.username }}</span>
+              <span class="text-[var(--text-primary)] font-medium">{{ data.username }}</span>
             </div>
           </template>
         </Column>
-        <Column field="full_name" header="Name" sortable>
+        <Column field="full_name" :header="t('usersView.colName')" sortable>
           <template #body="{ data }">
              <span class="text-[var(--text-secondary)]">{{ data.full_name || '-' }}</span>
           </template>
         </Column>
-        <Column field="email" header="Email" sortable class="hidden sm:table-cell">
+        <Column field="email" :header="t('usersView.colEmail')" sortable class="hidden sm:table-cell">
           <template #body="{ data }">
              <span class="text-[var(--text-secondary)]">{{ data.email || '-' }}</span>
           </template>
         </Column>
-        <Column field="role" header="Role" sortable>
+        <Column field="role" :header="t('usersView.colRole')" sortable>
           <template #body="{ data }">
             <Tag :value="data.role" :severity="getRoleSeverity(data.role)" />
           </template>
         </Column>
-        <Column header="Permissions" class="hidden md:table-cell">
+        <Column :header="t('usersView.colPermissions')" class="hidden md:table-cell">
           <template #body="{ data }">
             <div class="flex flex-wrap gap-1">
               <Tag
@@ -94,34 +94,34 @@
             </div>
           </template>
         </Column>
-        <Column field="enabled" header="Status" sortable>
+        <Column field="enabled" :header="t('usersView.colStatus')" sortable>
           <template #body="{ data }">
             <div class="flex flex-col items-start gap-1">
               <Tag
-                :value="data.enabled ? 'Active' : 'Inactive'"
+                :value="data.enabled ? t('usersView.statusActive') : t('usersView.statusInactive')"
                 :severity="data.enabled ? 'success' : 'danger'"
               />
               <Tag
                 v-if="data.must_change_password"
-                value="Password change required"
+                :value="t('usersView.pwChangeRequired')"
                 severity="warn"
                 class="text-[0.65rem]"
               />
             </div>
           </template>
         </Column>
-        <Column header="Expires" sortable field="expires_at" class="hidden lg:table-cell">
+        <Column :header="t('usersView.colExpires')" sortable field="expires_at" class="hidden lg:table-cell">
           <template #body="{ data }">
              <span v-if="data.expires_at" class="text-[var(--text-secondary)] text-sm">
               {{ formatDate(data.expires_at) }}
             </span>
              <span v-else-if="data.auto_deactivate_days > 0" class="text-[var(--warning)] text-sm">
-              After {{ data.auto_deactivate_days }} days
+              {{ t('usersView.afterDays', { n: data.auto_deactivate_days }) }}
             </span>
-             <span v-else class="text-[var(--text-muted)] text-sm">Never</span>
+             <span v-else class="text-[var(--text-muted)] text-sm">{{ t('usersView.never') }}</span>
           </template>
         </Column>
-        <Column header="Actions" :exportable="false">
+        <Column :header="t('usersView.colActions')" :exportable="false">
           <template #body="{ data }">
             <div class="flex gap-2">
               <Button
@@ -131,7 +131,7 @@
                 text
                 :severity="data.enabled ? 'warn' : 'success'"
                 @click="toggleUserEnabled(data)"
-                v-tooltip="data.enabled ? 'Deactivate' : 'Activate'"
+                v-tooltip="data.enabled ? t('usersView.deactivate') : t('usersView.activate')"
               />
               <Button
                 v-if="canEditUsers"
@@ -139,7 +139,7 @@
                 size="small"
                 text
                 @click="editUser(data)"
-                v-tooltip="'Edit user'"
+                v-tooltip="t('usersView.editUser')"
               />
               <Button
                 v-if="canDeleteUsers"
@@ -148,7 +148,7 @@
                 text
                 severity="danger"
                 @click="confirmDeleteUser(data)"
-                v-tooltip="'Delete user'"
+                v-tooltip="t('usersView.deleteUser')"
               />
             </div>
           </template>
@@ -156,7 +156,7 @@
         <template #empty>
            <div class="text-center py-8 text-[var(--text-muted)]">
             <i class="pi pi-users text-4xl mb-2 block"></i>
-            <p>No users found</p>
+            <p>{{ t('usersView.noUsers') }}</p>
           </div>
         </template>
        </DataTable>
@@ -164,28 +164,28 @@
 
        <Dialog
         v-model:visible="showModal"
-        :header="isEditMode ? 'Edit User' : 'Create User'"
+        :header="isEditMode ? t('usersView.editUserTitle') : t('usersView.createUserTitle')"
         modal
         class="w-full max-w-lg mx-4"
       >
         <div class="flex flex-col gap-4">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Username *</label>
+              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">{{ t('usersView.username') }} *</label>
               <InputText v-model="formData.username" class="w-full" :disabled="isEditMode" placeholder="username" />
             </div>
             <div>
-              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Full Name *</label>
+              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">{{ t('usersView.fullName') }} *</label>
               <InputText v-model="formData.full_name" class="w-full" placeholder="Max Mustermann" />
             </div>
           </div>
           <div>
-            <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Email *</label>
+            <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">{{ t('usersView.email') }} *</label>
             <InputText v-model="formData.email" type="email" class="w-full" placeholder="user@example.com" />
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Role *</label>
+              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">{{ t('usersView.role') }} *</label>
               <Dropdown
                 v-model="formData.role"
                 :options="roles"
@@ -196,31 +196,31 @@
                <small class="text-[var(--text-muted)]">{{ roleMeta[formData.role]?.description || '' }}</small>
             </div>
             <div v-if="!isEditMode">
-              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Password *</label>
+              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">{{ t('usersView.password') }} *</label>
               <Password v-model="formData.password" :feedback="true" toggleMask class="w-full" />
             </div>
           </div>
 
           <div v-if="isEditMode" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">New Password</label>
-              <Password v-model="formData.password" :feedback="true" toggleMask class="w-full" placeholder="Leave empty to keep" />
-               <small class="text-[var(--text-muted)]">Leave empty to keep current password</small>
+              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">{{ t('usersView.newPassword') }}</label>
+              <Password v-model="formData.password" :feedback="true" toggleMask class="w-full" />
+               <small class="text-[var(--text-muted)]">{{ t('usersView.keepPasswordHint') }}</small>
             </div>
             <div>
-              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Description</label>
-              <InputText v-model="formData.description" class="w-full" placeholder="Optional note" />
+              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">{{ t('usersView.description') }}</label>
+              <InputText v-model="formData.description" class="w-full" :placeholder="t('usersView.descriptionPlaceholder')" />
             </div>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Auto-Deactivate (days)</label>
-              <InputNumber v-model="formData.auto_deactivate_days" :min="0" :max="3650" class="w-full" placeholder="0 = never" />
-               <small class="text-[var(--text-muted)]">0 = no auto-deactivation</small>
+              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">{{ t('usersView.autoDeactivate') }}</label>
+              <InputNumber v-model="formData.auto_deactivate_days" :min="0" :max="3650" class="w-full" placeholder="0" />
+               <small class="text-[var(--text-muted)]">{{ t('usersView.autoDeactivateHint') }}</small>
             </div>
             <div v-if="formData.expires_at">
-              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">Expires At</label>
+              <label class="block text-sm font-medium text-[var(--text-secondary)] mb-1">{{ t('usersView.expiresAt') }}</label>
               <InputText :modelValue="formatDate(formData.expires_at)" class="w-full" disabled />
             </div>
           </div>
@@ -228,16 +228,16 @@
           <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
             <div class="flex items-center gap-2">
               <Checkbox v-model="formData.enabled" binary inputId="enabled-cb" />
-               <label for="enabled-cb" class="text-sm text-[var(--text-secondary)]">Enabled</label>
+               <label for="enabled-cb" class="text-sm text-[var(--text-secondary)]">{{ t('usersView.enabled') }}</label>
             </div>
             <div class="flex items-center gap-2">
               <Checkbox v-model="formData.must_change_password" binary inputId="mustchange-cb" />
-               <label for="mustchange-cb" class="text-sm text-[var(--text-secondary)]">Force password change on next login</label>
+               <label for="mustchange-cb" class="text-sm text-[var(--text-secondary)]">{{ t('usersView.forcePasswordChange') }}</label>
             </div>
           </div>
 
            <div class="rounded-2xl border border-[var(--border-soft)] bg-[var(--bg-panel-item)] p-3">
-             <div class="text-sm font-medium text-[var(--text-primary)] mb-2">Assigned permissions</div>
+             <div class="text-sm font-medium text-[var(--text-primary)] mb-2">{{ t('usersView.assignedPermissions') }}</div>
             <div class="flex flex-wrap gap-2">
               <Tag
                 v-for="permission in selectedRolePermissions"
@@ -245,15 +245,15 @@
                 :value="permission"
                 severity="info"
               />
-               <span v-if="selectedRolePermissions.length === 0" class="text-[var(--text-muted)] text-sm">No permissions</span>
+               <span v-if="selectedRolePermissions.length === 0" class="text-[var(--text-muted)] text-sm">{{ t('usersView.noPermissions') }}</span>
             </div>
           </div>
         </div>
         <template #footer>
-          <Button label="Cancel" severity="secondary" @click="closeModal" />
+          <Button :label="t('common.cancel')" severity="secondary" @click="closeModal" />
           <Button
             v-if="isEditMode ? canEditUsers : canCreateUsers"
-            :label="isEditMode ? 'Update' : 'Create'"
+            :label="isEditMode ? t('usersView.update') : t('usersView.create')"
             @click="saveUser"
             :loading="saving"
           />
@@ -357,7 +357,8 @@ const loadUsers = async () => {
     const response = await axios.get('/api/users');
     users.value = response.data || [];
   } catch (e) {
-    error.value = e.response?.data || 'Failed to load users';
+    const raw = e.response?.data;
+    error.value = (typeof raw === 'string' && raw) || t('usersView.loadFailed');
     console.error('Failed to load users:', e);
   } finally {
     loading.value = false;
@@ -378,22 +379,22 @@ const editUser = (user) => {
 
 const saveUser = async () => {
   if (isEditMode.value && !canEditUsers.value) {
-    toast.add({ severity: 'warn', summary: 'Forbidden', detail: 'Missing permission user:edit', life: 4000 });
+    toast.add({ severity: 'warn', summary: t('common.forbidden'), detail: t('usersView.missingPermission', { permission: 'user:edit' }), life: 4000 });
     return;
   }
 
   if (!isEditMode.value && !canCreateUsers.value) {
-    toast.add({ severity: 'warn', summary: 'Forbidden', detail: 'Missing permission user:create', life: 4000 });
+    toast.add({ severity: 'warn', summary: t('common.forbidden'), detail: t('usersView.missingPermission', { permission: 'user:create' }), life: 4000 });
     return;
   }
 
   if (!formData.value.username || !formData.value.full_name || !formData.value.email) {
-    toast.add({ severity: 'warn', summary: 'Validation', detail: 'Username, full name, and email are required', life: 4000 });
+    toast.add({ severity: 'warn', summary: t('usersView.validation'), detail: t('usersView.validationRequired'), life: 4000 });
     return;
   }
 
   if (!isEditMode.value && !formData.value.password) {
-    toast.add({ severity: 'warn', summary: 'Validation', detail: 'Password is required', life: 4000 });
+    toast.add({ severity: 'warn', summary: t('usersView.validation'), detail: t('usersView.validationPassword'), life: 4000 });
     return;
   }
 
@@ -409,16 +410,17 @@ const saveUser = async () => {
 		updateData.must_change_password = true;
       }
       await axios.put(`/api/users/${formData.value.id}`, updateData);
-      toast.add({ severity: 'success', summary: 'Success', detail: 'User updated', life: 3000 });
+      toast.add({ severity: 'success', summary: t('common.success'), detail: t('usersView.userUpdated'), life: 3000 });
     } else {
       await axios.post('/api/users', formData.value);
-      toast.add({ severity: 'success', summary: 'Success', detail: 'User created', life: 3000 });
+      toast.add({ severity: 'success', summary: t('common.success'), detail: t('usersView.userCreated'), life: 3000 });
     }
     closeModal();
     await loadUsers();
   } catch (e) {
-    const msg = typeof e.response?.data === 'string' ? e.response.data : 'Failed to save user';
-    toast.add({ severity: 'error', summary: 'Error', detail: msg, life: 5000 });
+    const raw = e.response?.data;
+    const msg = (typeof raw === 'string' && raw) || t('usersView.saveFailed');
+    toast.add({ severity: 'error', summary: t('common.error'), detail: msg, life: 5000 });
   } finally {
     saving.value = false;
   }
@@ -426,7 +428,7 @@ const saveUser = async () => {
 
 const toggleUserEnabled = async (user) => {
   if (!canEditUsers.value) {
-    toast.add({ severity: 'warn', summary: 'Forbidden', detail: 'Missing permission user:edit', life: 4000 });
+    toast.add({ severity: 'warn', summary: t('common.forbidden'), detail: t('usersView.missingPermission', { permission: 'user:edit' }), life: 4000 });
     return;
   }
 
@@ -438,37 +440,39 @@ const toggleUserEnabled = async (user) => {
     });
     toast.add({
       severity: 'success',
-      summary: 'Success',
-      detail: `User ${!user.enabled ? 'activated' : 'deactivated'}`,
+      summary: t('common.success'),
+      detail: !user.enabled ? t('usersView.userActivated', { name: user.username }) : t('usersView.userDeactivated', { name: user.username }),
       life: 3000
     });
     await loadUsers();
   } catch (e) {
-    const msg = typeof e.response?.data === 'string' ? e.response.data : 'Failed to toggle user status';
-    toast.add({ severity: 'error', summary: 'Error', detail: msg, life: 5000 });
+    const raw = e.response?.data;
+    const msg = (typeof raw === 'string' && raw) || t('usersView.toggleFailed');
+    toast.add({ severity: 'error', summary: t('common.error'), detail: msg, life: 5000 });
   }
 };
 
 const confirmDeleteUser = (user) => {
   if (!canDeleteUsers.value) {
-    toast.add({ severity: 'warn', summary: 'Forbidden', detail: 'Missing permission user:delete', life: 4000 });
+    toast.add({ severity: 'warn', summary: t('common.forbidden'), detail: t('usersView.missingPermission', { permission: 'user:delete' }), life: 4000 });
     return;
   }
 
   confirm.require({
-    message: `Are you sure you want to delete user "${user.username}" (${user.full_name})?`,
-    header: 'Confirm Delete',
+    message: t('usersView.confirmDeleteMessage', { username: user.username, fullName: user.full_name }),
+    header: t('usersView.confirmDeleteHeader'),
     icon: 'pi pi-exclamation-triangle',
-    acceptLabel: 'Delete',
-    rejectLabel: 'Cancel',
+    acceptLabel: t('common.delete'),
+    rejectLabel: t('common.cancel'),
     accept: async () => {
       try {
         await axios.delete(`/api/users/${user.id}`);
-        toast.add({ severity: 'success', summary: 'Success', detail: 'User deleted', life: 3000 });
+        toast.add({ severity: 'success', summary: t('common.success'), detail: t('usersView.userDeleted'), life: 3000 });
         await loadUsers();
       } catch (e) {
-        const msg = typeof e.response?.data === 'string' ? e.response.data : 'Failed to delete user';
-        toast.add({ severity: 'error', summary: 'Error', detail: msg, life: 5000 });
+        const raw = e.response?.data;
+        const msg = (typeof raw === 'string' && raw) || t('usersView.deleteFailed');
+        toast.add({ severity: 'error', summary: t('common.error'), detail: msg, life: 5000 });
       }
     }
   });
