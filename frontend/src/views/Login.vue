@@ -1,11 +1,10 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { useRouter } from 'vue-router';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import { useI18n } from 'vue-i18n';
-import axios from '../axios.js';
 import BrandMark from '../components/BrandMark.vue';
 
 const { t } = useI18n();
@@ -16,16 +15,6 @@ const error = ref('');
 const auth = useAuthStore();
 const router = useRouter();
 const loading = ref(false);
-const multiUser = ref(false);
-
-onMounted(async () => {
-  try {
-    const res = await axios.get('/api/status', { skipAuth: true });
-    multiUser.value = res.data.multi_user === true;
-  } catch {
-    multiUser.value = false;
-  }
-});
 
 const handleLogin = async () => {
   loading.value = true;

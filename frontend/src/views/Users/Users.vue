@@ -129,7 +129,7 @@
                 :icon="data.enabled ? 'pi pi-ban' : 'pi pi-check'"
                 size="small"
                 text
-                :severity="data.enabled ? 'warning' : 'success'"
+                :severity="data.enabled ? 'warn' : 'success'"
                 @click="toggleUserEnabled(data)"
                 v-tooltip="data.enabled ? 'Deactivate' : 'Activate'"
               />
@@ -259,9 +259,6 @@
           />
         </template>
       </Dialog>
-
-      <Toast />
-      <ConfirmDialog />
   </div>
 </template>
 
@@ -279,8 +276,6 @@ import Dropdown from 'primevue/select';
 import Password from 'primevue/password';
 import Checkbox from 'primevue/checkbox';
 import Tag from 'primevue/tag';
-import Toast from 'primevue/toast';
-import ConfirmDialog from 'primevue/confirmdialog';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 import { useAuthStore } from '../../stores/auth';
@@ -315,14 +310,15 @@ const defaultFormData = () => ({
 
 const formData = ref(defaultFormData());
 
-const roles = [
+// computed so role labels/descriptions follow language switches without a remount
+const roles = computed(() => [
   { label: t('usersView.roleAdmin'), value: 'admin' },
   { label: t('usersView.roleTechniker'), value: 'techniker' },
   { label: t('usersView.roleBenutzer'), value: 'benutzer' },
   { label: t('usersView.roleAuditor'), value: 'auditor' }
-]
+])
 
-const roleMeta = {
+const roleMeta = computed(() => ({
   admin: {
     description: t('usersView.roleAdminDesc'),
     permissions: ['proxy:*', 'device:*', 'config:*', 'system:*', 'user:*', 'audit:*', 'logs:*']
@@ -339,14 +335,14 @@ const roleMeta = {
     description: t('usersView.roleAuditorDesc'),
     permissions: ['proxy:view', 'device:view', 'config:view', 'system:view', 'audit:view', 'audit:export', 'logs:view', 'logs:export']
   }
-}
+}))
 
 const canCreateUsers = computed(() => auth.hasPermission('user:create'));
 const canEditUsers = computed(() => auth.hasPermission('user:edit'));
 const canDeleteUsers = computed(() => auth.hasPermission('user:delete'));
-const selectedRolePermissions = computed(() => roleMeta[formData.value.role]?.permissions || []);
+const selectedRolePermissions = computed(() => roleMeta.value[formData.value.role]?.permissions || []);
 
-const getRolePermissions = (role) => roleMeta[role]?.permissions || [];
+const getRolePermissions = (role) => roleMeta.value[role]?.permissions || [];
 
 const formatDate = (dateStr) => {
   if (!dateStr) return '';

@@ -221,9 +221,6 @@
             </Card>
         </div>
 
-        <Toast />
-        <ConfirmDialog />
-
         <!-- ── Update Section ──────────────────────────────────── -->
         <Card v-if="auth.hasPermission('system:restart')" class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
             <template #title>
@@ -290,8 +287,6 @@
   import axios from '../axios.js';
   import Card from 'primevue/card';
   import Button from 'primevue/button';
-  import Toast from 'primevue/toast';
-  import ConfirmDialog from 'primevue/confirmdialog';
   import Badge from 'primevue/badge';
   import ProgressBar from 'primevue/progressbar';
   import Dialog from 'primevue/dialog';
@@ -383,9 +378,13 @@
       await axios.post('/api/update/perform');
       statusPollTimer = setInterval(pollStatus, 1500);
     } catch (err) {
+      // The error body may be plain text or JSON — extract a string either way
+      // instead of interpolating an object as "[object Object]".
+      const raw = err.response?.data;
+      const errorText = typeof raw === 'string' ? raw : (raw?.error || raw?.message || err.message);
       const msg = err.response?.status === 409
         ? t('update.alreadyRunning')
-        : t('update.installFailed', { error: err.response?.data || err.message });
+        : t('update.installFailed', { error: errorText });
       toast.add({ severity: 'error', summary: t('update.title'), detail: msg, life: 5000 });
       updating.value = false;
     }

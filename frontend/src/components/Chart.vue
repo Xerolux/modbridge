@@ -1,9 +1,12 @@
 <template>
   <div class="h-full w-full p-3">
-    <div v-if="loading" class="flex items-center justify-center h-full">
+    <!-- v-show instead of v-if: the chart container must stay mounted so its
+         ref exists on first initChart() call, otherwise loading could never
+         be cleared (the container with the ref was never rendered). -->
+    <div v-show="loading" class="flex items-center justify-center h-full">
       <i class="pi pi-spin pi-spinner text-2xl"></i>
     </div>
-    <div v-else ref="chartContainer" class="h-full w-full"></div>
+    <div v-show="!loading" ref="chartContainer" class="h-full w-full"></div>
   </div>
 </template>
 

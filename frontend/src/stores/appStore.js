@@ -36,9 +36,12 @@ export const useAppStore = defineStore('app', () => {
   const theme = ref(readStoredTheme());
   const accent = ref(localStorage.getItem('modbridge_accent') || 'mono');
   const density = ref(localStorage.getItem('modbridge_density') || 'comfortable');
+  // An explicit stored choice wins; the OS preference only seeds the default.
+  const storedReducedMotion = localStorage.getItem('modbridge_reduced_motion');
   const reducedMotion = ref(
-    localStorage.getItem('modbridge_reduced_motion') === 'true' ||
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    storedReducedMotion !== null
+      ? storedReducedMotion === 'true'
+      : window.matchMedia('(prefers-reduced-motion: reduce)').matches
   );
 
   // Backward-compatible boolean — true when in dark or bw mode (PrimeVue dark selector)
@@ -77,15 +80,33 @@ export const useAppStore = defineStore('app', () => {
     }
   };
 
+  // Re-applies the proxy order the user arranged in the config view.
+  // Unknown proxies (new since last visit) keep server order at the end.
+  const applyStoredProxyOrder = (list) => {
+    let order = [];
+    try {
+      order = JSON.parse(localStorage.getItem('modbridge_proxy_order') || '[]');
+    } catch {
+      order = [];
+    }
+    if (!Array.isArray(order) || order.length === 0) return list;
+    const rank = new Map(order.map((id, i) => [id, i]));
+    return [...list].sort((a, b) => {
+      const ra = rank.has(a.id) ? rank.get(a.id) : order.length;
+      const rb = rank.has(b.id) ? rank.get(b.id) : order.length;
+      return ra - rb;
+    });
+  };
+
   const fetchProxies = async () => {
     try {
       isLoading.value = true;
       const res = await axios.get('/api/proxies');
       // Convert tags array to comma-separated string for editing
-      proxies.value = res.data.map(proxy => ({
+      proxies.value = applyStoredProxyOrder(res.data.map(proxy => ({
         ...proxy,
         tags: Array.isArray(proxy.tags) ? proxy.tags.join(', ') : proxy.tags || ''
-      }));
+      })));
       error.value = null;
     } catch (e) {
       error.value = e.response?.data || e.message;

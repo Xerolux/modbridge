@@ -1,7 +1,6 @@
 <template>
-import { useI18n } from 'vue-i18n';
     <div class="p-2 sm:p-4 flex flex-col gap-4">
-        <h1 class="text-xl sm:text-2xl font-bold mb-2 sm:mb-4 text-gray-800 dark:text-gray-200">Configuration</h1>
+        <h1 class="text-xl sm:text-2xl font-bold mb-2 sm:mb-4 text-gray-800 dark:text-gray-200">{{ t('config.title') }}</h1>
 
         <div v-if="loading" class="flex justify-center">
             <i class="pi pi-spin pi-spinner text-4xl text-blue-500"></i>
@@ -10,12 +9,12 @@ import { useI18n } from 'vue-i18n';
         <div v-else class="flex flex-col gap-6">
             <Tabs value="0">
                 <TabList class="glass-card rounded-t-3xl text-gray-800 dark:text-gray-200 overflow-x-auto flex-nowrap whitespace-nowrap hide-scrollbar border border-gray-200 dark:border-white/10 border-b-0">
-                    <Tab value="0" class="shrink-0">Proxies</Tab>
-                    <Tab value="1" class="shrink-0">Logging</Tab>
-                    <Tab v-if="auth.hasPermission('config:edit')" value="2" class="shrink-0">Security</Tab>
-                    <Tab v-if="auth.hasPermission('config:edit')" value="3" class="shrink-0">Email</Tab>
-                    <Tab v-if="auth.hasPermission('config:edit')" value="4" class="shrink-0">Backup</Tab>
-                    <Tab v-if="auth.hasPermission('config:edit')" value="5" class="shrink-0">Advanced</Tab>
+                    <Tab value="0" class="shrink-0">{{ t('config.proxies') }}</Tab>
+                    <Tab value="1" class="shrink-0">{{ t('config.logging') }}</Tab>
+                    <Tab v-if="auth.hasPermission('config:edit')" value="2" class="shrink-0">{{ t('config.security') }}</Tab>
+                    <Tab v-if="auth.hasPermission('config:edit')" value="3" class="shrink-0">{{ t('config.email') }}</Tab>
+                    <Tab v-if="auth.hasPermission('config:edit')" value="4" class="shrink-0">{{ t('config.backup') }}</Tab>
+                    <Tab v-if="auth.hasPermission('config:edit')" value="5" class="shrink-0">{{ t('config.advanced') }}</Tab>
                 </TabList>
 
                 <TabPanels class="glass-card rounded-b-3xl text-surface-900 dark:text-white p-2 sm:p-4 border border-gray-200 dark:border-white/10 border-t-0">
@@ -25,28 +24,28 @@ import { useI18n } from 'vue-i18n';
 
                     <TabPanel value="1">
                         <div class="space-y-4">
-                            <h3 class="text-lg font-semibold">Logging Configuration</h3>
+                            <h3 class="text-lg font-semibold">{{ t('config.loggingConfig') }}</h3>
 
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Log Level</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.logLevel') }}</label>
                                     <Dropdown v-model="config.log_level" :options="logLevels" optionLabel="label" optionValue="value" class="w-full" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Max File Size (MB)</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.logMaxSize') }}</label>
                                     <InputNumber v-model="config.log_max_size" :min="1" class="w-full" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Max Files</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.logMaxFiles') }}</label>
                                     <InputNumber v-model="config.log_max_files" :min="1" class="w-full" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Max Age (Days)</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.logMaxAgeDays') }}</label>
                                     <InputNumber v-model="config.log_max_age_days" :min="1" class="w-full" />
                                 </div>
                             </div>
 
-                            <Button @click="saveConfig" :disabled="!configLoaded" label="Save Logging Configuration" icon="pi pi-save" />
+                            <Button @click="saveConfig" :disabled="!configLoaded" :label="t('config.saveLogging')" icon="pi pi-save" />
                         </div>
                     </TabPanel>
 
@@ -56,19 +55,19 @@ import { useI18n } from 'vue-i18n';
                                 <h3 class="text-lg font-semibold mb-4">SSL/TLS</h3>
                                 <div class="grid grid-cols-1 gap-4">
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Enable SSL/TLS</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.enableTLS') }}</label>
                                         <ToggleSwitch v-model="config.tls_enabled" />
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Certificate File</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.certFile') }}</label>
                                         <InputText v-model="config.tls_cert_file" class="w-full" placeholder="/path/to/cert.pem" />
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Key File</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.keyFile') }}</label>
                                         <InputText v-model="config.tls_key_file" class="w-full" placeholder="/path/to/key.pem" />
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Session Timeout (Hours)</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.sessionTimeout') }}</label>
                                         <InputNumber v-model="config.session_timeout" :min="1" class="w-full" />
                                     </div>
                                 </div>
@@ -78,224 +77,222 @@ import { useI18n } from 'vue-i18n';
                                 <h3 class="text-lg font-semibold mb-4">CORS</h3>
                                 <div class="grid grid-cols-1 gap-4">
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Allowed Origins</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.corsOrigins') }}</label>
                                         <Chips v-model="config.cors_allowed_origins" class="w-full" />
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Allowed Methods</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.corsMethods') }}</label>
                                         <Chips v-model="config.cors_allowed_methods" class="w-full" />
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Allowed Headers</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.corsHeaders') }}</label>
                                         <Chips v-model="config.cors_allowed_headers" class="w-full" />
                                     </div>
                                 </div>
                             </div>
 
                             <div>
-                                <h3 class="text-lg font-semibold mb-4">Rate Limiting</h3>
+                                <h3 class="text-lg font-semibold mb-4">{{ t('config.rateLimiting') }}</h3>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Enable Rate Limiting</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.rateLimitEnabled') }}</label>
                                         <ToggleSwitch v-model="config.rate_limit_enabled" />
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Requests per Minute</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.rateLimitRequests') }}</label>
                                         <InputNumber v-model="config.rate_limit_requests" :min="1" class="w-full" />
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Burst Size</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.rateLimitBurst') }}</label>
                                         <InputNumber v-model="config.rate_limit_burst" :min="1" class="w-full" />
                                     </div>
                                 </div>
                             </div>
 
                             <div>
-                                <h3 class="text-lg font-semibold mb-4">IP Filtering</h3>
+                                <h3 class="text-lg font-semibold mb-4">{{ t('config.ipFiltering') }}</h3>
                                 <div class="grid grid-cols-1 gap-4">
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Enable IP Whitelist</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.ipWhitelistEnabled') }}</label>
                                         <ToggleSwitch v-model="config.ip_whitelist_enabled" />
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">IP Whitelist</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.ipWhitelist') }}</label>
                                         <Chips v-model="config.ip_whitelist" class="w-full" placeholder="192.168.1.0/24" />
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Enable IP Blacklist</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.ipBlacklistEnabled') }}</label>
                                         <ToggleSwitch v-model="config.ip_blacklist_enabled" />
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">IP Blacklist</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.ipBlacklist') }}</label>
                                         <Chips v-model="config.ip_blacklist" class="w-full" placeholder="10.0.0.0/8" />
                                     </div>
                                 </div>
                             </div>
 
-                            <Button @click="saveConfig" :disabled="!configLoaded" label="Save Security Configuration" icon="pi pi-shield" />
+                            <Button @click="saveConfig" :disabled="!configLoaded" :label="t('config.saveSecurity')" icon="pi pi-shield" />
                         </div>
                     </TabPanel>
 
                     <TabPanel value="3">
                         <div class="space-y-4">
-                            <h3 class="text-lg font-semibold">Email Configuration</h3>
+                            <h3 class="text-lg font-semibold">{{ t('config.emailConfig') }}</h3>
 
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Enable Email Alerts</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.emailEnabled') }}</label>
                                     <ToggleSwitch v-model="config.email_enabled" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">SMTP Server</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.smtpServer') }}</label>
                                     <InputText v-model="config.email_smtp_server" class="w-full" placeholder="smtp.gmail.com" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">SMTP Port</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.smtpPort') }}</label>
                                     <InputNumber v-model="config.email_smtp_port" :min="1" :max="65535" class="w-full" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">From Email</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.emailFrom') }}</label>
                                     <InputText v-model="config.email_from" class="w-full" placeholder="noreply@example.com" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">To Email</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.emailTo') }}</label>
                                     <InputText v-model="config.email_to" class="w-full" placeholder="admin@example.com" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Username</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.emailUsername') }}</label>
                                     <InputText v-model="config.email_username" class="w-full" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Password</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.emailPassword') }}</label>
                                     <Password v-model="config.email_password" :feedback="false" toggleMask class="w-full" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Alert on Error</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.alertOnError') }}</label>
                                     <ToggleSwitch v-model="config.email_alert_on_error" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Alert on Warning</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.alertOnWarning') }}</label>
                                     <ToggleSwitch v-model="config.email_alert_on_warning" />
                                 </div>
                             </div>
 
-                            <Button @click="saveConfig" :disabled="!configLoaded" label="Save Email Configuration" icon="pi pi-envelope" />
+                            <Button @click="saveConfig" :disabled="!configLoaded" :label="t('config.saveEmail')" icon="pi pi-envelope" />
                         </div>
                     </TabPanel>
 
                     <TabPanel value="4">
                         <div class="space-y-4">
-                            <h3 class="text-lg font-semibold">Backup Configuration</h3>
+                            <h3 class="text-lg font-semibold">{{ t('config.backupSection') }}</h3>
 
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Enable Backups</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.backupEnabled') }}</label>
                                     <ToggleSwitch v-model="config.backup_enabled" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Backup Interval</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.backupInterval') }}</label>
                                     <Dropdown v-model="config.backup_interval" :options="backupIntervals" optionLabel="label" optionValue="value" class="w-full" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Retention (Count)</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.backupRetention') }}</label>
                                     <InputNumber v-model="config.backup_retention" :min="1" class="w-full" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Backup Path</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.backupPath') }}</label>
                                     <InputText v-model="config.backup_path" class="w-full" placeholder="./backups" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Backup Database</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.backupDatabase') }}</label>
                                     <ToggleSwitch v-model="config.backup_database" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Backup Configuration</label>
+                                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.backupConfig') }}</label>
                                     <ToggleSwitch v-model="config.backup_config" />
                                 </div>
                             </div>
 
-                            <Button @click="saveConfig" :disabled="!configLoaded" label="Save Backup Configuration" icon="pi pi-download" />
+                            <Button @click="saveConfig" :disabled="!configLoaded" :label="t('config.saveBackup')" icon="pi pi-download" />
                         </div>
                     </TabPanel>
 
                     <TabPanel value="5">
                         <div class="space-y-6">
                             <div>
-                                <h3 class="text-lg font-semibold mb-4">Advanced Configuration</h3>
+                                <h3 class="text-lg font-semibold mb-4">{{ t('config.advancedConfig') }}</h3>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Debug Mode</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.debugMode') }}</label>
                                         <ToggleSwitch v-model="config.debug_mode" />
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Max Connections</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.maxConnections') }}</label>
                                         <InputNumber v-model="config.max_connections" :min="1" class="w-full" />
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Enable Metrics</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.metricsEnabled') }}</label>
                                         <ToggleSwitch v-model="config.metrics_enabled" />
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Metrics Port</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.metricsPort') }}</label>
                                         <InputText v-model="config.metrics_port" class="w-full" placeholder=":9090" />
                                     </div>
                                 </div>
                             </div>
 
                             <div v-if="auth.hasPermission('config:edit')">
-                                <h3 class="text-lg font-semibold mb-4">Password</h3>
+                                <h3 class="text-lg font-semibold mb-4">{{ t('config.passwordSection') }}</h3>
                                 <div class="grid grid-cols-1 gap-4">
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ $t('login.currentPassword') }}</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('login.currentPassword') }}</label>
                                         <Password v-model="passwordForm.current_password" :feedback="false" toggleMask class="w-full" />
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ $t('login.newPassword') }}</label>
+                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('login.newPassword') }}</label>
                                         <Password v-model="passwordForm.new_password" toggleMask class="w-full" />
                                         <div class="mt-2 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                                            <p class="text-xs text-blue-600 dark:text-blue-300 font-medium mb-1">{{ $t('login.passwordRequirements') }}:</p>
+                                            <p class="text-xs text-blue-600 dark:text-blue-300 font-medium mb-1">{{ t('login.passwordRequirements') }}:</p>
                                             <ul class="text-xs text-gray-500 dark:text-gray-400 space-y-1 ml-4 list-disc">
-                                                <li>{{ $t('login.passwordMinLength') }}</li>
-                                                <li>{{ $t('login.passwordComplexity') }}</li>
-                                                <li>{{ $t('login.passwordNotCommon') }}</li>
+                                                <li>{{ t('login.passwordMinLength') }}</li>
+                                                <li>{{ t('login.passwordComplexity') }}</li>
+                                                <li>{{ t('login.passwordNotCommon') }}</li>
                                             </ul>
                                         </div>
                                     </div>
-                                    <Button :label="$t('login.changePassword')" icon="pi pi-key" @click="changePassword" />
+                                    <Button :label="t('login.changePassword')" icon="pi pi-key" @click="changePassword" />
                                 </div>
                             </div>
 
                             <div v-if="auth.hasPermission('config:export')">
-                                <h3 class="text-lg font-semibold mb-4">Configuration Backup</h3>
+                                <h3 class="text-lg font-semibold mb-4">{{ t('config.configBackup') }}</h3>
                                 <div class="flex gap-4">
-                                    <Button label="Export Configuration" icon="pi pi-download" @click="exportConfig" />
-                                    <Button label="Import Configuration" icon="pi pi-upload" severity="secondary" @click="triggerImport" />
+                                    <Button :label="t('config.exportConfig')" icon="pi pi-download" @click="exportConfig" />
+                                    <Button :label="t('config.importConfig')" icon="pi pi-upload" severity="secondary" @click="triggerImport" />
                                     <input type="file" ref="importFile" accept=".json" @change="importConfig" style="display: none" />
                                 </div>
                             </div>
 
                             <div v-if="auth.hasPermission('system:restart')">
-                                <h3 class="text-lg font-semibold mb-4">System Actions</h3>
+                                <h3 class="text-lg font-semibold mb-4">{{ t('config.systemActions') }}</h3>
                                 <div class="flex gap-4">
-                                    <Button label="Restart System" icon="pi pi-refresh" severity="danger" @click="confirmRestart" />
+                                    <Button :label="t('config.restartSystem')" icon="pi pi-refresh" severity="danger" @click="confirmRestart" />
                                 </div>
                             </div>
 
-                            <Button @click="saveConfig" :disabled="!configLoaded" label="Save Advanced Configuration" icon="pi pi-cog" />
+                            <Button @click="saveConfig" :disabled="!configLoaded" :label="t('config.saveAdvanced')" icon="pi pi-cog" />
                         </div>
                     </TabPanel>
                 </TabPanels>
             </Tabs>
         </div>
-
-        <Toast />
-        <ConfirmDialog />
     </div>
 </template>
 
 <script setup>
-  import { ref, onMounted } from 'vue';
+  import { ref, computed, onMounted } from 'vue';
   import { useRouter } from 'vue-router';
+  import { useI18n } from 'vue-i18n';
   import axios from '../axios.js';
   import Button from 'primevue/button';
   import Password from 'primevue/password';
@@ -309,8 +306,6 @@ import { useI18n } from 'vue-i18n';
   import InputText from 'primevue/inputtext';
   import ToggleSwitch from 'primevue/toggleswitch';
   import Chips from 'primevue/inputtags';
-  import Toast from 'primevue/toast';
-  import ConfirmDialog from 'primevue/confirmdialog';
   import { useToast } from 'primevue/usetoast';
   import { useConfirm } from 'primevue/useconfirm';
   import ConfigForm from '../components/ConfigForm.vue';
@@ -378,11 +373,11 @@ const { t } = useI18n();
      { label: 'ERROR', value: 'ERROR' }
  ];
 
- const backupIntervals = [
-     { label: 'Hourly', value: 'hourly' },
-     { label: 'Daily', value: 'daily' },
-     { label: 'Weekly', value: 'weekly' }
- ];
+ const backupIntervals = computed(() => [
+     { label: t('config.intervalHourly'), value: 'hourly' },
+     { label: t('config.intervalDaily'), value: 'daily' },
+     { label: t('config.intervalWeekly'), value: 'weekly' }
+ ]);
 
  const importFile = ref(null);
 
@@ -418,21 +413,22 @@ const { t } = useI18n();
      }
      try {
          await axios.put('/api/config/system', config.value);
-         toast.add({ severity: 'success', summary: 'Success', detail: 'Configuration saved', life: 3000 });
+         toast.add({ severity: 'success', summary: t('common.success'), detail: t('config.saved'), life: 3000 });
      } catch (e) {
-         toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data || e.message, life: 5000 });
+         const detail = typeof e.response?.data === 'string' ? e.response.data : e.message;
+         toast.add({ severity: 'error', summary: t('common.error'), detail: t('config.saveError'), life: 5000 });
      }
  };
 
  const changePassword = async () => {
      try {
          await axios.post('/api/config/password', passwordForm.value);
-         toast.add({ severity: 'success', summary: 'Success', detail: 'Password changed successfully', life: 3000 });
+         toast.add({ severity: 'success', summary: t('common.success'), detail: t('config.passwordChanged'), life: 3000 });
          passwordForm.value = { current_password: '', new_password: '' };
          await auth.logout();
          await router.replace('/login');
      } catch (e) {
-         let errorMsg = e.response?.data || e.message;
+         let errorMsg = typeof e.response?.data === 'string' ? e.response.data : e.message;
          // Provide user-friendly error messages for common password validation errors
          if (typeof errorMsg === 'string') {
              if (errorMsg.includes('at least 8 characters')) {
@@ -443,7 +439,7 @@ const { t } = useI18n();
                  errorMsg = t('config.passwordErrorTooCommon');
              }
          }
-         toast.add({ severity: 'error', summary: 'Error', detail: errorMsg, life: 5000 });
+         toast.add({ severity: 'error', summary: t('common.error'), detail: errorMsg, life: 5000 });
      }
  };
 
@@ -457,9 +453,9 @@ const { t } = useI18n();
          document.body.appendChild(link);
          link.click();
          link.remove();
-         toast.add({ severity: 'success', summary: 'Success', detail: 'Configuration exported', life: 3000 });
+         toast.add({ severity: 'success', summary: t('common.success'), detail: t('config.exported'), life: 3000 });
      } catch (e) {
-         toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to export configuration', life: 5000 });
+         toast.add({ severity: 'error', summary: t('common.error'), detail: t('config.exportError'), life: 5000 });
      }
  };
 
@@ -477,26 +473,26 @@ const { t } = useI18n();
          await axios.post('/api/config/import', formData, {
              headers: { 'Content-Type': 'multipart/form-data' }
          });
-         toast.add({ severity: 'success', summary: 'Success', detail: 'Configuration imported', life: 3000 });
+         toast.add({ severity: 'success', summary: t('common.success'), detail: t('config.imported'), life: 3000 });
          await store.fetchProxies();
          await fetchConfig();
      } catch (e) {
-         toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to import configuration', life: 5000 });
+         toast.add({ severity: 'error', summary: t('common.error'), detail: t('config.importError'), life: 5000 });
      }
      event.target.value = '';
  };
 
  const confirmRestart = () => {
      confirm.require({
-         message: 'Are you sure you want to restart the service?',
-         header: 'Confirmation',
+         message: t('config.confirmRestartMessage'),
+         header: t('common.confirm'),
          icon: 'pi pi-exclamation-triangle',
          accept: async () => {
              try {
                  await axios.post('/api/system/restart');
-                 toast.add({ severity: 'info', summary: 'Restarting', detail: 'System is restarting...', life: 3000 });
+                 toast.add({ severity: 'info', summary: t('common.info'), detail: t('config.restarting'), life: 3000 });
              } catch (e) {
-                 toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to restart', life: 3000 });
+                 toast.add({ severity: 'error', summary: t('common.error'), detail: t('config.restartFailed'), life: 3000 });
              }
          }
      });

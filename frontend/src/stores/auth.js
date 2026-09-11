@@ -50,7 +50,8 @@ export const useAuthStore = defineStore('auth', () => {
         user.value = {
           userId: res.data.user_id || '',
           username: res.data.username || '',
-          role: res.data.role || 'admin',
+          // No fallback role: a malformed response must not grant admin rights.
+          role: res.data.role || '',
           permissions: res.data.permissions || []
         }
         mustChangePassword.value = !!res.data.must_change_password
@@ -77,10 +78,10 @@ export const useAuthStore = defineStore('auth', () => {
       mustChangePassword.value = !!res.data.force_password_change
       const meRes = await axios.get('/api/me')
       user.value = {
-        userId: meRes.data.user_id || res.data.user_id || 'admin',
-        username: meRes.data.username || res.data.username || 'admin',
-        role: meRes.data.role || res.data.role || 'admin',
-        permissions: meRes.data.permissions || []
+        userId: meRes.data.user_id || res.data.user_id || '',
+        username: meRes.data.username || res.data.username || '',
+        role: meRes.data.role || res.data.role || '',
+        permissions: meRes.data.permissions || res.data.permissions || []
       }
       mustChangePassword.value = mustChangePassword.value || !!meRes.data.must_change_password
       isAuthenticated.value = true
@@ -88,7 +89,9 @@ export const useAuthStore = defineStore('auth', () => {
       return { success: true, mustChangePassword: mustChangePassword.value }
     } catch (e) {
       resetState()
-      const message = e.response?.data?.trim() || e.message || 'Login failed'
+      // The error body may be plain text (http.Error) or JSON — never assume a string.
+      const raw = e.response?.data
+      const message = (typeof raw === 'string' && raw.trim()) || raw?.error || e.message || 'Login failed'
       return { success: false, message }
     }
   }

@@ -430,8 +430,6 @@
              <CalibrationReport :report="lastCalibrationReport" show-apply @apply="applyStoredCalibration" />
          </Dialog>
          <Menu ref="actionMenu" id="overlay_menu" :model="menuItems" :popup="true" />
-         <Toast />
-         <ConfirmDialog />
      </div>
 </template>
 
@@ -448,8 +446,6 @@ import ProgressBar from 'primevue/progressbar';
 import CalibrationReport from '../components/CalibrationReport.vue';
 import Select from 'primevue/select';
 import Chips from 'primevue/inputtags';
-import Toast from 'primevue/toast';
-import ConfirmDialog from 'primevue/confirmdialog';
 import Tabs from 'primevue/tabs';
 import TabList from 'primevue/tablist';
 import Tab from 'primevue/tab';

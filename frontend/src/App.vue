@@ -4,6 +4,7 @@ import { useAppStore } from './stores/appStore';
 import { useToast } from 'primevue/usetoast';
 import { useI18n } from 'vue-i18n';
 import Toast from 'primevue/toast';
+import ConfirmDialog from 'primevue/confirmdialog';
 
 const store = useAppStore();
 const toast = useToast();
@@ -64,6 +65,7 @@ onMounted(() => {
 <template>
   <div :class="appShellClass">
     <Toast />
+    <ConfirmDialog />
     <template v-if="showAmbient">
       <div class="ambient-layer ambient-grid"></div>
       <div class="ambient-layer ambient-orb ambient-orb-a"></div>

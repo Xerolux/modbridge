@@ -382,13 +382,22 @@ onMounted(async () => {
           if (!sseBatchFrame) sseBatchFrame = requestAnimationFrame(flushSSEUpdates);
           break;
         }
-        case 'proxy_removed':
+        case 'proxy_removed': {
           if (!eventData.proxy_id) return;
           pendingSSEUpdates.delete(eventData.proxy_id);
+          // Remove the GridStack tile as well — filtering the widgets array
+          // only unmounts the teleported content and would leave an empty cell.
+          const widget = widgets.value.find(w => w.proxy_id === eventData.proxy_id);
+          if (widget && grid.value) {
+            const mount = document.getElementById(`mount_${widget.id}`);
+            const gridItem = mount?.closest('.grid-stack-item');
+            if (gridItem) grid.value.removeWidget(gridItem);
+          }
           proxies.value = proxies.value.filter(proxy => proxy.id !== eventData.proxy_id);
-          widgets.value = widgets.value.filter(widget => widget.proxy_id !== eventData.proxy_id);
+          widgets.value = widgets.value.filter(w => w.proxy_id !== eventData.proxy_id);
           saveLayout();
           break;
+        }
       }
     });
   } catch (err) {
@@ -531,7 +540,8 @@ const fetchData = async (isInitial = false) => {
     error.value = true;
     errorMessage.value = typeof errorData === 'string' ? errorData : requestError.message || t('common.error');
     if (isInitial) loading.value = false;
-    throw requestError;
+    // No rethrow: fetchData is also used directly as a template event handler
+    // (retry button, panel refresh), and the error state is already recorded.
   }
 };
 

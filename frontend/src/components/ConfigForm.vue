@@ -17,19 +17,19 @@
 
         <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div class="hero-stat">
-            <span class="hero-stat-label">Proxies</span>
+            <span class="hero-stat-label">{{ t('configForm.statProxies') }}</span>
             <strong class="hero-stat-value">{{ store.proxies.length }}</strong>
           </div>
           <div class="hero-stat">
-            <span class="hero-stat-label">Unsaved</span>
+            <span class="hero-stat-label">{{ t('configForm.statUnsaved') }}</span>
             <strong class="hero-stat-value">{{ dirtyCount }}</strong>
           </div>
           <div class="hero-stat">
-            <span class="hero-stat-label">Running</span>
+            <span class="hero-stat-label">{{ t('configForm.statRunning') }}</span>
             <strong class="hero-stat-value">{{ runningCount }}</strong>
           </div>
           <div class="hero-stat">
-            <span class="hero-stat-label">Port</span>
+            <span class="hero-stat-label">{{ t('configForm.statPort') }}</span>
             <strong class="hero-stat-value">{{ store.webPort || ':8080' }}</strong>
           </div>
         </div>
@@ -144,19 +144,19 @@
 
                 <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-12">
                   <div class="field-group xl:col-span-4">
-                    <label>Name</label>
+                    <label>{{ t('control.form.name') }}</label>
                     <input v-model="proxy.name" type="text" placeholder="Factory Line A" @input="markDirty(proxy, index)" />
                     <small v-if="getFieldError(proxy, index, 'name')" class="field-error">{{ getFieldError(proxy, index, 'name') }}</small>
                   </div>
 
                   <div class="field-group xl:col-span-4">
-                    <label>Listen Addr</label>
+                    <label>{{ t('control.form.listenAddr') }}</label>
                     <input v-model="proxy.listen_addr" type="text" placeholder=":5020" @input="markDirty(proxy, index)" />
                     <small v-if="getFieldError(proxy, index, 'listen_addr')" class="field-error">{{ getFieldError(proxy, index, 'listen_addr') }}</small>
                   </div>
 
                   <div class="field-group xl:col-span-4">
-                    <label>Target Addr</label>
+                    <label>{{ t('control.form.targetAddr') }}</label>
                     <input v-model="proxy.target_addr" type="text" placeholder="192.168.1.100:502" @input="markDirty(proxy, index)" />
                     <small v-if="getFieldError(proxy, index, 'target_addr')" class="field-error">{{ getFieldError(proxy, index, 'target_addr') }}</small>
                   </div>
@@ -167,7 +167,7 @@
                   </div>
 
                   <div class="field-group xl:col-span-6">
-                    <label>Tags</label>
+                    <label>{{ t('control.form.tags') }}</label>
                     <input
                       v-model="proxy.tags"
                       type="text"
@@ -201,57 +201,57 @@
 
                 <div v-if="proxy._showAdvanced" class="advanced-grid rounded-[20px] border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/10 p-4">
                   <div class="field-group">
-                    <label>Conn Timeout (s)</label>
+                    <label>{{ t('control.form.connectionTimeout') }}</label>
                     <input v-model.number="proxy.connection_timeout" type="number" min="1" max="300" @input="markDirty(proxy, index)" />
                     <small v-if="getFieldError(proxy, index, 'connection_timeout')" class="field-error">{{ getFieldError(proxy, index, 'connection_timeout') }}</small>
                   </div>
                   <div class="field-group">
-                    <label>Read Timeout (s)</label>
+                    <label>{{ t('control.form.readTimeout') }}</label>
                     <input v-model.number="proxy.read_timeout" type="number" min="1" max="300" @input="markDirty(proxy, index)" />
                     <small v-if="getFieldError(proxy, index, 'read_timeout')" class="field-error">{{ getFieldError(proxy, index, 'read_timeout') }}</small>
                   </div>
                   <div class="field-group">
-                    <label>Max Retries</label>
+                    <label>{{ t('control.form.maxRetries') }}</label>
                     <input v-model.number="proxy.max_retries" type="number" min="0" max="10" @input="markDirty(proxy, index)" />
                     <small v-if="getFieldError(proxy, index, 'max_retries')" class="field-error">{{ getFieldError(proxy, index, 'max_retries') }}</small>
                   </div>
                   <div class="field-group">
-                    <label>Max Read Size</label>
+                    <label>{{ t('control.form.maxReadSize') }}</label>
                     <input v-model.number="proxy.max_read_size" type="number" min="0" max="65535" @input="markDirty(proxy, index)" />
                     <small v-if="getFieldError(proxy, index, 'max_read_size')" class="field-error">{{ getFieldError(proxy, index, 'max_read_size') }}</small>
                   </div>
                   <div class="field-group">
-                    <label>Connect Delay (ms)</label>
+                    <label>{{ t('control.form.connectDelay') }}</label>
                     <input v-model.number="proxy.connect_delay_ms" type="number" min="0" max="60000" @input="markDirty(proxy, index)" />
                     <small v-if="getFieldError(proxy, index, 'connect_delay_ms')" class="field-error">{{ getFieldError(proxy, index, 'connect_delay_ms') }}</small>
                   </div>
                   <div class="field-group">
-                    <label>Max Target Connections</label>
+                    <label>{{ t('control.form.maxTargetConns') }}</label>
                     <input v-model.number="proxy.max_target_conns" type="number" min="0" max="100" @input="markDirty(proxy, index)" />
                     <small v-if="getFieldError(proxy, index, 'max_target_conns')" class="field-error">{{ getFieldError(proxy, index, 'max_target_conns') }}</small>
                   </div>
                   <div class="field-group">
-                    <label>Min Request Gap (ms)</label>
+                    <label>{{ t('control.form.minRequestGap') }}</label>
                     <input v-model.number="proxy.min_request_gap_ms" type="number" min="0" max="10000" @input="markDirty(proxy, index)" />
                     <small v-if="getFieldError(proxy, index, 'min_request_gap_ms')" class="field-error">{{ getFieldError(proxy, index, 'min_request_gap_ms') }}</small>
                   </div>
                   <div class="field-group">
-                    <label>Request Timeout (ms)</label>
+                    <label>{{ t('control.form.requestTimeout') }}</label>
                     <input v-model.number="proxy.request_timeout_ms" type="number" min="0" max="600000" @input="markDirty(proxy, index)" />
                     <small v-if="getFieldError(proxy, index, 'request_timeout_ms')" class="field-error">{{ getFieldError(proxy, index, 'request_timeout_ms') }}</small>
                   </div>
                   <div class="field-group">
-                    <label>Cache Responses</label>
+                    <label>{{ t('control.form.cacheEnabled') }}</label>
                     <input v-model="proxy.cache_enabled" type="checkbox" @change="markDirty(proxy, index)" />
                     <small v-if="getFieldError(proxy, index, 'cache_enabled')" class="field-error">{{ getFieldError(proxy, index, 'cache_enabled') }}</small>
                   </div>
                   <div class="field-group">
-                    <label>Cache TTL (ms)</label>
+                    <label>{{ t('control.form.cacheTtl') }}</label>
                     <input v-model.number="proxy.cache_ttl_ms" type="number" min="0" max="3600000" :disabled="!proxy.cache_enabled" @input="markDirty(proxy, index)" />
                     <small v-if="getFieldError(proxy, index, 'cache_ttl_ms')" class="field-error">{{ getFieldError(proxy, index, 'cache_ttl_ms') }}</small>
                   </div>
                   <div class="field-group">
-                    <label>Background Poll (ms)</label>
+                    <label>{{ t('control.form.pollInterval') }}</label>
                     <input v-model.number="proxy.poll_interval_ms" type="number" min="0" max="3600000" :disabled="!proxy.cache_enabled" @input="markDirty(proxy, index)" />
                     <small v-if="getFieldError(proxy, index, 'poll_interval_ms')" class="field-error">{{ getFieldError(proxy, index, 'poll_interval_ms') }}</small>
                   </div>
@@ -268,7 +268,6 @@
                 <p class="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">{{ t('configForm.webInterface') }}</p>                <h3 class="mt-1 text-xl font-bold text-[var(--text-primary)]">{{ t('configForm.portTitle') }}</h3>
               </div>
               <div class="field-group">
-                <label>Web Interface Address</label>
                 <div class="flex gap-2">
                   <input
                     v-model="store.webPort"
@@ -313,15 +312,14 @@
       </div>
     </div>
   </section>
-  <ConfirmDialog />
 </template>
 
 <script setup>
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import Button from 'primevue/button';
-import ConfirmDialog from 'primevue/confirmdialog';
 import { useConfirm } from 'primevue/useconfirm';
+import { useToast } from 'primevue/usetoast';
 import { VueDraggable } from 'vue-draggable-plus';
 import GripVerticalIcon from './icons/GripVertical.vue';
 import { useAppStore } from '../stores/appStore';
@@ -330,6 +328,9 @@ import validators from '../utils/validators';
 const { t } = useI18n();
 const store = useAppStore();
 const confirm = useConfirm();
+const toast = useToast();
+
+const PROXY_ORDER_KEY = 'modbridge_proxy_order';
 
 const validationErrors = ref({});
 const activeProxyKey = ref(null);
@@ -410,7 +411,10 @@ const removeProxy = async (id, index) => {
     header: t('configForm.confirmRemoveHeader'),
     icon: 'pi pi-exclamation-triangle',
     accept: async () => {
-      await store.deleteProxy(id);
+      const ok = await store.deleteProxy(id);
+      if (!ok) {
+        toast.add({ severity: 'error', summary: t('common.error'), detail: t('configForm.removeFailed'), life: 5000 });
+      }
     }
   });
 };
@@ -443,6 +447,8 @@ const saveProxy = async (proxy, index) => {
     // Refetch to drop transient flags (_isDirty/_isNew) and restore the
     // canonical server state; otherwise the card stays stuck on "Changed".
     await store.fetchProxies();
+  } else {
+    toast.add({ severity: 'error', summary: t('common.error'), detail: t('configForm.saveFailed'), life: 5000 });
   }
 
   activeSaveKey.value = null;
@@ -454,7 +460,10 @@ const savePort = async () => {
     header: t('configForm.confirmPortHeader'),
     icon: 'pi pi-exclamation-triangle',
     accept: async () => {
-      await store.saveWebPort(store.webPort);
+      const ok = await store.saveWebPort(store.webPort);
+      if (!ok) {
+        toast.add({ severity: 'error', summary: t('common.error'), detail: t('configForm.portSaveFailed'), life: 5000 });
+      }
     }
   });
 };
@@ -469,6 +478,10 @@ const markDirty = (proxy, index) => {
 
 const onReorder = () => {
   activeProxyKey.value = null;
+  // The server has no sort index, so the visual working order lives in
+  // localStorage and is re-applied by the store after every fetch.
+  const ids = store.proxies.map(proxy => proxy.id).filter(Boolean);
+  if (ids.length) localStorage.setItem(PROXY_ORDER_KEY, JSON.stringify(ids));
 };
 </script>
 

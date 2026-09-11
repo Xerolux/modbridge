@@ -2,7 +2,7 @@
   <div class="p-4 flex flex-col gap-4">
     <div class="flex justify-between items-center mb-4">
       <div class="flex items-center gap-3">
-        <h1 class="text-2xl font-bold">Device Management</h1>
+        <h1 class="text-2xl font-bold">{{ t('devices.title') }}</h1>
         <div v-if="lastRefreshed" class="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
           <i class="pi pi-refresh text-[10px]" :class="{ 'pi-spin': isRefreshing }"></i>
           <span>{{ t('common.lastRefreshed') }}: {{ timeAgo }}</span>
@@ -10,13 +10,13 @@
       </div>
       <div class="flex gap-2">
         <Button
-          label="Export CSV"
+          :label="t('devices.exportCsv')"
           icon="pi pi-download"
           severity="secondary"
           @click="exportDevices"
         />
         <Button
-          label="Refresh"
+          :label="t('devices.refresh')"
           icon="pi pi-refresh"
           :loading="isRefreshing"
           @click="refreshNow"
@@ -40,7 +40,7 @@
       <div class="flex flex-col sm:flex-row gap-4 items-center w-full">
         <InputText
           v-model="searchTerm"
-          placeholder="Search devices..."
+          :placeholder="t('devices.searchPlaceholder')"
           class="w-full sm:max-w-md"
         />
         <Dropdown
@@ -48,7 +48,7 @@
           :options="sortOptions"
           optionLabel="label"
           optionValue="value"
-          placeholder="Sortierung"
+          :placeholder="t('devices.sortPlaceholder')"
           class="w-full sm:w-48"
         />
       </div>
@@ -65,8 +65,8 @@
         stripedRows
         class="p-datatable-sm glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden"
       >
-        <Column field="ip" header="IP-Adresse" sortable></Column>
-         <Column field="name" header="Name" sortable filterMatchMode="contains">
+        <Column field="ip" :header="t('devices.ipAddress')" sortable></Column>
+         <Column field="name" :header="t('devices.columnName')" sortable filterMatchMode="contains">
           <template #body="{ data }">
             <InputText
               v-model="data.name"
@@ -90,26 +90,27 @@
             {{ formatDate(data.firstSeen) }}
           </template>
         </Column>
-        <Column field="connectionCount" header="Verbindungen" sortable>
+        <Column field="connectionCount" :header="t('devices.connections')" sortable>
           <template #body="{ data }">
             <Badge :value="data.connectionCount" :severity="getConnectionSeverity(data.connectionCount)" />
           </template>
         </Column>
-        <Column header="Aktionen" :exportable="false">
+        <Column :header="t('devices.actions')" :exportable="false">
           <template #body="{ data }">
             <div class="flex gap-2">
               <Button
                 icon="pi pi-eye"
                 size="small"
                 text
-                title="Details anzeigen"
+                :title="t('devices.showDetails')"
                 @click="showDeviceDetails(data)"
               />
               <Button
                 icon="pi pi-history"
                 size="small"
                 text
-                title="Verlauf anzeigen"
+                :title="t('devices.showHistory')"
+                :loading="historyLoading && selectedDevice?.ip === data.ip"
                 @click="showConnectionHistory(data.ip)"
               />
             </div>
@@ -118,7 +119,6 @@
       </DataTable>
     </div>
 
-    <Toast />
     <Dialog v-model:visible="deviceDetailsVisible" :header="t('devices.deviceDetails')" class="w-full max-w-lg mx-4" modal>
       <div v-if="selectedDevice" class="flex flex-col gap-4">
         <div class="grid grid-cols-2 gap-4">
@@ -131,7 +131,7 @@
             <p>{{ selectedDevice.mac || 'N/A' }}</p>
           </div>
           <div>
-            <label class="font-semibold">Name:</label>
+            <label class="font-semibold">{{ t('devices.columnName') }}:</label>
             <p>{{ selectedDevice.name || 'N/A' }}</p>
           </div>
           <div>
@@ -150,13 +150,13 @@
       </div>
     </Dialog>
 
-    <Dialog v-model:visible="historyVisible" header="Verbindungshistorie" class="w-full max-w-4xl mx-4" modal>
+    <Dialog v-model:visible="historyVisible" :header="t('devices.connectionHistory')" class="w-full max-w-4xl mx-4" modal>
       <div class="flex flex-col gap-4">
         <div class="flex justify-between items-center">
           <h3>{{ selectedDevice?.ip }}</h3>
           <div class="flex gap-2">
             <Button
-              label="Export CSV"
+              :label="t('devices.exportCsv')"
               icon="pi pi-download"
               severity="secondary"
               size="small"
@@ -172,13 +172,13 @@
           stripedRows
           class="p-datatable-sm"
         >
-          <Column field="proxyID" header="Proxy ID" sortable></Column>
-          <Column field="connectedAt" header="Verbunden am" sortable>
+          <Column field="proxyID" :header="t('devices.proxyId')" sortable></Column>
+          <Column field="connectedAt" :header="t('devices.connectedAt')" sortable>
             <template #body="{ data }">
               {{ formatDateTime(data.connectedAt) }}
             </template>
           </Column>
-          <Column field="requestCount" header="Anzahl Requests" sortable></Column>
+          <Column field="requestCount" :header="t('devices.requestCount')" sortable></Column>
         </DataTable>
       </div>
     </Dialog>
@@ -196,7 +196,6 @@ import InputText from 'primevue/inputtext';
 import Dropdown from 'primevue/select';
 import Badge from 'primevue/badge';
 import Dialog from 'primevue/dialog';
-import Toast from 'primevue/toast';
 import { useToast } from 'primevue/usetoast';
 import { useAppStore } from '../stores/appStore';
 import { formatDate, formatDateTime } from '../utils/helpers';
@@ -219,13 +218,14 @@ const historyLoading = ref(false);
 const selectedDevice = ref(null);
 const connectionHistory = ref([]);
 
-const sortOptions = [
+// computed so the labels follow language switches without a remount
+const sortOptions = computed(() => [
   { label: t('devices.sortNameAsc'), value: 'name_asc' },
   { label: t('devices.sortNameDesc'), value: 'name_desc' },
   { label: t('devices.sortIpAsc'), value: 'ip_asc' },
   { label: t('devices.sortConnectionsDesc'), value: 'connections_desc' },
   { label: t('devices.sortFirstSeenDesc'), value: 'firstSeen_desc' }
-];
+]);
 
 const filters = ref({
   'ip': { value: null, matchMode: 'contains' },
@@ -281,7 +281,7 @@ const fetchDevices = async () => {
     loading.value = false;
   } catch (e) {
     error.value = e.response?.data?.error || e.message;
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch devices', life: 3000 });
+    toast.add({ severity: 'error', summary: t('common.error'), detail: t('devices.fetchError'), life: 3000 });
     loading.value = false;
   }
 };
@@ -292,9 +292,9 @@ const updateDeviceName = async (device) => {
       ip: device.ip,
       name: device.name
     });
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Device name updated', life: 3000 });
+    toast.add({ severity: 'success', summary: t('common.success'), detail: t('devices.nameUpdated'), life: 3000 });
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to update device name', life: 3000 });
+    toast.add({ severity: 'error', summary: t('common.error'), detail: t('devices.nameUpdateError'), life: 3000 });
   }
 };
 
@@ -312,34 +312,34 @@ const showConnectionHistory = async (ip) => {
     historyVisible.value = true;
     historyLoading.value = false;
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch history', life: 3000 });
+    toast.add({ severity: 'error', summary: t('common.error'), detail: t('devices.fetchHistoryError'), life: 3000 });
     historyLoading.value = false;
   }
 };
 
 const exportHistoryCSV = async () => {
-  if (selectedDevice.value) {
-    try {
-      await store.exportDeviceHistory('csv');
-      toast.add({ severity: 'success', summary: 'Success', detail: 'History exported', life: 3000 });
-    } catch (e) {
-      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to export', life: 3000 });
-    }
+  // The store catches errors internally and returns false — check the result,
+  // otherwise a failed export would still show the success toast.
+  const ok = await store.exportDeviceHistory('csv');
+  if (ok) {
+    toast.add({ severity: 'success', summary: t('common.success'), detail: t('devices.exported'), life: 3000 });
+  } else {
+    toast.add({ severity: 'error', summary: t('common.error'), detail: t('devices.exportError'), life: 3000 });
   }
 };
 
 const exportDevices = async () => {
-  try {
-    await store.exportDeviceHistory('csv');
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Devices exported', life: 3000 });
-  } catch (e) {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to export', life: 3000 });
+  const ok = await store.exportDeviceHistory('csv');
+  if (ok) {
+    toast.add({ severity: 'success', summary: t('common.success'), detail: t('devices.exported'), life: 3000 });
+  } else {
+    toast.add({ severity: 'error', summary: t('common.error'), detail: t('devices.exportError'), life: 3000 });
   }
 };
 
 const getConnectionSeverity = (count) => {
   if (count > 100) return 'danger';
-  if (count > 50) return 'warning';
+  if (count > 50) return 'warn';
   return 'success';
 };
 

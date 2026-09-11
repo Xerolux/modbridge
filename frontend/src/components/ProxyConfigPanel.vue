@@ -1,5 +1,4 @@
 <template>
-  <Toast />
   <div
     v-if="visible"
     :class="['proxy-config-panel', minimized ? 'minimized' : '']"
@@ -96,7 +95,7 @@
           </div>
 
           <div class="config-group">
-            <label class="config-label">{{ t('configPanel.maxReadSizeHint') }}</label>
+            <label class="config-label">{{ t('control.form.maxReadSize') }}</label>
             <InputNumber
               v-model="batchConfig.max_read_size"
               :min="0"
@@ -118,7 +117,7 @@
           </div>
 
           <div class="config-group">
-            <label class="config-label">Max. Ziel-Verbindungen (0=Standard)</label>
+            <label class="config-label">{{ t('control.form.maxTargetConns') }}</label>
             <InputNumber
               v-model="batchConfig.max_target_conns"
               :min="0"
@@ -129,7 +128,7 @@
           </div>
 
           <div class="config-group">
-            <label class="config-label">Mindestabstand zwischen Anfragen (ms)</label>
+            <label class="config-label">{{ t('control.form.minRequestGap') }}</label>
             <InputNumber
               v-model="batchConfig.min_request_gap_ms"
               :min="0"
@@ -140,7 +139,7 @@
           </div>
 
           <div class="config-group">
-            <label class="config-label">Anfrage-Budget (ms, 0=automatisch)</label>
+            <label class="config-label">{{ t('control.form.requestTimeout') }}</label>
             <InputNumber
               v-model="batchConfig.request_timeout_ms"
               :min="0"
@@ -198,7 +197,6 @@
       </div>
     </div>
   </div>
-  <ConfirmDialog />
 </template>
 
 <script setup>
@@ -208,10 +206,8 @@ import InputNumber from 'primevue/inputnumber';
 import Checkbox from 'primevue/checkbox';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
-import ConfirmDialog from 'primevue/confirmdialog';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
-import Toast from 'primevue/toast';
 import axios from '../axios.js';
 
 let dragRafId = null;
