@@ -190,8 +190,8 @@ func TestHandleProxiesPostValid(t *testing.T) {
 
 	server.handleProxies(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", w.Code)
+	if w.Code != http.StatusCreated {
+		t.Errorf("Expected status 201, got %d", w.Code)
 	}
 
 	proxies := mgr.GetProxies()

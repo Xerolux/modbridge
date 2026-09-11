@@ -138,8 +138,8 @@ func TestAuditProxy_CreateSuccess(t *testing.T) {
 	w := httptest.NewRecorder()
 	server.handleProxies(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200 (body: %s)", w.Code, w.Body.String())
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201 (body: %s)", w.Code, w.Body.String())
 	}
 	e := findAuditEntry(t, server, "proxy.created", true)
 	if e == nil {

@@ -1189,21 +1189,29 @@ func (s *Server) handleProxies(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// A failing auto-start (e.g. unreachable target) is a proxy status,
+		// not a failed creation: the resource exists and the health monitor
+		// keeps retrying. Report 201 with the start error so clients can
+		// surface it instead of treating the whole creation as failed.
+		startErr := ""
 		if req.Enabled && !req.Paused {
 			if err := s.mgr.StartProxy(req.ID); err != nil {
 				s.log.Error(req.ID, fmt.Sprintf("Failed to start proxy after creation: %v", err))
-				if s.auditor != nil {
-					s.auditor.LogProxyAction("proxy.created", req.ID, session.UserID, session.Username, req.Name, ip, ua, false)
-				}
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
+				startErr = err.Error()
 			}
 		}
 
 		if s.auditor != nil {
-			s.auditor.LogProxyAction("proxy.created", req.ID, session.UserID, session.Username, req.Name, ip, ua, true)
+			s.auditor.LogProxyAction("proxy.created", req.ID, session.UserID, session.Username, req.Name, ip, ua, startErr == "")
 		}
-		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":          req.ID,
+			"start_error": startErr,
+		}); err != nil {
+			s.log.Error("API", fmt.Sprintf("Failed to encode proxy creation response: %v", err))
+		}
 		return
 	}
 
