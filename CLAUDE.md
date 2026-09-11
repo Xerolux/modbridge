@@ -30,7 +30,7 @@ modbridge/
 ├── config.example.json        # Example runtime configuration (copy to config.json)
 ├── version.txt                # Current version string
 ├── .env.example               # Environment variable template
-├── pkg/                       # All Go packages (35+, ~26k lines)
+├── pkg/                       # All Go packages (33, ~25k lines of non-test Go)
 │   ├── api/                   # HTTP handlers, routes, middleware composition
 │   ├── manager/               # Proxy lifecycle management
 │   ├── proxy/                 # Proxy instance: stats, circuit breaker, load balancer, alerting, auto-recovery
@@ -62,7 +62,10 @@ modbridge/
 │   ├── portmanager/           # Dynamic port allocation
 │   ├── web/                   # Embedded frontend assets (dist/ copied here at build time)
 │   └── testing/               # Test utilities: mockmodbus/, integration/, performance/
-├── cmd/cli/                   # CLI tooling
+├── cmd/                       # Additional entry points
+│   ├── modbridge-headless/    # Build variant without the WebUI
+│   ├── cli/                   # CLI tooling
+│   └── openapi/               # Writes docs/openapi.json
 ├── frontend/                  # Vue.js 3 + Vite source
 │   ├── src/
 │   │   ├── views/             # Page-level Vue components
@@ -75,7 +78,7 @@ modbridge/
 ├── docs/                      # Extended docs (German + English, ADRs)
 │   └── adr/                   # Architecture Decision Records
 └── .github/
-    ├── workflows/             # CI/CD pipelines (6 workflows)
+    ├── workflows/             # CI/CD pipelines (4 workflows)
     ├── ISSUE_TEMPLATE/        # Bug/feature templates
     └── dependabot.yml         # Automated dependency updates
 ```
@@ -134,7 +137,7 @@ make update-deps      # Update Go dependencies
 
 ### Build Requirements
 
-- **Go 1.26.1+** with `CGO_ENABLED=1` (required for `go-sqlite3`)
+- **Go 1.26.5+** with `CGO_ENABLED=1` (required for `go-sqlite3`)
 - **GCC** (for SQLite CGO compilation; cross-compilers for arm: `gcc-aarch64-linux-gnu`, `gcc-arm-linux-gnueabihf`)
 - Cross-compiling always needs `CGO_ENABLED=1` plus a matching `CC`; a CGO-less build compiles but fails at runtime with "Binary was compiled with CGO_ENABLED=0"
 - **Node 24+** (frontend build)
@@ -163,7 +166,7 @@ go test -run TestFunctionName  # Single test
 
 ### Test Organization
 
-- **28 test files** spread across packages (co-located with source: `pkg/foo/foo_test.go`)
+- Test files live next to the source they cover (`pkg/foo/foo_test.go`)
 - **Mock Modbus server:** `pkg/testing/mockmodbus/` — use for proxy/modbus tests
 - **Integration tests:** `pkg/testing/integration/`
 - **Performance tests:** `pkg/testing/performance/`
@@ -362,7 +365,7 @@ for `go-sqlite3`, so every target needs a matching cross-toolchain.
 - **SQLite3** via `github.com/mattn/go-sqlite3` (requires CGO)
 - Pragmas (`journal_mode=WAL`, `synchronous=NORMAL`, `busy_timeout`, `foreign_keys`) are passed through the DSN, because they are per-connection; the pool is capped at one connection since SQLite serialises writers
 - Database file: `modbridge.db` (auto-created on first run)
-- Fallback mode: If DB initialization fails, the app runs without persistence (`pkg/database/fallback.go`)
+- If DB initialization fails, `main.go` leaves `db` nil and the app runs without persistence — users, audit and device history are then unavailable. `pkg/database/fallback.go` holds an unused circuit breaker and is not part of this path
 - Schema defined in `pkg/database/schema_extended.go`
 
 ---
