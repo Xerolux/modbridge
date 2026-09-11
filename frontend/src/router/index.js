@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { navigation } from './navigation'
 
 const Dashboard = () => import(/* webpackChunkName: "dashboard" */ '../views/Dashboard.vue')
 const Login = () => import(/* webpackChunkName: "login" */ '../views/Login.vue')
@@ -98,7 +99,19 @@ const routes = [
 
 const router = createRouter({
   history: createWebHashHistory(),
-  routes
+  routes,
+  scrollBehavior(to, from, savedPosition) {
+    return savedPosition || { top: 0 }
+  }
+})
+
+router.beforeEach(() => {
+  navigation.loading = true
+  navigation.failedPath = null
+})
+
+router.afterEach(() => {
+  navigation.loading = false
 })
 
 router.beforeEach(async (to) => {
@@ -128,12 +141,10 @@ router.beforeEach(async (to) => {
   return true
 })
 
-router.onError((error) => {
+router.onError((error, to) => {
   console.error('Router navigation error:', error)
-  const message = String(error?.message || '')
-  if (/failed to fetch dynamically imported module|importing a module script failed|loading chunk|chunkloaderror/i.test(message)) {
-    window.location.reload()
-  }
+  navigation.loading = false
+  navigation.failedPath = to?.fullPath || '/'
 })
 
 export default router

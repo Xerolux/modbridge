@@ -17,6 +17,8 @@ const mobileMenuOpen = ref(false);
 const mobileMenuButton = ref(null);
 const mobileDrawer = ref(null);
 const mobileCloseButton = ref(null);
+const desktopMedia = window.matchMedia('(min-width: 1024px)');
+const handleDesktop = () => { if (desktopMedia.matches) closeMobileMenu(); };
 let previousBodyOverflow = '';
 
 const item = (labelKey, icon, path, permission) => ({ labelKey, icon, path, permission });
@@ -62,6 +64,7 @@ const logout = async () => {
   router.push('/login');
 };
 
+const documentMainFocus = () => document.getElementById('main-content')?.focus();
 const closeMobileMenu = () => { mobileMenuOpen.value = false; };
 const handleKeydown = (event) => {
   if (event.key === 'Escape') closeMobileMenu();
@@ -99,17 +102,20 @@ watch(() => route.path, closeMobileMenu);
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown);
+  desktopMedia.addEventListener('change', handleDesktop);
   app.fetchProxies();
 });
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown);
+  desktopMedia.removeEventListener('change', handleDesktop);
   document.body.style.overflow = previousBodyOverflow;
 });
 </script>
 
 <template>
   <div class="app-layout">
-    <aside class="sidebar hidden lg:flex" aria-label="Hauptnavigation">
+    <a class="skip-link" href="#main-content" @click.prevent="documentMainFocus">{{ t('navigation.skip') }}</a>
+    <aside class="sidebar hidden lg:flex" :aria-label="t('navigation.label')">
       <button type="button" class="brand" @click="router.push('/')" aria-label="ModBridge Dashboard">
         <BrandMark />
         <span class="min-w-0 text-left">
@@ -163,7 +169,7 @@ onUnmounted(() => {
       </div>
     </aside>
 
-    <div class="main-column">
+    <div class="main-column" :inert="mobileMenuOpen">
       <header class="mobile-header flex lg:hidden">
         <button type="button" class="brand" @click="router.push('/')" aria-label="ModBridge Dashboard">
           <BrandMark />
@@ -188,7 +194,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <main class="page-content">
+      <main id="main-content" class="page-content" tabindex="-1">
         <router-view />
       </main>
     </div>
@@ -197,7 +203,7 @@ onUnmounted(() => {
       <button v-if="mobileMenuOpen" type="button" class="mobile-backdrop lg:hidden" :aria-label="t('nav.closeNavigation')" @click="closeMobileMenu"></button>
     </Transition>
     <Transition name="slide">
-      <aside ref="mobileDrawer" v-if="mobileMenuOpen" class="mobile-drawer lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
+      <aside ref="mobileDrawer" v-if="mobileMenuOpen" class="mobile-drawer lg:hidden" role="dialog" aria-modal="true" :aria-label="t('navigation.label')">
         <div class="drawer-header">
           <div class="brand"><BrandMark /><strong>ModBridge</strong></div>
           <button ref="mobileCloseButton" type="button" class="icon-button" @click="closeMobileMenu" :aria-label="t('nav.closeNavigation')"><i class="pi pi-times"></i></button>
@@ -223,7 +229,7 @@ onUnmounted(() => {
 <style scoped>
 .app-layout { display: flex; min-height: 100vh; }
 .sidebar {
-  position: sticky; top: 0; width: 16.5rem; height: 100vh; flex: 0 0 16.5rem; flex-direction: column;
+  position: sticky; top: 0; width: 16.5rem; height: 100dvh; flex: 0 0 16.5rem; flex-direction: column;
   padding: 1rem; border-right: 1px solid var(--border-subtle); background: color-mix(in srgb, var(--bg-surface-strong) 88%, transparent);
   backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); z-index: 40;
 }
@@ -235,8 +241,8 @@ onUnmounted(() => {
 .system-summary small { margin-top: .08rem; font-size: .66rem; color: var(--text-muted); }
 .sidebar-nav { min-height: 0; flex: 1; overflow-y: auto; }
 .nav-section + .nav-section { margin-top: 1.15rem; }
-.nav-section h2 { margin: 0 0 .35rem .65rem; font: 700 .62rem/1.4 ui-sans-serif, system-ui, sans-serif; letter-spacing: .16em; text-transform: uppercase; color: var(--text-muted); }
-.sidebar-link { position: relative; display: flex; align-items: center; gap: .7rem; min-height: 2.55rem; padding: .42rem .55rem; border-radius: .85rem; color: var(--text-secondary); text-decoration: none; font-size: .82rem; font-weight: 550; transition: background .16s ease, color .16s ease, transform .16s ease; }
+.nav-section h2 { margin: 0 0 .35rem .65rem; font: 700 .72rem/1.4 ui-sans-serif, system-ui, sans-serif; letter-spacing: .16em; text-transform: uppercase; color: var(--text-muted); }
+.sidebar-link { position: relative; display: flex; align-items: center; gap: .7rem; min-height: 2.85rem; padding: .42rem .55rem; border-radius: .85rem; color: var(--text-secondary); text-decoration: none; font-size: .9rem; font-weight: 550; transition: background .16s ease, color .16s ease, transform .16s ease; }
 .sidebar-link:hover { color: var(--text-primary); background: var(--bg-soft); transform: translateX(2px); }
 .sidebar-link--active { color: var(--accent); background: var(--accent-tint); }
 .sidebar-link--active::before { content: ''; position: absolute; left: -.35rem; width: 3px; height: 1.15rem; border-radius: 9px; background: var(--accent); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent); }
@@ -245,7 +251,7 @@ onUnmounted(() => {
 .sidebar-tools { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: 0 .25rem .75rem; }
 .user-card { display: flex; align-items: center; gap: .65rem; padding: .65rem; border: 1px solid var(--border-subtle); border-radius: 1rem; background: var(--bg-panel-item); }
 .user-avatar { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .7rem; color: var(--accent); background: var(--accent-tint); font-size: .75rem; font-weight: 800; }
-.icon-button { display: grid; place-items: center; width: 2.35rem; height: 2.35rem; flex: 0 0 auto; border: 0; border-radius: .8rem; color: var(--text-secondary); background: var(--bg-panel-item); cursor: pointer; transition: background .16s, color .16s; }
+.icon-button { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; flex: 0 0 auto; border: 0; border-radius: .8rem; color: var(--text-secondary); background: var(--bg-panel-item); cursor: pointer; transition: background .16s, color .16s; }
 .icon-button:hover { color: var(--text-primary); background: var(--bg-soft); }
 .icon-button--danger:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
 .main-column { min-width: 0; flex: 1; }
@@ -253,7 +259,7 @@ onUnmounted(() => {
 .page-context__eyebrow { display: block; margin-bottom: .18rem; font-size: .62rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--text-muted); }
 .page-context strong { font-size: .95rem; color: var(--text-primary); }
 .page-context__state, .mobile-status { display: flex; align-items: center; gap: .5rem; padding: .45rem .7rem; border: 1px solid var(--border-subtle); border-radius: 999px; background: var(--bg-panel-item); color: var(--text-muted); font-size: .72rem; }
-.page-content { width: 100%; max-width: 100rem; margin: 0 auto; padding: .75rem 1rem 1.5rem; }
+.page-content { width: 100%; max-width: 100rem; margin: 0 auto; padding: 1.25rem 1.5rem 2rem; }
 .mobile-header { position: sticky; top: 0; z-index: 50; align-items: center; justify-content: space-between; padding: calc(.65rem + env(safe-area-inset-top)) calc(.8rem + env(safe-area-inset-right)) .65rem calc(.8rem + env(safe-area-inset-left)); border-bottom: 1px solid var(--border-subtle); background: color-mix(in srgb, var(--bg-surface-strong) 88%, transparent); backdrop-filter: var(--glass-blur); }
 .mobile-backdrop { position: fixed; inset: 0; z-index: 80; border: 0; background: rgba(2, 6, 23, .56); backdrop-filter: blur(3px); }
 .mobile-drawer { position: fixed; inset: 0 auto 0 0; z-index: 90; display: flex; width: min(20rem, 88vw); flex-direction: column; padding: calc(1rem + env(safe-area-inset-top)) 1rem calc(1rem + env(safe-area-inset-bottom)) calc(1rem + env(safe-area-inset-left)); border-right: 1px solid var(--border-soft); background: var(--bg-surface-strong); box-shadow: var(--shadow-strong); }

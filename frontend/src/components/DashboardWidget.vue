@@ -38,10 +38,10 @@ const statusDotClass = {
 
     <div class="relative z-[1] flex h-full flex-col justify-between p-4 sm:p-5">
       <!-- Header -->
-      <div class="flex items-start justify-between gap-3">
+      <div class="flex flex-col items-start gap-2 pr-7">
         <div class="min-w-0 flex-1">
-          <div class="text-[0.68rem] font-semibold uppercase tracking-[0.26em] text-[var(--text-muted)] mb-1.5">{{ t('widget.proxyLabel') }}</div>
-          <div class="text-base font-bold text-[var(--text-primary)] truncate leading-tight" :title="title">{{ title }}</div>
+          <div class="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)] mb-1.5">{{ t('widget.proxyLabel') }}</div>
+          <div class="text-base font-bold text-[var(--text-primary)] break-words leading-snug" :title="title">{{ title }}</div>
         </div>
         <div :class="statusClass[status] || statusClass.Unknown" class="shrink-0">
           <span :class="statusDotClass[status] || statusDotClass.Unknown"></span>
@@ -83,7 +83,7 @@ const statusDotClass = {
 .widget-bg {
   position: absolute;
   inset: 0;
-  background: var(--hero-gradient);
+  background: var(--bg-panel-item);
   opacity: 0.7;
 }
 
@@ -116,4 +116,5 @@ const statusDotClass = {
   font-size: 0.68rem;
   color: var(--text-muted);
 }
+@media (max-width: 640px) { .widget-drag-hint { display: none; } }
 </style>

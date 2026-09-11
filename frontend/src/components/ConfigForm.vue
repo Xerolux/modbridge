@@ -1,7 +1,7 @@
 <template>
   <section class="config-shell space-y-6">
     <div class="glass-hero rounded-[28px] p-5 sm:p-6">
-      <div class="relative z-[1] flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+      <div class="relative z-[1] flex flex-col gap-5 2xl:flex-row 2xl:items-end 2xl:justify-between">
         <div class="space-y-3">
           <div class="inline-flex items-center gap-2 rounded-full border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.3em] text-[var(--text-muted)]">
             <i class="pi pi-sparkles"></i>
@@ -499,8 +499,8 @@ const onReorder = () => {
   background: var(--bg-panel-item);
   border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .hero-stat {
@@ -514,7 +514,8 @@ const onReorder = () => {
   color: var(--text-muted);
   font-size: 0.7rem;
   text-transform: uppercase;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
 }
 
 .hero-stat-value {

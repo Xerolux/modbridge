@@ -2,6 +2,14 @@ import { createI18n } from 'vue-i18n';
 
 // German translations (default)
 const de = {
+  navigation: {
+    loading: 'Seite wird geladen …',
+    failed: 'Die Seite konnte nicht geladen werden.',
+    hint: 'Prüfe die Verbindung und lade die Seite erneut.',
+    retry: 'Seite neu laden',
+    skip: 'Zum Inhalt',
+    label: 'Hauptnavigation'
+  },
   // Navigation
   nav: {
     dashboard: 'Dashboard',
@@ -475,8 +483,8 @@ const de = {
 
   // Proxy studio (ConfigForm)
   configForm: {
-    heroTitle: 'Glass WebUI mit Drag and Drop',
-    heroSubtitle: 'Reordne Proxies per Drag-and-Drop, bearbeite Parameter direkt in Karten und speichere nur die Einträge, die sich wirklich geändert haben.',
+    heroTitle: 'Proxies konfigurieren',
+    heroSubtitle: 'Verbindungen einrichten, Proxies anordnen und Änderungen gezielt speichern.',
     statProxies: 'Proxies',
     statUnsaved: 'Ungespeichert',
     statRunning: 'Laufend',
@@ -713,6 +721,14 @@ const de = {
 
 // English translations
 const en = {
+  navigation: {
+    loading: 'Loading page …',
+    failed: 'The page could not be loaded.',
+    hint: 'Check your connection and reload the page.',
+    retry: 'Reload page',
+    skip: 'Skip to content',
+    label: 'Main navigation'
+  },
   // Navigation
   nav: {
     dashboard: 'Dashboard',
@@ -1186,8 +1202,8 @@ const en = {
 
   // Proxy studio (ConfigForm)
   configForm: {
-    heroTitle: 'Glass WebUI with Drag and Drop',
-    heroSubtitle: 'Reorder proxies via drag-and-drop, edit parameters directly on cards, and save only the entries that actually changed.',
+    heroTitle: 'Configure proxies',
+    heroSubtitle: 'Set up connections, organize proxies, and save individual changes.',
     statProxies: 'Proxies',
     statUnsaved: 'Unsaved',
     statRunning: 'Running',

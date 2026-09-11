@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:ui": "playwright test --config playwright.ui.config.js"
   },
   "dependencies": {
     "@primeuix/themes": "^3.0.0",

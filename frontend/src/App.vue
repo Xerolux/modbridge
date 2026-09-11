@@ -5,6 +5,7 @@ import { useToast } from 'primevue/usetoast';
 import { useI18n } from 'vue-i18n';
 import Toast from 'primevue/toast';
 import ConfirmDialog from 'primevue/confirmdialog';
+import { navigation } from './router/navigation';
 
 const store = useAppStore();
 const toast = useToast();
@@ -15,7 +16,10 @@ const appShellClass = computed(() => [
   'app-shell'
 ]);
 
-const showAmbient = computed(() => store.theme !== 'bw' && !store.reducedMotion);
+const reloadPage = () => {
+  window.location.hash = `#${navigation.failedPath || '/'}`;
+  window.location.reload();
+};
 
 // Apply the entire theme to <html> in one pass — class toggles, accent palette,
 // density and motion preferences. Runs once on mount and whenever any value changes.
@@ -42,16 +46,6 @@ watch(
 );
 
 onMounted(() => {
-  // Pause ambient orb animations when the tab is hidden to save CPU/battery
-  const handleVisibility = () => {
-    const state = document.hidden ? 'paused' : 'running';
-    document.querySelectorAll('.ambient-orb').forEach(el => {
-      el.style.animationPlayState = state;
-    });
-  };
-  document.addEventListener('visibilitychange', handleVisibility);
-  onUnmounted(() => document.removeEventListener('visibilitychange', handleVisibility));
-
   // Global 403 handler: axios dispatches 'app:forbidden' whenever a request is
   // rejected with Forbidden. Show a single toast instead of silent failures.
   const handleForbidden = () => {
@@ -66,12 +60,14 @@ onMounted(() => {
   <div :class="appShellClass">
     <Toast />
     <ConfirmDialog />
-    <template v-if="showAmbient">
-      <div class="ambient-layer ambient-grid"></div>
-      <div class="ambient-layer ambient-orb ambient-orb-a"></div>
-      <div class="ambient-layer ambient-orb ambient-orb-b"></div>
-      <div class="ambient-layer ambient-orb ambient-orb-c"></div>
-    </template>
+    <div v-if="navigation.loading" class="navigation-progress" role="status">
+      <span>{{ t('navigation.loading') }}</span>
+    </div>
+    <div v-if="navigation.failedPath" class="navigation-error" role="alert">
+      <strong>{{ t('navigation.failed') }}</strong>
+      <span>{{ t('navigation.hint') }}</span>
+      <button type="button" @click="reloadPage">{{ t('navigation.retry') }}</button>
+    </div>
 
     <div class="content-wrapper">
       <router-view></router-view>
@@ -82,8 +78,8 @@ onMounted(() => {
 <style>
  :root {
    --bg-canvas: #09111f;
-   --bg-surface: rgba(14, 22, 39, 0.72);
-   --bg-surface-strong: rgba(11, 18, 32, 0.9);
+   --bg-surface: #111d2e;
+   --bg-surface-strong: #111d2e;
    --bg-soft: rgba(148, 163, 184, 0.12);
    --bg-input: rgba(255, 255, 255, 0.05);
    --bg-panel-item: rgba(255, 255, 255, 0.04);
@@ -102,14 +98,14 @@ onMounted(() => {
    --border-subtle: rgba(255, 255, 255, 0.08);
    --shadow-soft: 0 20px 60px rgba(2, 6, 23, 0.35);
    --shadow-strong: 0 35px 80px rgba(2, 6, 23, 0.5);
-   --glass-blur: blur(24px);
+   --glass-blur: none;
    --hero-gradient: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(192, 132, 252, 0.18));
    --panel-gradient: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
    --grid-line: rgba(255, 255, 255, 0.035);
    /* Density knobs — overridden by [data-density="compact"] */
    --space-card: 1.25rem;
-   --radius-panel: 24px;
-   --radius-hero: 28px;
+   --radius-panel: 16px;
+   --radius-hero: 18px;
    --control-h: 44px;
 }
 
@@ -161,20 +157,20 @@ onMounted(() => {
 }
 
 .light {
-  --bg-canvas: #eef4fb;
-  --bg-surface: rgba(255, 255, 255, 0.7);
-  --bg-surface-strong: rgba(255, 255, 255, 0.92);
+  --bg-canvas: #f4f6f9;
+  --bg-surface: #ffffff;
+  --bg-surface-strong: #ffffff;
   --bg-soft: rgba(15, 23, 42, 0.05);
   --bg-input: rgba(15, 23, 42, 0.06);
   --bg-panel-item: rgba(15, 23, 42, 0.04);
   --bg-dark-overlay: rgba(0, 0, 0, 0.04);
   --text-primary: #102038;
   --text-secondary: #334155;
-  --text-muted: #64748b;
+  --text-muted: #526176;
   --border-soft: rgba(15, 23, 42, 0.08);
   --border-strong: rgba(56, 189, 248, 0.22);
   --border-subtle: rgba(15, 23, 42, 0.1);
-  --shadow-soft: 0 18px 45px rgba(148, 163, 184, 0.18);
+  --shadow-soft: 0 2px 8px rgba(15, 23, 42, 0.04);
   --shadow-strong: 0 28px 60px rgba(148, 163, 184, 0.24);
   --hero-gradient: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(192, 132, 252, 0.12));
   --panel-gradient: linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.3));
@@ -212,7 +208,7 @@ onMounted(() => {
   --border-subtle: rgba(255, 255, 255, 0.08);
   --shadow-soft: 0 20px 60px rgba(0, 0, 0, 0.6);
   --shadow-strong: 0 35px 80px rgba(0, 0, 0, 0.75);
-  --glass-blur: blur(20px);
+  --glass-blur: none;
   --hero-gradient: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
   --panel-gradient: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01));
   --grid-line: rgba(255, 255, 255, 0.04);
@@ -264,11 +260,6 @@ onMounted(() => {
 /* ── Reduced motion ────────────────────────────────────────────────
    Honors user preference for less animation — better on low-end mobile
    and for accessibility. Disables orbs/grid float and button transforms. */
-.reduced-motion .ambient-orb,
-.reduced-motion .ambient-grid {
-  display: none !important;
-}
-.reduced-motion .ambient-orb { animation: none !important; }
 .reduced-motion .p-button,
 .reduced-motion .proxy-card,
 .reduced-motion .grid-stack-item-content {
@@ -289,22 +280,11 @@ body,
 body {
   margin: 0;
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background:
-    radial-gradient(circle at top left, rgba(125, 211, 252, 0.14), transparent 32%),
-    radial-gradient(circle at top right, rgba(192, 132, 252, 0.16), transparent 28%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.12), transparent 20%),
-    var(--bg-canvas);
+  background: var(--bg-canvas);
   color: var(--text-primary);
   overflow-x: hidden;
 }
 
-/* Monochrome background glow for the B&W looking-glass theme */
-html.bw body {
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.06), transparent 34%),
-    radial-gradient(circle at top right, rgba(255, 255, 255, 0.04), transparent 30%),
-    var(--bg-canvas);
-}
 
 h1,
 h2,
@@ -342,54 +322,6 @@ textarea,
   z-index: 2;
 }
 
-.ambient-layer {
-  pointer-events: none;
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  /* Promote to a GPU layer once instead of repainting on scroll */
-  transform: translateZ(0);
-  will-change: transform;
-}
-
-.ambient-grid {
-  opacity: 0.4;
-  background-image:
-    linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: 28px 28px;
-  mask-image: radial-gradient(circle at center, black 30%, transparent 90%);
-}
-
-.ambient-orb {
-  filter: blur(80px);
-  opacity: 0.55;
-  animation: floatOrb 18s ease-in-out infinite;
-}
-
-.ambient-orb-a {
-  inset: auto auto 72% 6%;
-  width: 26rem;
-  height: 26rem;
-  background: rgba(56, 189, 248, 0.22);
-}
-
-.ambient-orb-b {
-  inset: 8% 4% auto auto;
-  width: 24rem;
-  height: 24rem;
-  background: rgba(192, 132, 252, 0.18);
-  animation-duration: 22s;
-}
-
-.ambient-orb-c {
-  inset: auto 20% 10% auto;
-  width: 20rem;
-  height: 20rem;
-  background: rgba(34, 197, 94, 0.12);
-  animation-duration: 26s;
-}
-
 .glass-card,
 .glass-panel,
 .glass-hero {
@@ -399,18 +331,6 @@ textarea,
   box-shadow: var(--shadow-soft);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-}
-
-.glass-card::before,
-.glass-panel::before,
-.glass-hero::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--panel-gradient);
-  opacity: 0.9;
-  pointer-events: none;
 }
 
 .glass-hero {
@@ -471,61 +391,6 @@ textarea,
   background: var(--accent);
 }
 
-@keyframes floatOrb {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(1.5rem, -1.2rem, 0) scale(1.08);
-  }
-}
-
-@media (max-width: 768px) {
-  .ambient-grid {
-    opacity: 0.14;
-  }
-
-  .ambient-orb-a,
-  .ambient-orb-b,
-  .ambient-orb-c {
-    width: 13rem;
-    height: 13rem;
-    filter: blur(54px);
-    opacity: 0.35;
-  }
-
-  .ambient-orb-c {
-    display: none;
-  }
-
-  .p-card,
-  .p-dialog,
-  .p-datatable,
-  .p-tabpanels,
-  .p-tablist,
-  .p-menubar,
-  .p-sidebar,
-  .p-dropdown-panel {
-    backdrop-filter: blur(14px) !important;
-    -webkit-backdrop-filter: blur(14px) !important;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ambient-grid,
-  .ambient-orb {
-    display: none;
-  }
-
-  .ambient-orb {
-    animation: none !important;
-  }
-
-  .p-button {
-    transition: none !important;
-  }
-}
 
 :focus-visible {
   outline: 2px solid var(--accent-strong);
@@ -539,7 +404,7 @@ textarea,
 .p-tablist,
 .p-menubar,
 .p-sidebar {
-  border-radius: 24px !important;
+  border-radius: var(--radius-panel) !important;
 }
 
 .p-card,
@@ -567,7 +432,7 @@ textarea,
   background: var(--bg-input) !important;
   border: 1px solid var(--border-soft) !important;
   color: var(--text-primary) !important;
-  border-radius: 16px !important;
+  border-radius: 10px !important;
   min-height: 44px;
 }
 
@@ -581,13 +446,13 @@ textarea,
 }
 
 .p-button {
-  border-radius: 16px !important;
+  border-radius: 10px !important;
   min-height: 44px;
   transition: transform 0.2s ease, box-shadow 0.2s ease !important;
 }
 
 .p-button:hover {
-  transform: translateY(-1px);
+  filter: brightness(0.97);
 }
 
 .p-tab {
@@ -643,7 +508,7 @@ textarea,
 /* Cards / panels: consistent padding and clear borders */
 .glass-panel,
 .glass-card {
-  padding: 1.25rem !important;
+  padding: var(--space-card);
 }
 
 /* Truncation utility for tight spaces */

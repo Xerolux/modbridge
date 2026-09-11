@@ -60,6 +60,7 @@
           @click="showConfigPanel = true"
           class="flex-1 sm:flex-none"
           severity="secondary"
+          :aria-label="t('dashboard.proxyConfigTooltip')"
           v-tooltip.bottom="t('dashboard.proxyConfigTooltip')"
         />
         <Button :label="t('dashboard.addWidget')" icon="pi pi-plus" @click="openAddWidget" class="flex-1 sm:flex-none" />
@@ -87,7 +88,7 @@
       </div>
     </div>
 
-    <section v-else class="dashboard-stage glass-panel rounded-[28px] p-3 sm:p-4">
+    <section v-show="!loading && !error" class="dashboard-stage glass-panel rounded-[28px] p-3 sm:p-4">
       <div class="relative z-[1]">
         <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div class="flex items-center gap-2 text-sm text-[var(--text-muted)]">
@@ -110,7 +111,7 @@
         </div>
 
         <div
-          class="grid-stack-dashboard grid-stack min-h-[60vh] sm:min-h-[520px] rounded-[24px] border border-gray-200 dark:border-white/10"
+          class="grid-stack-dashboard grid-stack min-h-[280px] sm:min-h-[520px] rounded-[24px] border border-gray-200 dark:border-white/10"
           :class="{ 'grid-stack-dashboard--editing': layoutEditing, 'hidden': widgets.length === 0 }"
         >
           <div v-if="layoutEditing" class="layout-edit-banner">
@@ -123,7 +124,6 @@
               <DashboardWidget
                 :title="widget.title"
                 :value="getWidgetValue(widget)"
-                :unit="widget.unit"
                 :status="getWidgetStatus(widget)"
                 :active-connections="getWidgetConnections(widget)"
               />
@@ -209,6 +209,7 @@ let unwatchConnected = null;
 let unwatchLiveness = null;
 let gridInitialized = false;
 let fetchVersion = 0;
+let disposed = false;
 // SSE update batching — coalesce rapid updates into a single rAF flush
 let pendingSSEUpdates = new Map();
 let sseBatchFrame = null;
@@ -321,6 +322,7 @@ const initializeGrid = () => {
 onMounted(async () => {
   try {
     await fetchData(true);
+    if (disposed) return;
 
     // Initialize GridStack BEFORE loading widgets: the <Teleport> targets
     // (#mount_<id>) are created by GridStack.addWidget, so the grid must
@@ -335,7 +337,7 @@ onMounted(async () => {
       layoutToLoad = buildDefaultLayout(proxies.value);
     }
 
-    loadGrid(layoutToLoad);
+    if (!error.value) loadGrid(layoutToLoad);
     window.addEventListener('resize', handleResize);
 
     const { data, disconnect, isConnected, lastMessageAt } = useEventSource('/api/proxies/stream');
@@ -351,7 +353,7 @@ onMounted(async () => {
       const now = Date.now();
       const stale = !isConnected.value || lastMessageAt.value === 0 || (now - lastMessageAt.value) > LIVE_STALE_MS;
       liveStale.value = stale;
-      if (stale) {
+      if (stale && !error.value && !document.hidden && !disposed) {
         // Best-effort refresh; ignore errors (toast already handled centrally).
         fetchData(false).catch(() => {});
       }
@@ -408,11 +410,14 @@ onMounted(async () => {
 });
 
 const handleResize = debounce(() => {
+  if (disposed) return;
   isMobileLayout.value = window.innerWidth <= BREAKPOINTS.MOBILE;
   syncGridInteractivity();
 }, 150);
 
 onUnmounted(() => {
+  disposed = true;
+  fetchVersion++;
   if (unwatchData) unwatchData();
   if (unwatchConnected) unwatchConnected();
   if (unwatchLiveness) unwatchLiveness();
@@ -421,6 +426,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', handleResize);
   if (grid.value) {
     grid.value.destroy(false);
+    grid.value = null;
   }
   if (sseDisconnect) {
     sseDisconnect();
@@ -485,7 +491,8 @@ const addWidgetToGrid = (item) => {
     x: item.x ?? 0,
     y: item.y ?? 0,
     w: item.w ?? 2,
-    h: item.h ?? 2,
+    h: Math.max(item.h ?? 3, 3),
+    minH: 3,
     id,
     content: ''
   });
@@ -531,13 +538,23 @@ const fetchData = async (isInitial = false) => {
     error.value = null;
     errorMessage.value = '';
     const res = await axios.get('/api/proxies');
-    if (thisVersion !== fetchVersion) return;
+    if (disposed || thisVersion !== fetchVersion) return;
     proxies.value = res.data;
     if (isInitial) loading.value = false;
+    await nextTick();
+    if (disposed) return;
+    if (grid.value) {
+      grid.value.onResize();
+      if (isInitial && !widgets.value.length && proxies.value.length) {
+        const saved = getStoredLayout();
+        loadGrid(saved.length ? saved : buildDefaultLayout(proxies.value));
+      }
+    }
   } catch (requestError) {
-    if (thisVersion !== fetchVersion) return;
+    if (disposed || thisVersion !== fetchVersion) return;
     const errorData = requestError.response?.data;
-    error.value = true;
+    error.value = isInitial || !gridInitialized;
+    liveStale.value = true;
     errorMessage.value = typeof errorData === 'string' ? errorData : requestError.message || t('common.error');
     if (isInitial) loading.value = false;
     // No rethrow: fetchData is also used directly as a template event handler
@@ -636,7 +653,7 @@ const goToLogs = () => {
 }
 
 .dashboard-stat {
-  border-radius: 20px;
+  border-radius: 12px;
   padding: 0.9rem 1rem;
   background: var(--bg-panel-item);
   border: 1px solid var(--border-subtle);
@@ -646,7 +663,7 @@ const goToLogs = () => {
   display: block;
   font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
 }
 
@@ -715,8 +732,8 @@ const goToLogs = () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
+  width: 2.75rem;
+  height: 2.75rem;
   border: 0;
   border-radius: 999px;
   background: var(--bg-surface-strong);

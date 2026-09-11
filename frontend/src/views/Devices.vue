@@ -1,14 +1,14 @@
 <template>
-  <div class="p-4 flex flex-col gap-4">
-    <div class="flex justify-between items-center mb-4">
-      <div class="flex items-center gap-3">
+  <div class="p-2 sm:p-4 flex flex-col gap-4 min-w-0">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+      <div class="flex flex-wrap items-center gap-3 min-w-0">
         <h1 class="text-2xl font-bold">{{ t('devices.title') }}</h1>
         <div v-if="lastRefreshed" class="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
           <i class="pi pi-refresh text-[10px]" :class="{ 'pi-spin': isRefreshing }"></i>
           <span>{{ t('common.lastRefreshed') }}: {{ timeAgo }}</span>
         </div>
       </div>
-      <div class="flex gap-2">
+      <div class="flex flex-wrap gap-2">
         <Button
           :label="t('devices.exportCsv')"
           icon="pi pi-download"

@@ -209,6 +209,10 @@ jobs:
         working-directory: ./frontend
         run: npx playwright install --with-deps chromium
 
+      - name: Run responsive WebUI regression tests
+        working-directory: ./frontend
+        run: npm run test:ui
+
       # The suite starts the binary itself, walks the first-run password
       # change and drives the UI, so it covers what a build and unit tests
       # cannot: whether the page actually works when clicked.
