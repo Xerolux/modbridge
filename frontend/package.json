@@ -13,7 +13,7 @@
   "dependencies": {
     "@primeuix/themes": "^3.0.0",
     "axios": "^1.19.0",
-    "gridstack": "^13.0.2",
+    "gridstack": "^13.2.0",
     "pinia": "^4.0.3",
     "primeicons": "^8.0.0",
     "primevue": "^5.0.1",
