@@ -1,5 +1,6 @@
 <template>
     <div class="p-2 sm:p-4 flex flex-col gap-4 w-full min-w-0">
+    <DataHealth :failed="loadFailed" :last-success="lastSuccess" :live="sseConnected !== false && !liveStale" @refresh="fetchProxies" />
 
         <!-- ── Hero ────────────────────────────────────────────────── -->
         <section class="glass-hero rounded-[28px] p-5 sm:p-6">
@@ -87,28 +88,8 @@
         </div>
 
         <!-- ── Loading ─────────────────────────────────────────────── -->
-        <div v-if="loading" class="glass-panel rounded-[28px] p-10">
-            <div class="flex min-h-[320px] flex-col items-center justify-center text-center relative z-[1]">
-                <div class="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-[var(--bg-panel-item)] border border-[var(--border-subtle)]">
-                    <i class="pi pi-spin pi-spinner text-3xl text-[var(--accent)]"></i>
-                </div>
-                <p class="text-[var(--text-secondary)] text-sm">{{ $t('control.loading') }}</p>
-            </div>
-        </div>
-
-        <!-- ── Empty state ─────────────────────────────────────────── -->
-        <div v-else-if="proxies.length === 0" class="glass-panel rounded-[28px] p-10">
-            <div class="flex min-h-[280px] flex-col items-center justify-center text-center relative z-[1]">
-                <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--bg-panel-item)] border border-[var(--border-subtle)]">
-                    <i class="pi pi-inbox text-2xl text-[var(--text-muted)]"></i>
-                </div>
-                <h3 class="text-lg font-semibold text-[var(--text-primary)]">{{ $t('control.noProxies') }}</h3>
-                <p class="mt-2 text-sm text-[var(--text-muted)] max-w-sm">{{ $t('control.noProxiesHint') }}</p>
-            </div>
-        </div>
-
-        <!-- ── Proxy grid ──────────────────────────────────────────── -->
-        <div v-else>
+        <PageState :loading="loading" :error="loadFailed && !proxies.length" :empty="!loading && !loadFailed && !proxies.length" @retry="fetchProxies" />
+        <div v-if="!loading && proxies.length">
             <!-- No search results -->
             <div v-if="filteredGroups.length === 0" class="glass-panel rounded-[28px] p-8 text-center relative z-[1]">
                 <i class="pi pi-search text-2xl text-[var(--text-muted)] mb-3 block"></i>
@@ -434,6 +415,8 @@
 </template>
 
 <script setup>
+import PageState from '../components/PageState.vue';
+import DataHealth from '../components/DataHealth.vue';
 import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue';
 import axios from '../axios.js';
 import Button from 'primevue/button';
@@ -466,6 +449,8 @@ const proxies = ref([]);
 const loading = ref(true);
 const editMode = ref(false);
 const searchQuery = ref('');
+const loadFailed = ref(false);
+const lastSuccess = ref(null);
 const sseConnected = ref(null);
 const liveStale = ref(false);
 
@@ -476,6 +461,7 @@ const toast = useToast();
 const confirm = useConfirm();
 let disconnectFn = null;
 const pendingTimers = [];
+let disposed = false;
 let watchdogTimer = null;
 let unwatchConnectedLive = null;
 
@@ -755,9 +741,12 @@ const onProxyReorder = (orderedGroup) => {
 const fetchProxies = async () => {
     try {
         const res = await axios.get('/api/proxies');
-        proxies.value = applyProxyOrder(normalizeProxyList(res.data));
+        if (disposed) return;
+        loadFailed.value = false;
+        lastSuccess.value = new Date();
+        if (!disposed) proxies.value = applyProxyOrder(normalizeProxyList(res.data));
     } catch (e) {
-        toast.add({ severity: 'error', summary: t('common.error'), detail: t('control.fetchProxiesFailed'), life: 5000 });
+        if (!disposed) loadFailed.value = true;
     }
 };
 
@@ -788,6 +777,7 @@ const scheduleProxyFlush = () => {
 
 onMounted(async () => {
     await fetchProxies();
+    if (disposed) return;
     loading.value = false;
 
     const { data, disconnect, isConnected, lastMessageAt } = useEventSource('/api/proxies/stream');
@@ -800,7 +790,7 @@ onMounted(async () => {
         const now = Date.now();
         const stale = !isConnected.value || lastMessageAt.value === 0 || (now - lastMessageAt.value) > LIVE_STALE_MS;
         liveStale.value = stale;
-        if (stale) {
+        if (stale && !document.hidden && !disposed) {
             fetchProxies();
         }
     };
@@ -844,6 +834,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+    disposed = true;
     pendingTimers.forEach(clearTimeout);
     pendingTimers.length = 0;
     if (watchdogTimer) clearInterval(watchdogTimer);

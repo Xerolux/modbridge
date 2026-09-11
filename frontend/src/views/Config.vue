@@ -2,11 +2,9 @@
     <div class="p-2 sm:p-4 flex flex-col gap-4">
         <h1 class="text-xl sm:text-2xl font-bold mb-2 sm:mb-4 text-gray-800 dark:text-gray-200">{{ t('config.title') }}</h1>
 
-        <div v-if="loading" class="flex justify-center">
-            <i class="pi pi-spin pi-spinner text-4xl text-blue-500"></i>
-        </div>
+<PageState :loading="loading" :error="configError" @retry="fetchConfig" />
 
-        <div v-else class="flex flex-col gap-6">
+        <div v-if="!loading && !configError" class="flex flex-col gap-6">
             <Tabs value="0">
                 <TabList class="glass-card rounded-t-3xl text-gray-800 dark:text-gray-200 overflow-x-auto flex-nowrap whitespace-nowrap hide-scrollbar border border-gray-200 dark:border-white/10 border-b-0">
                     <Tab value="0" class="shrink-0">{{ t('config.proxies') }}</Tab>
@@ -290,6 +288,7 @@
 </template>
 
 <script setup>
+import PageState from '../components/PageState.vue';
   import { ref, computed, onMounted } from 'vue';
   import { useRouter } from 'vue-router';
   import { useI18n } from 'vue-i18n';
@@ -385,14 +384,17 @@ const { t } = useI18n();
  // placeholders. Saving them would overwrite the real configuration — the CORS
  // origins in particular, which can lock the operator out of the UI.
  const configLoaded = ref(false);
+ const configError = ref(false);
 
  const fetchConfig = async () => {
+     configError.value = false;
      try {
          const res = await axios.get('/api/config/system');
          config.value = { ...config.value, ...res.data };
          configLoaded.value = true;
      } catch (e) {
          configLoaded.value = false;
+         configError.value = true;
          toast.add({ severity: 'error', summary: t('common.error'), detail: t('config.loadError'), life: 5000 });
      }
  };

@@ -1,4 +1,4 @@
-import { ref, onScopeDispose } from 'vue';
+import { ref, getCurrentScope, onScopeDispose } from 'vue';
 import { EVENT_SOURCE_CONFIG } from './constants';
 
 export function useEventSource(url, options = {}) {
@@ -108,7 +108,15 @@ export function useEventSource(url, options = {}) {
     }
   };
 
+  const resume = () => { if (!manualClose && !document.hidden && navigator.onLine) connect(); };
+  const livenessTimer = setInterval(() => {
+    if (!manualClose && !document.hidden && isConnected.value && Date.now() - lastMessageAt.value > 45000) connect();
+  }, 15000);
+  window.addEventListener('online', resume);
+
   const disconnect = () => {
+    clearInterval(livenessTimer);
+    window.removeEventListener('online', resume);
     manualClose = true;
     if (reconnectTimeout) {
       clearTimeout(reconnectTimeout);
@@ -125,7 +133,7 @@ export function useEventSource(url, options = {}) {
 
   connect();
 
-  if (typeof onScopeDispose === 'function') {
+  if (getCurrentScope()) {
     onScopeDispose(() => {
       disconnect();
     });

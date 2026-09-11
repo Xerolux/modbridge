@@ -376,7 +376,8 @@ func (s *Server) Stop() {
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]string{
-		"status": "ok",
+		"status":  "ok",
+		"version": s.updater.CurrentVersion(),
 	}); err != nil {
 		s.log.Error("API", fmt.Sprintf("Failed to encode health response: %v", err))
 	}

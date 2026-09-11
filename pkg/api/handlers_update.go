@@ -114,7 +114,7 @@ func (s *Server) handleUpdatePerform(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		// Poll briefly for the done state, then signal restart.
 		// The updater's runUpdate goroutine sets StateDone after swap.
-		for i := 0; i < 60; i++ { // max ~60 seconds
+		for deadline := time.Now().Add(updater.UpdateTimeout + time.Minute); time.Now().Before(deadline); {
 			st := s.updater.GetStatus()
 			if st.State == updater.StateDone {
 				s.triggerRestart()

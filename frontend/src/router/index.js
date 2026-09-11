@@ -38,6 +38,8 @@ const routes = [
     component: Layout,
     meta: { requiresAuth: true },
     children: [
+      { path: '/updates', name: 'Updates', component: () => import('../views/Updates.vue'), meta: { permission: 'system:restart' } },
+      { path: '/setup', name: 'Setup', component: () => import('../views/Setup.vue'), meta: { permission: 'proxy:create' } },
       {
         path: '',
         name: 'Dashboard',

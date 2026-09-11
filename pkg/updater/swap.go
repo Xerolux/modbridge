@@ -22,6 +22,9 @@ import (
 // underlying rename is atomic (rename is only atomic within a single
 // filesystem). If staging fails, the original binary is restored.
 func SwapBinary(newBinaryPath, targetPath string) (string, error) {
+	if err := os.Chmod(newBinaryPath, 0755); err != nil {
+		return "", fmt.Errorf("preparing executable permissions: %w", err)
+	}
 	backupPath := targetPath + ".bak." + time.Now().Format("20060102_150405")
 
 	// Step 1: move current binary aside (backup).
@@ -36,11 +39,6 @@ func SwapBinary(newBinaryPath, targetPath string) (string, error) {
 			return "", fmt.Errorf("swap failed (%v) and rollback also failed (%v) — binary at %s, manual recovery needed", err, rbErr, backupPath)
 		}
 		return "", fmt.Errorf("installing new binary: %w (rolled back)", err)
-	}
-
-	// Step 3: ensure executable bit.
-	if err := os.Chmod(targetPath, 0755); err != nil {
-		return backupPath, fmt.Errorf("setting executable permissions: %w", err)
 	}
 
 	return backupPath, nil

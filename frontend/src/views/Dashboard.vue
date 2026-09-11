@@ -1,5 +1,6 @@
 <template>
   <div class="dashboard-container p-2 sm:p-4 flex flex-col gap-4 w-full overflow-x-hidden">
+    <DataHealth :live="sseConnected !== false && !liveStale" @refresh="fetchData(false)" />
     <section class="glass-hero dashboard-hero rounded-[28px] p-5 sm:p-6">
       <div class="relative z-[1] flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div class="space-y-3">
@@ -170,6 +171,7 @@
 </template>
 
 <script setup>
+import DataHealth from '../components/DataHealth.vue';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from "vue-i18n";

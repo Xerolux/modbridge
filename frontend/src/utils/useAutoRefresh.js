@@ -1,46 +1,39 @@
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue';
 
 export function useAutoRefresh(fetchFn, intervalMs = 30000) {
-  const lastRefreshed = ref(null)
-  const isRefreshing = ref(false)
-  let timer = null
-  let isTabVisible = !document.hidden
-
+  const lastRefreshed = ref(null);
+  const isRefreshing = ref(false);
+  const refreshError = ref(false);
+  let timer;
+  let controller;
+  let disposed = false;
   const refreshNow = async () => {
-    if (isRefreshing.value) return
-    isRefreshing.value = true
+    if (disposed || isRefreshing.value) return;
+    isRefreshing.value = true;
     try {
-      await fetchFn()
-      lastRefreshed.value = new Date()
+      controller = new AbortController();
+      const result = await fetchFn({ signal: controller.signal });
+      if (disposed) return;
+      refreshError.value = result === false;
+      if (result !== false) lastRefreshed.value = new Date();
     } catch {
-      // errors handled by the fetchFn itself
+      if (!disposed) refreshError.value = true;
     } finally {
-      isRefreshing.value = false
+      if (!disposed) isRefreshing.value = false;
     }
-  }
-
-  const onVisibilityChange = () => {
-    isTabVisible = !document.hidden
-    if (isTabVisible) refreshNow()
-  }
-
-  const start = () => {
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    timer = setInterval(() => {
-      if (isTabVisible) refreshNow()
-    }, intervalMs)
-  }
-
-  const stop = () => {
-    document.removeEventListener('visibilitychange', onVisibilityChange)
-    if (timer) {
-      clearInterval(timer)
-      timer = null
-    }
-  }
-
-  onMounted(() => start())
-  onUnmounted(() => stop())
-
-  return { lastRefreshed, isRefreshing, refreshNow }
+  };
+  const resume = () => { if (!document.hidden && navigator.onLine) refreshNow(); };
+  onMounted(() => {
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('online', resume);
+    timer = setInterval(resume, intervalMs);
+  });
+  onUnmounted(() => {
+    disposed = true;
+    controller?.abort();
+    clearInterval(timer);
+    document.removeEventListener('visibilitychange', resume);
+    window.removeEventListener('online', resume);
+  });
+  return { lastRefreshed, isRefreshing, refreshError, refreshNow };
 }

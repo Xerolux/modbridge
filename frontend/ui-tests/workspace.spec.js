@@ -17,11 +17,13 @@ for (const width of [360, 768, 1440]) {
     page.on('pageerror', error => errors.push(error.stack));
     await page.setViewportSize({ width, height: 900 });
     await mockApi(page);
-    for (const path of ['/', '/config', '/control', '/devices', '/logs', '/users', '/audit', '/system', '/']) {
+    for (const path of ['/', '/config', '/control', '/devices', '/logs', '/users', '/audit', '/system', '/setup', '/updates', '/']) {
+      const started = Date.now();
       await page.goto(`/#${path}`);
       await expect(page.locator(`.sidebar-link[href="#${path}"]`).first()).toHaveAttribute('aria-current', 'page');
       await expect(page.locator('main')).toBeVisible();
       await expect(page.locator('main h1').first()).toBeVisible();
+      expect(Date.now() - started, `route ${path} should render within 5 seconds`).toBeLessThan(5000);
       if (path === '/') {
         await expect(page.locator('.widget-shell')).toHaveCount(1);
         await page.screenshot({ path: `test-results/dashboard-${width}.png`, fullPage: true });

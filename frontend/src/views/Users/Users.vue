@@ -1,5 +1,6 @@
 <template>
   <div class="p-2 sm:p-4 flex flex-col gap-4 w-full min-w-0">
+    <DataHealth :failed="refreshError" :busy="isRefreshing" :last-success="lastRefreshed" @refresh="refreshNow" />
 
     <section class="glass-hero rounded-[var(--radius-hero)] p-5 sm:p-6">
       <div class="relative z-[1] flex flex-col gap-3">
@@ -30,23 +31,11 @@
       </div>
     </section>
 
-    <div v-if="loading" class="glass-panel rounded-[var(--radius-panel)] p-10">
-      <div class="relative z-[1] flex min-h-[280px] items-center justify-center">
-        <i class="pi pi-spin pi-spinner text-4xl text-[var(--accent)]"></i>
-      </div>
-    </div>
-
-    <div v-else-if="error" class="glass-panel rounded-[var(--radius-panel)] p-10">
-      <div class="relative z-[1] flex min-h-[280px] flex-col items-center justify-center text-center">
-        <i class="pi pi-exclamation-triangle text-4xl text-[var(--danger)] mb-4"></i>
-        <p class="text-[var(--text-secondary)]">{{ error }}</p>
-        <Button @click="loadUsers" :label="t('common.retry')" class="mt-4" />
-      </div>
-    </div>
-
-    <div v-else class="glass-panel rounded-[var(--radius-panel)] overflow-hidden">
+    <SearchField v-model="search" />
+    <PageState :loading="loading" :error="Boolean(error)" @retry="loadUsers" />
+    <div v-if="!loading && !error" class="glass-panel rounded-[var(--radius-panel)] overflow-hidden">
       <DataTable
-        :value="users"
+        :value="filteredEntries"
         :paginator="users.length > 10"
         :rows="10"
         :rowsPerPageOptions="[10, 25, 50]"
@@ -153,12 +142,7 @@
             </div>
           </template>
         </Column>
-        <template #empty>
-           <div class="text-center py-8 text-[var(--text-muted)]">
-            <i class="pi pi-users text-4xl mb-2 block"></i>
-            <p>{{ t('usersView.noUsers') }}</p>
-          </div>
-        </template>
+        <template #empty><PageState empty /></template>
        </DataTable>
        </div>
 
@@ -263,6 +247,9 @@
 </template>
 
 <script setup>
+import SearchField from '../../components/SearchField.vue';
+import PageState from '../../components/PageState.vue';
+import DataHealth from '../../components/DataHealth.vue';
 import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import axios from '../../axios.js';
@@ -285,6 +272,8 @@ import { REFRESH_INTERVALS } from '../../utils/constants';
 const { t } = useI18n();
 
 const users = ref([]);
+const search = ref('');
+const filteredEntries = computed(() => users.value.filter(entry => Object.values(entry).some(value => String(value ?? '').toLowerCase().includes(search.value.toLowerCase()))));
 const loading = ref(true);
 const error = ref(null);
 const saving = ref(false);
@@ -493,16 +482,17 @@ const getRoleSeverity = (role) => {
   return severities[role] || 'secondary'
 }
 
-const silentFetchUsers = async () => {
+const silentFetchUsers = async ({ signal } = {}) => {
   try {
-    const response = await axios.get('/api/users');
+    const response = await axios.get('/api/users', { signal });
     users.value = response.data || [];
+    error.value = null;
   } catch (e) {
-    /* silent */
+    return false;
   }
 };
 
-const { lastRefreshed, isRefreshing, refreshNow } = useAutoRefresh(silentFetchUsers, REFRESH_INTERVALS.USERS);
+const { lastRefreshed, isRefreshing, refreshError, refreshNow } = useAutoRefresh(silentFetchUsers, REFRESH_INTERVALS.USERS);
 
 const timeAgo = ref('');
 let timeAgoTimer = null;

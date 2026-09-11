@@ -27,6 +27,7 @@ const navGroups = [
     labelKey: 'nav.groupProxies',
     items: [
       item('nav.dashboard', 'pi pi-home', '/', null),
+      item('workspace.setup', 'pi pi-plus-circle', '/setup', 'proxy:create'),
       item('nav.control', 'pi pi-sliders-h', '/control', 'proxy:view'),
       item('nav.devices', 'pi pi-desktop', '/devices', 'device:view')
     ]
@@ -42,6 +43,7 @@ const navGroups = [
     labelKey: 'nav.groupSystem',
     items: [
       item('nav.settings', 'pi pi-cog', '/config', 'config:view'),
+      item('update.title', 'pi pi-cloud-download', '/updates', 'system:restart'),
       item('nav.system', 'pi pi-info-circle', '/system', 'system:view'),
       item('nav.logs', 'pi pi-list', '/logs', 'logs:view')
     ]

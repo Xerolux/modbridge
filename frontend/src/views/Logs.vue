@@ -1,11 +1,19 @@
 <script setup>
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import SearchField from '../components/SearchField.vue';
+import PageState from '../components/PageState.vue';
+import DataHealth from '../components/DataHealth.vue';
+import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useEventSource } from '../utils/eventSource';
 import axios from '../axios.js';
 import { formatDateTime, getLogLevelColor } from '../utils/helpers';
 import { useI18n } from 'vue-i18n';
 
 const logs = ref([]);
+const search = ref('');
+const loadError = ref(false);
+const lastSuccess = ref(null);
+let disposed = false;
+const filteredLogs = computed(() => logs.value.filter(log => `${log.level} ${log.proxy_id} ${log.message}`.toLowerCase().includes(search.value.toLowerCase())));
 const { t } = useI18n();
 const isConnected = ref(false);
 const autoScroll = ref(localStorage.getItem('logsAutoScroll') !== 'false');
@@ -35,12 +43,16 @@ const toggleAutoScroll = () => {
 };
 
 const fetchInitialLogs = async () => {
+  if (disposed) return;
   loadingInitial.value = true;
+  loadError.value = false;
   try {
     const res = await axios.get('/api/logs');
-    logs.value = res.data || [];
+    if (disposed) return;
+    logs.value = trimLogs(res.data || []);
+    lastSuccess.value = new Date();
   } catch (e) {
-    console.error('Failed to fetch initial logs', e);
+    if (!disposed) loadError.value = true;
   } finally {
     loadingInitial.value = false;
   }
@@ -48,11 +60,12 @@ const fetchInitialLogs = async () => {
 
 onMounted(async () => {
   await fetchInitialLogs();
+  if (disposed) return;
 
   const { data, disconnect, isConnected: connected } = useEventSource('/api/logs/stream');
   disconnectFn = disconnect;
 
-  unwatchConnected = watch(connected, (val) => { isConnected.value = val; });
+  unwatchConnected = watch(connected, (val) => { isConnected.value = val; if (val && !disposed) fetchInitialLogs(); }, { immediate: true });
 
   unwatchData = watch(data, (eventData) => {
     if (!eventData) return;
@@ -67,6 +80,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  disposed = true;
   if (unwatchData) unwatchData();
   if (unwatchConnected) unwatchConnected();
   if (logBatchFrame) cancelAnimationFrame(logBatchFrame);
@@ -130,35 +144,18 @@ watch(logs, (newVal) => {
       </div>
     </section>
 
-    <!-- ── Loading ───────────────────────────────────────────────── -->
-    <div v-if="loadingInitial" class="glass-panel rounded-[28px] p-10">
-      <div class="flex min-h-[320px] flex-col items-center justify-center text-center relative z-[1]">
-        <div class="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-[var(--bg-panel-item)] border border-[var(--border-subtle)]">
-          <i class="pi pi-spin pi-spinner text-3xl text-[var(--accent)]"></i>
-        </div>
-        <p class="text-[var(--text-secondary)] text-sm">{{ t('logs.loading') }}</p>
-      </div>
-    </div>
-
-    <!-- ── Empty state ───────────────────────────────────────────── -->
-    <div v-else-if="logs.length === 0" class="glass-panel rounded-[28px] p-10">
-      <div class="flex min-h-[320px] flex-col items-center justify-center text-center relative z-[1]">
-        <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--bg-panel-item)] border border-[var(--border-subtle)]">
-          <i class="pi pi-inbox text-2xl text-[var(--text-muted)]"></i>
-        </div>
-        <h3 class="text-lg font-semibold text-[var(--text-primary)]">{{ t('logs.emptyTitle') }}</h3>
-        <p class="mt-2 text-sm text-[var(--text-muted)] max-w-sm">{{ t('logs.emptyHint') }}</p>
-      </div>
-    </div>
+    <DataHealth :failed="loadError" :busy="loadingInitial" :last-success="lastSuccess" :live="isConnected" @refresh="fetchInitialLogs" />
+    <SearchField v-model="search" />
+    <PageState :loading="loadingInitial && !logs.length" :error="loadError && !logs.length" :empty="!loadingInitial && !loadError && !filteredLogs.length" @retry="fetchInitialLogs" />
 
     <!-- ── Log list ──────────────────────────────────────────────── -->
     <div
-      v-else
+      v-if="filteredLogs.length"
       ref="logsContainer"
       class="glass-panel rounded-[28px] p-3 sm:p-4 font-mono text-sm h-[60vh] sm:h-[calc(100vh-280px)] overflow-y-auto"
     >
       <div
-        v-for="(log, index) in logs"
+        v-for="(log, index) in filteredLogs"
         :key="index"
         class="log-row"
       >

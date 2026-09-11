@@ -50,14 +50,17 @@ jobs:
             echo "Invalid version in version.txt: ${CURRENT}"
             exit 1
           fi
-          IFS='.' read -r MAJOR MINOR PATCH BUILD <<< "$CURRENT"
-          BUILD=${BUILD:-0}
-          BUILD=$((BUILD + 1))
-          NEXT="${MAJOR}.${MINOR}.${PATCH}.${BUILD}"
-          while git rev-parse -q --verify "refs/tags/v${NEXT}" >/dev/null; do
+          NEXT="$CURRENT"
+          if git rev-parse -q --verify "refs/tags/v${CURRENT}" >/dev/null; then
+            IFS='.' read -r MAJOR MINOR PATCH BUILD <<< "$CURRENT"
+            BUILD=${BUILD:-0}
             BUILD=$((BUILD + 1))
             NEXT="${MAJOR}.${MINOR}.${PATCH}.${BUILD}"
-          done
+            while git rev-parse -q --verify "refs/tags/v${NEXT}" >/dev/null; do
+              BUILD=$((BUILD + 1))
+              NEXT="${MAJOR}.${MINOR}.${PATCH}.${BUILD}"
+            done
+          fi
 
           # What the binary calls itself: the version about to be released on a
           # push to main, the tag when built from one, and otherwise a name that
@@ -162,7 +165,7 @@ jobs:
         working-directory: ./frontend
         env:
           VITE_PRIMEVUE_LICENSE: ${{ secrets.VITE_PRIMEVUE_LICENSE }}
-        run: npm ci && npm run build
+        run: npm ci && npm run build && npm run check:budget
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -355,14 +358,7 @@ jobs:
     name: Auto Release
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    # The browser suite is deliberately NOT a gate here. It drives a real
-    # binary through a real browser, which makes it the most valuable check
-    # and the least reliable one — a slow runner is enough to fail it. It
-    # already blocked one release for a reason that had nothing to do with the
-    # release. Its result stays visible as a red check on main; it just no
-    # longer holds the tag hostage. Everything that can be trusted to be
-    # deterministic still gates: compile, vet, unit tests, all binaries.
-    needs: [version, quality, test, build-frontend, build-binaries, build-headless]
+    needs: [version, quality, test, build-frontend, build-binaries, build-headless, e2e, benchmarks]
     timeout-minutes: 15
     permissions:
       contents: write
@@ -400,7 +396,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add version.txt
-          git commit -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
+          git diff --cached --quiet || git commit -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
           git tag -a "${{ steps.bump.outputs.tag }}" -m "Release ${{ steps.bump.outputs.tag }}"
           git push origin main --follow-tags
 

@@ -52,6 +52,9 @@ type UpdateStatus struct {
 
 // ErrUpdateInProgress is returned when PerformUpdate is called while an
 // update is already running.
+// UpdateTimeout bounds the complete background installation.
+const UpdateTimeout = 10 * time.Minute
+
 var ErrUpdateInProgress = errors.New("an update is already in progress")
 
 // Updater coordinates GitHub release checks and atomic binary updates.
@@ -62,19 +65,21 @@ type Updater struct {
 
 	apiBase string // overridable in tests; default githubBaseURL
 
-	mu            sync.RWMutex
-	status        UpdateStatus
-	cachedRelease *ReleaseInfo
-	cacheExpiry   time.Time
+	mu             sync.RWMutex
+	status         UpdateStatus
+	cachedRelease  *ReleaseInfo
+	cacheExpiry    time.Time
+	executablePath func() (string, error)
 }
 
 // New creates an Updater for the given repo (e.g. "Xerolux/modbridge").
 func New(repo string, current BuildInfo) *Updater {
 	return &Updater{
-		repo:    repo,
-		current: current,
-		client:  &http.Client{Timeout: 30 * time.Second},
-		apiBase: githubBaseURL,
+		repo:           repo,
+		current:        current,
+		client:         &http.Client{Timeout: 30 * time.Second},
+		apiBase:        githubBaseURL,
+		executablePath: os.Executable,
 		status: UpdateStatus{
 			State:     StateIdle,
 			UpdatedAt: time.Now(),
@@ -151,20 +156,6 @@ func (u *Updater) CheckForUpdate(ctx context.Context) (*ReleaseInfo, error) {
 	}
 	u.mu.RUnlock()
 
-	// Capture the entry state so we can avoid clobbering an in-flight update.
-	// When PerformUpdate calls CheckForUpdate internally, runUpdate takes over
-	// the state machine right after this returns; blindly resetting to Idle
-	// here would briefly overwrite an already-progressing download state seen
-	// by status pollers. Only a standalone check (entry state Idle) owns the
-	// Idle reset.
-	prev := u.GetStatus().State
-	u.setStatus(StateChecking, 0, "checking")
-	defer func() {
-		if prev == StateIdle {
-			u.setStatus(StateIdle, 0, "")
-		}
-	}()
-
 	apiURL := fmt.Sprintf("%s/repos/%s/releases/latest", u.apiBase, u.repo)
 	release, err := fetchLatestRelease(ctx, u.client, apiURL)
 	if err != nil {
@@ -184,12 +175,20 @@ func (u *Updater) CheckForUpdate(ctx context.Context) (*ReleaseInfo, error) {
 // Progress is reported via GetStatus(). Returns ErrUpdateInProgress if an
 // update is already running.
 func (u *Updater) PerformUpdate(ctx context.Context) error {
-	u.mu.RLock()
+	u.mu.Lock()
 	running := u.status.State != StateIdle && u.status.State != StateDone && u.status.State != StateError
-	u.mu.RUnlock()
 	if running {
+		u.mu.Unlock()
 		return ErrUpdateInProgress
 	}
+	u.status = UpdateStatus{State: StateChecking, StartedAt: time.Now(), UpdatedAt: time.Now()}
+	u.mu.Unlock()
+	accepted := false
+	defer func() {
+		if !accepted {
+			u.setError("update could not be started")
+		}
+	}()
 
 	release, err := u.CheckForUpdate(ctx)
 	if err != nil {
@@ -213,7 +212,12 @@ func (u *Updater) PerformUpdate(ctx context.Context) error {
 		return errors.New("checksums.txt not found in release assets — cannot verify integrity")
 	}
 
-	go u.runUpdate(ctx, release, asset, checksumsAsset)
+	accepted = true
+	go func() {
+		jobCtx, cancel := context.WithTimeout(context.Background(), UpdateTimeout)
+		defer cancel()
+		u.runUpdate(jobCtx, release, asset, checksumsAsset)
+	}()
 	return nil
 }
 
@@ -221,7 +225,7 @@ func (u *Updater) PerformUpdate(ctx context.Context) error {
 func (u *Updater) runUpdate(ctx context.Context, release *ReleaseInfo, asset Asset, checksumsAsset *Asset) {
 	// Resolve the running executable once; used both to place the temp file
 	// (same-directory rename required for atomic swap) and as the swap target.
-	execPath, err := os.Executable()
+	execPath, err := u.executablePath()
 	if err != nil {
 		u.setError("could not locate current executable: " + err.Error())
 		return

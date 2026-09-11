@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:e2e": "playwright test",
+    "check:budget": "node scripts/check-budget.mjs",
     "test:ui": "playwright test --config playwright.ui.config.js"
   },
   "dependencies": {

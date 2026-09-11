@@ -1,5 +1,6 @@
 <template>
     <div class="p-2 sm:p-4 flex flex-col gap-4 w-full">
+    <DataHealth :failed="refreshError" :busy="isRefreshing" :last-success="lastRefreshed" @refresh="refreshNow" />
         <div class="flex items-center gap-3 mb-2 sm:mb-4">
           <h1 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200">{{ t('system.title') }}</h1>
           <div v-if="lastRefreshed" class="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
@@ -221,68 +222,12 @@
             </Card>
         </div>
 
-        <!-- ── Update Section ──────────────────────────────────── -->
-        <Card v-if="auth.hasPermission('system:restart')" class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10">
-            <template #title>
-              <div class="text-lg sm:text-xl flex items-center justify-between">
-                <span class="flex items-center gap-2"><i class="pi pi-cloud-download"></i> {{ t('update.title') }}</span>
-                <Badge
-                  :severity="updateData.update_available ? 'warn' : 'success'"
-                  :value="updateData.update_available ? t('update.available') : t('update.upToDate')"
-                />
-              </div>
-            </template>
-            <template #content>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                <div class="p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white/50 dark:bg-gray-800/50">
-                  <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">{{ t('update.installed') }}</div>
-                  <div class="text-lg font-bold text-gray-800 dark:text-gray-200">{{ updateData.current_version || '—' }}</div>
-                  <div class="text-xs text-gray-400 mt-1">{{ updateData.os }}/{{ updateData.arch }} · {{ updateData.go_version }}</div>
-                </div>
-                <div class="p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white/50 dark:bg-gray-800/50">
-                  <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">{{ t('update.latest') }}</div>
-                  <div class="text-lg font-bold text-gray-800 dark:text-gray-200">{{ updateData.latest_version || '—' }}</div>
-                  <div class="text-xs text-gray-400 mt-1" v-if="updateData.published_at">{{ formatReleaseDate(updateData.published_at) }}</div>
-                </div>
-              </div>
 
-              <div v-if="updateData.asset_unavailable" class="mb-3 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-600 dark:text-amber-400">
-                {{ t('update.assetUnavailable') }}
-              </div>
-
-              <div v-if="checkError" class="mb-3 p-2 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-600 dark:text-red-400">
-                {{ t('update.checkFailed') }}
-              </div>
-
-              <div v-if="updateData.release_notes" class="mb-3">
-                <pre class="text-xs text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-900/50 p-3 rounded-xl border border-gray-200 dark:border-white/10 whitespace-pre-wrap max-h-48 overflow-y-auto">{{ updateData.release_notes }}</pre>
-              </div>
-
-              <div class="flex flex-wrap gap-2">
-                <Button :label="t('update.checkAgain')" icon="pi pi-refresh" severity="secondary" @click="checkUpdate" :loading="checking" size="small" />
-                <Button v-if="updateData.update_available && !updateData.asset_unavailable" :label="t('update.install')" icon="pi pi-download" @click="confirmInstall" :disabled="updating" size="small" />
-                <a v-if="updateData.release_url" :href="updateData.release_url" target="_blank" rel="noopener" class="text-xs text-purple-600 dark:text-purple-400 hover:underline self-center ml-1">{{ t('update.viewOnGithub') }}</a>
-              </div>
-
-              <div v-if="updating || updateStatus.state === 'done'" class="mt-3">
-                <ProgressBar :value="updateStatus.progress" />
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">{{ t(`update.state.${updateStatus.state}`) }}</p>
-                <p v-if="updateStatus.message" class="text-[10px] text-gray-400 mt-1">{{ updateStatus.message }}</p>
-              </div>
-            </template>
-        </Card>
-
-        <Dialog v-model:visible="showUpdateDialog" :header="t('update.confirmTitle')" :modal="true" class="w-11/12 sm:w-full max-w-[440px]">
-          <p class="text-sm text-gray-600 dark:text-gray-400">{{ t('update.confirmMessage') }}</p>
-          <div class="flex justify-end gap-2 mt-4">
-            <Button :label="t('common.cancel')" severity="secondary" @click="showUpdateDialog = false" size="small" />
-            <Button :label="t('update.install')" icon="pi pi-download" @click="doInstall" size="small" />
-          </div>
-        </Dialog>
     </div>
 </template>
 
  <script setup>
+import DataHealth from '../components/DataHealth.vue';
   import { ref, onMounted, onUnmounted } from 'vue';
   import axios from '../axios.js';
   import Card from 'primevue/card';
@@ -336,116 +281,23 @@
   const portStatus = ref({});
   const blockedPorts = ref([]);
 
-  // ── Update module state ──────────────────────────────────────
-  const updateData = ref({
-    current_version: '', latest_version: '', update_available: false,
-    asset_unavailable: false, release_notes: '', release_url: '',
-    published_at: '', os: '', arch: '', go_version: '',
-  });
-  const updateStatus = ref({ state: 'idle', progress: 0, message: '' });
-  const checking = ref(false);
-  const updating = ref(false);
-  const checkError = ref(false);
-  const showUpdateDialog = ref(false);
-  let statusPollTimer = null;
-  let restartProbeTimer = null;
-
-  const formatReleaseDate = (iso) => {
-    try {
-      return new Date(iso).toLocaleDateString('de-DE', { year: 'numeric', month: 'short', day: 'numeric' });
-    } catch { return iso; }
-  };
-
-  const checkUpdate = async () => {
-    checking.value = true;
-    checkError.value = false;
-    try {
-      const res = await axios.get('/api/update/check');
-      updateData.value = res.data;
-    } catch {
-      checkError.value = true;
-    } finally {
-      checking.value = false;
-    }
-  };
-
-  const confirmInstall = () => { showUpdateDialog.value = true; };
-
-  const doInstall = async () => {
-    showUpdateDialog.value = false;
-    updating.value = true;
-    try {
-      await axios.post('/api/update/perform');
-      statusPollTimer = setInterval(pollStatus, 1500);
-    } catch (err) {
-      // The error body may be plain text or JSON — extract a string either way
-      // instead of interpolating an object as "[object Object]".
-      const raw = err.response?.data;
-      const errorText = typeof raw === 'string' ? raw : (raw?.error || raw?.message || err.message);
-      const msg = err.response?.status === 409
-        ? t('update.alreadyRunning')
-        : t('update.installFailed', { error: errorText });
-      toast.add({ severity: 'error', summary: t('update.title'), detail: msg, life: 5000 });
-      updating.value = false;
-    }
-  };
-
-  const reloadWhenServiceIsReady = (attempt = 0) => {
-    restartProbeTimer = setTimeout(async () => {
-      try {
-        const response = await fetch('/api/health', { cache: 'no-store', credentials: 'same-origin' });
-        if (response.ok) {
-          window.location.reload();
-          return;
-        }
-      } catch {
-        // The short outage is expected while the new binary starts.
-      }
-
-      if (attempt < 40) {
-        reloadWhenServiceIsReady(attempt + 1);
-      } else {
-        updating.value = false;
-      }
-    }, attempt === 0 ? 2500 : 1500);
-  };
-
-  const pollStatus = async () => {
-    try {
-      const res = await axios.get('/api/update/status');
-      updateStatus.value = res.data;
-      if (res.data.state === 'done') {
-        clearInterval(statusPollTimer);
-        statusPollTimer = null;
-        toast.add({ severity: 'success', summary: t('update.title'), detail: t('update.installSuccess'), life: 3000 });
-        reloadWhenServiceIsReady();
-      } else if (res.data.state === 'error') {
-        clearInterval(statusPollTimer);
-        statusPollTimer = null;
-        updating.value = false;
-        toast.add({ severity: 'error', summary: t('update.title'), detail: t('update.installFailed', { error: res.data.error }), life: 8000 });
-      }
-    } catch {
-      // Network error during restart is expected — keep polling
-    }
-  };
-
-  const fetchInfo = async () => {
+  const fetchInfo = async ({ signal } = {}) => {
       try {
           loadError.value = null;
           const [infoRes, configRes] = await Promise.all([
-              axios.get('/api/system/info'),
-              axios.get('/api/config/system')
+              axios.get('/api/system/info', { signal }),
+              axios.get('/api/config/system', { signal })
           ]);
           systemInfo.value = infoRes.data;
           config.value = configRes.data;
       } catch (e) {
           // Surface the error instead of silently leaving zeros/empty fields.
           loadError.value = e.response?.data || e.message || 'Failed to fetch system info';
+          return false;
       }
   };
 
-  const { lastRefreshed, isRefreshing, refreshNow } = useAutoRefresh(fetchInfo, REFRESH_INTERVALS.SYSTEM_INFO);
+  const { lastRefreshed, isRefreshing, refreshError, refreshNow } = useAutoRefresh(fetchInfo, REFRESH_INTERVALS.SYSTEM_INFO);
 
   const timeAgo = ref('');
   let timeAgoTimer = null;
@@ -608,14 +460,9 @@ const releasePort = (portInfo) => {
       await fetchInfo();
       loading.value = false;
       timeAgoTimer = setInterval(updateTimeAgo, 5000);
-      if (auth.hasPermission('system:restart')) {
-        checkUpdate(); // auto-check only when the current role may install it
-      }
   });
 
   onUnmounted(() => {
       if (timeAgoTimer) clearInterval(timeAgoTimer);
-      if (statusPollTimer) clearInterval(statusPollTimer);
-      if (restartProbeTimer) clearTimeout(restartProbeTimer);
   });
   </script>

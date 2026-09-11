@@ -1,5 +1,6 @@
 <template>
   <div class="p-2 sm:p-4 flex flex-col gap-4 min-w-0">
+    <DataHealth :failed="refreshError" :busy="isRefreshing" :last-success="lastRefreshed" @refresh="refreshNow" />
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
       <div class="flex flex-wrap items-center gap-3 min-w-0">
         <h1 class="text-2xl font-bold">{{ t('devices.title') }}</h1>
@@ -24,19 +25,8 @@
       </div>
     </div>
 
-    <div v-if="loading" class="flex justify-center min-h-[500px]">
-      <i class="pi pi-spin pi-spinner text-4xl"></i>
-    </div>
-
-    <div v-else-if="error" class="flex justify-center min-h-[500px]">
-      <div class="text-center">
-        <i class="pi pi-exclamation-triangle text-4xl text-red-500"></i>
-        <p class="mt-4 text-red-400">{{ t('common.error') }}: {{ error }}</p>
-        <Button @click="fetchDevices" :label="t('common.retry')" class="mt-4" />
-      </div>
-    </div>
-
-    <div v-else class="flex flex-col gap-4">
+    <PageState :loading="loading" :error="Boolean(error)" @retry="fetchDevices" />
+    <div v-if="!loading && !error" class="flex flex-col gap-4">
       <div class="flex flex-col sm:flex-row gap-4 items-center w-full">
         <InputText
           v-model="searchTerm"
@@ -186,6 +176,8 @@
 </template>
 
 <script setup>
+import PageState from '../components/PageState.vue';
+import DataHealth from '../components/DataHealth.vue';
 import { ref, onMounted, computed, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import axios from '../axios.js';
@@ -343,21 +335,22 @@ const getConnectionSeverity = (count) => {
   return 'success';
 };
 
-const silentFetchDevices = async () => {
+const silentFetchDevices = async ({ signal } = {}) => {
   try {
-    const res = await axios.get('/api/devices');
+    const res = await axios.get('/api/devices', { signal });
     devices.value = res.data.map(device => ({
       ...device,
       connectionCount: device.request_count || 0,
       firstSeen: device.first_seen,
       lastSeen: device.last_connect,
     }));
+    error.value = null;
   } catch (e) {
-    /* silent - errors shown on manual refresh */
+    return false;
   }
 };
 
-const { lastRefreshed, isRefreshing, refreshNow } = useAutoRefresh(silentFetchDevices, REFRESH_INTERVALS.DEVICES);
+const { lastRefreshed, isRefreshing, refreshError, refreshNow } = useAutoRefresh(silentFetchDevices, REFRESH_INTERVALS.DEVICES);
 
 const timeAgo = ref('');
 let timeAgoTimer = null;

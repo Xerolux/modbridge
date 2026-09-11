@@ -1,5 +1,6 @@
 <template>
   <div class="p-2 sm:p-4 flex flex-col gap-4 w-full">
+    <DataHealth :failed="refreshError" :busy="isRefreshing" :last-success="lastRefreshed" @refresh="refreshNow" />
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-2 sm:mb-4">
       <div class="flex items-center gap-3">
         <h1 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200">Audit Log</h1>
@@ -27,19 +28,11 @@
       </div>
     </div>
 
-    <div v-if="loading" class="flex justify-center py-12">
-      <i class="pi pi-spin pi-spinner text-4xl text-blue-500"></i>
-    </div>
-
-    <div v-else-if="error" class="flex flex-col items-center justify-center py-12">
-      <i class="pi pi-exclamation-triangle text-4xl text-red-500 mb-4"></i>
-      <p class="text-red-400">{{ error }}</p>
-      <Button @click="loadLogs" label="Retry" class="mt-4" />
-    </div>
-
-    <div v-else class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden">
+    <SearchField v-model="search" />
+    <PageState :loading="loading" :error="Boolean(error)" @retry="loadLogs" />
+    <div v-if="!loading && !error" class="glass-card rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden">
       <DataTable
-        :value="auditLogs"
+        :value="filteredEntries"
         :paginator="auditLogs.length >= limit"
         :rows="limit"
         :rowsPerPageOptions="[25, 50, 100]"
@@ -107,19 +100,17 @@
             </span>
           </template>
         </Column>
-        <template #empty>
-          <div class="text-center py-8 text-gray-400 dark:text-gray-500">
-            <i class="pi pi-history text-4xl mb-2 block"></i>
-            <p>No audit logs found</p>
-          </div>
-        </template>
+        <template #empty><PageState empty /></template>
       </DataTable>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import SearchField from '../../components/SearchField.vue';
+import PageState from '../../components/PageState.vue';
+import DataHealth from '../../components/DataHealth.vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import axios from '../../axios.js';
 import DataTable from 'primevue/datatable';
@@ -135,6 +126,8 @@ const { t } = useI18n();
 const auth = useAuthStore();
 
 const auditLogs = ref([]);
+const search = ref('');
+const filteredEntries = computed(() => auditLogs.value.filter(entry => Object.values(entry).some(value => String(value ?? '').toLowerCase().includes(search.value.toLowerCase()))));
 const loading = ref(true);
 const error = ref(null);
 const limit = ref(50);
@@ -194,16 +187,17 @@ const getActionSeverity = (action) => {
   return 'secondary';
 };
 
-const silentFetchLogs = async () => {
+const silentFetchLogs = async ({ signal } = {}) => {
   try {
-    const response = await axios.get(`/api/audit/logs?limit=${limit.value}&offset=0`);
+    const response = await axios.get(`/api/audit/logs?limit=${limit.value}&offset=0`, { signal });
     auditLogs.value = response.data || [];
+    error.value = null;
   } catch (e) {
-    /* silent */
+    return false;
   }
 };
 
-const { lastRefreshed, isRefreshing, refreshNow } = useAutoRefresh(silentFetchLogs, REFRESH_INTERVALS.AUDIT);
+const { lastRefreshed, isRefreshing, refreshError, refreshNow } = useAutoRefresh(silentFetchLogs, REFRESH_INTERVALS.AUDIT);
 
 const timeAgo = ref('');
 let timeAgoTimer = null;

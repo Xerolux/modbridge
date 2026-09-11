@@ -476,7 +476,21 @@ func (s *Server) handleProxyConnectivityCheck(w http.ResponseWriter, r *http.Req
 	}
 
 	cfg := s.cfgMgr.Get()
-	results := make(map[string]map[string]interface{}, len(cfg.Proxies))
+	proxies := cfg.Proxies
+	if id := r.URL.Query().Get("proxy_id"); id != "" {
+		proxies = nil
+		for _, proxy := range cfg.Proxies {
+			if proxy.ID == id {
+				proxies = append(proxies, proxy)
+				break
+			}
+		}
+		if len(proxies) == 0 {
+			http.Error(w, "Proxy not found", http.StatusNotFound)
+			return
+		}
+	}
+	results := make(map[string]map[string]interface{}, len(proxies))
 
 	// Dial every target in parallel under one overall budget. Probing serially
 	// with a 5s timeout each would exceed the server's WriteTimeout as soon as a
@@ -490,7 +504,7 @@ func (s *Server) handleProxyConnectivityCheck(w http.ResponseWriter, r *http.Req
 	)
 	dialer := &net.Dialer{}
 
-	for _, proxy := range cfg.Proxies {
+	for _, proxy := range proxies {
 		wg.Add(1)
 		go func(proxy config.ProxyConfig) {
 			defer wg.Done()
