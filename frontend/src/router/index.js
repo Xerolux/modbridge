@@ -86,6 +86,13 @@ const routes = [
         meta: { permission: 'audit:view' }
       }
     ]
+  },
+  // Unknown routes previously rendered a completely blank page (no view at
+  // all). Redirect them home instead so a stale bookmark or typo never looks
+  // like a broken app.
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/'
   }
 ]
 
