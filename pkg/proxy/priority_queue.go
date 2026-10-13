@@ -89,11 +89,10 @@ func NewPriorityQueue(config PriorityQueueConfig) *PriorityQueue {
 
 	pq.cond = sync.NewCond(&pq.mu)
 
-	// Start worker goroutine
-	pq.wg.Add(1)
-	go pq.processLoop()
-
-	// Start timeout checker
+	// Start timeout checker. There is deliberately no processing loop: the
+	// queue is storage, and the consumer that calls Dequeue owns the request.
+	// An internal loop racing the consumer for Dequeue would silently discard
+	// queued requests (their ResponseChan/ErrorChan would never see a value).
 	pq.wg.Add(1)
 	go pq.timeoutChecker()
 
@@ -144,7 +143,8 @@ func (pq *PriorityQueue) Enqueue(req *Request) error {
 	return nil
 }
 
-// Dequeue removes and returns the highest priority request
+// Dequeue removes and returns the highest priority request. It blocks while
+// the queue is empty and reports false once the queue has been stopped.
 func (pq *PriorityQueue) Dequeue() (*Request, bool) {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
@@ -156,30 +156,11 @@ func (pq *PriorityQueue) Dequeue() (*Request, bool) {
 		pq.cond.Wait()
 	}
 
-	return pq.getNextRequest(), true
-}
-
-// processLoop processes requests from the queue
-func (pq *PriorityQueue) processLoop() {
-	defer pq.wg.Done()
-
-	for {
-		select {
-		case <-pq.ctx.Done():
-			return
-		default:
-		}
-
-		_, ok := pq.Dequeue()
-		if !ok {
-			return
-		}
-
+	req := pq.getNextRequest()
+	if req != nil {
 		pq.totalDequeued++
-
-		// Request processing is handled by the caller
-		// The response will be sent through ResponseChan
 	}
+	return req, true
 }
 
 // timeoutChecker checks for timed out requests

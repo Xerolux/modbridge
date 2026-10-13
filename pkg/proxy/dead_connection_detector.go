@@ -249,11 +249,12 @@ func (d *DeadConnectionDetector) GetConnectionInfo(remoteAddr string) (*Connecti
 	return &copy, true
 }
 
-// GetStats returns detector statistics
+// GetStats returns detector statistics.
+//
+// The connection map is snapshotted before the stats mutex is taken, matching
+// the lock order of RecordError/Recover (d.mu before d.muStats); the reverse
+// order here could deadlock against them.
 func (d *DeadConnectionDetector) GetStats() map[string]interface{} {
-	d.muStats.Lock()
-	defer d.muStats.Unlock()
-
 	d.mu.RLock()
 	totalConnections := len(d.connections)
 	deadConnections := 0
@@ -262,14 +263,18 @@ func (d *DeadConnectionDetector) GetStats() map[string]interface{} {
 			deadConnections++
 		}
 	}
+	lastCheck := d.lastCheck
 	d.mu.RUnlock()
+
+	d.muStats.Lock()
+	defer d.muStats.Unlock()
 
 	return map[string]interface{}{
 		"total_connections": totalConnections,
 		"dead_connections":  deadConnections,
 		"detected_count":    d.detectedCount,
 		"recovered_count":   d.recoveredCount,
-		"last_check":        d.lastCheck,
+		"last_check":        lastCheck,
 		"check_interval":    d.checkInterval,
 	}
 }

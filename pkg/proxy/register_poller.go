@@ -36,7 +36,12 @@ type RegisterPoller struct {
 
 	refresh func(req []byte) ([]byte, error)
 	store   func(key uint64, unitID uint8, resp []byte)
-	logf    func(msg string)
+	// generationOf supplies a per-unit invalidation generation (the response
+	// cache's). When set, a refresh captures it before the read goes out and
+	// the answer is only stored if no write invalidated the unit in between.
+	// nil disables the check.
+	generationOf func(unitID uint8) uint64
+	logf         func(msg string)
 
 	// Merge adjacent ranges into one read when they are no further apart than
 	// this. Zero disables batching and every request is refreshed on its own.
@@ -76,6 +81,7 @@ const defaultMaxAddressGap = 16
 func NewRegisterPoller(interval, idleAfter time.Duration, maxEntries int,
 	refresh func(req []byte) ([]byte, error),
 	store func(key uint64, unitID uint8, resp []byte),
+	generationOf func(unitID uint8) uint64,
 	logf func(msg string),
 ) *RegisterPoller {
 	if idleAfter <= 0 {
@@ -92,6 +98,7 @@ func NewRegisterPoller(interval, idleAfter time.Duration, maxEntries int,
 		maxEntries:    maxEntries,
 		refresh:       refresh,
 		store:         store,
+		generationOf:  generationOf,
 		logf:          logf,
 	}
 }
@@ -230,6 +237,7 @@ func (rp *RegisterPoller) refreshOne(ctx context.Context, entry dueRequest) bool
 	default:
 	}
 
+	gen := rp.unitGeneration(entry.unitID)
 	resp, err := rp.refresh(entry.frame)
 	if err != nil {
 		rp.failures.Add(1)
@@ -238,8 +246,15 @@ func (rp *RegisterPoller) refreshOne(ctx context.Context, entry dueRequest) bool
 		}
 		return true
 	}
+	// Never cache an exception: it describes a moment, not a value. Serving a
+	// transient device exception to clients for a full TTL is worse than
+	// letting them fall through to the target.
+	if modbus.IsExceptionResponse(resp) {
+		rp.failures.Add(1)
+		return true
+	}
 	rp.refreshes.Add(1)
-	rp.store(entry.key, entry.unitID, resp)
+	rp.storeIfFresh(gen, entry.key, entry.unitID, resp)
 	return true
 }
 
@@ -250,6 +265,7 @@ func (rp *RegisterPoller) refreshOne(ctx context.Context, entry dueRequest) bool
 func (rp *RegisterPoller) refreshGroup(ctx context.Context, group batchGroup) {
 	combined := modbus.CreateReadRequest(0, group.unitID, group.function, group.base, group.quantity)
 
+	gen := rp.unitGeneration(group.unitID)
 	resp, err := rp.refresh(combined)
 	if err == nil {
 		var parts map[uint64][]byte
@@ -260,7 +276,7 @@ func (rp *RegisterPoller) refreshGroup(ctx context.Context, group batchGroup) {
 			rp.batchedSaved.Add(int64(len(group.members) - 1))
 			for _, member := range group.members {
 				if frame, ok := parts[member.key]; ok {
-					rp.store(member.key, member.unitID, frame)
+					rp.storeIfFresh(gen, member.key, member.unitID, frame)
 				}
 			}
 			return
@@ -277,6 +293,25 @@ func (rp *RegisterPoller) refreshGroup(ctx context.Context, group batchGroup) {
 			return
 		}
 	}
+}
+
+// unitGeneration captures a unit's invalidation generation, or 0 when no
+// generation source is configured.
+func (rp *RegisterPoller) unitGeneration(unitID uint8) uint64 {
+	if rp.generationOf == nil {
+		return 0
+	}
+	return rp.generationOf(unitID)
+}
+
+// storeIfFresh stores a refreshed response unless the unit was invalidated
+// while the read was in flight — the answer would re-cache the pre-write value
+// the invalidation just removed.
+func (rp *RegisterPoller) storeIfFresh(gen uint64, key uint64, unitID uint8, resp []byte) {
+	if rp.generationOf != nil && rp.generationOf(unitID) != gen {
+		return
+	}
+	rp.store(key, unitID, resp)
 }
 
 type dueRequest struct {

@@ -384,6 +384,9 @@ func (hc *EndpointHealthChecker) RecordFailure(address string) {
 // RecordSuccess records a success for an endpoint
 func (hc *EndpointHealthChecker) RecordSuccess(address string) {
 	hc.mu.Lock()
+	// Clear the failure streak with the same lock that raised it, or the
+	// threshold collapses to one after the first unhealthy episode.
+	delete(hc.failCounts, address)
 	hc.successCounts[address]++
 	shouldMark := hc.successCounts[address] >= hc.config.HealthyThreshold
 	hc.mu.Unlock()

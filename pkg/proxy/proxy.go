@@ -325,6 +325,7 @@ func (p *ProxyInstance) Start() error {
 			512,
 			p.refreshForPoller,
 			func(key uint64, unitID uint8, resp []byte) { p.cache.SetForUnit(key, unitID, resp) },
+			p.cache.Generation,
 			func(msg string) { p.log.Debug(p.ID, msg) },
 		)
 		p.poller.Start(p.ctx)
@@ -625,6 +626,14 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 
 		forwardStart := time.Now()
 
+		// Capture the unit's cache generation before the read goes out: a
+		// write landing while the answer is in flight must stop the pre-write
+		// value from being cached behind the write's invalidation.
+		var readGeneration uint64
+		if p.cache != nil && cacheable {
+			readGeneration = p.cache.Generation(cacheUnit)
+		}
+
 		// Route to the appropriate forwarding function based on protocol.
 		respFrame, errFwd = p.forwardClientRequest(reqFrame)
 
@@ -657,7 +666,7 @@ func (p *ProxyInstance) handleClient(clientConn net.Conn, sem chan struct{}) {
 			if cacheable {
 				// Never cache an exception: it describes a moment, not a value.
 				if !modbus.IsExceptionResponse(respFrame) {
-					p.cache.SetForUnit(cacheKey, cacheUnit, respFrame)
+					p.cache.SetForUnitIfFresh(readGeneration, cacheKey, cacheUnit, respFrame)
 				}
 			} else if unitID, fc, ok := modbus.FrameUnitAndFunction(reqFrame); ok && modbus.IsWriteFunction(fc) {
 				// A write may have changed any register of that unit, and the
@@ -714,9 +723,12 @@ func (p *ProxyInstance) startHealthChecker() {
 	})
 
 	p.healthChecker.SetOnRecovery(func() {
-		p.log.Info(p.ID, "Health checker detected target recovery, resetting circuit breaker and pre-warming pool")
+		p.log.Info(p.ID, "Health checker detected target recovery, resuming circuit-breaker probes and pre-warming pool")
 		if p.circuitBreaker != nil {
-			p.circuitBreaker.Reset()
+			// TCP reachability is not transaction evidence: forgive the
+			// adaptive backoff and probe with the next real request instead of
+			// closing the breaker on a dial alone.
+			p.circuitBreaker.OnTargetReachable()
 		}
 		if p.connPool != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

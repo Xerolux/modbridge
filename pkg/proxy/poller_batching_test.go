@@ -148,6 +148,7 @@ func TestPollerBatchesRefreshes(t *testing.T) {
 			mu.Unlock()
 		},
 		nil,
+		nil,
 	)
 
 	for _, spec := range []struct{ addr, qty uint16 }{{200, 4}, {204, 4}, {208, 4}} {
