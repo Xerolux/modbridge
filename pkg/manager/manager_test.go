@@ -6,6 +6,8 @@
 package manager
 
 import (
+	"net"
+	"path/filepath"
 	"testing"
 
 	"modbridge/pkg/config"
@@ -185,5 +187,56 @@ func TestGetProxyStatus(t *testing.T) {
 
 	if status["enabled"] != true {
 		t.Errorf("Expected enabled true, got %v", status["enabled"])
+	}
+}
+
+// TestUpdateProxyPersistsConfigWhenStartFails verifies that a failed start
+// after an update does not leave config.json describing the old proxy: the
+// runtime already holds the new instance, the health monitor retries it, and
+// skipping the persist would silently revert the update on the next restart.
+func TestUpdateProxyPersistsConfigWhenStartFails(t *testing.T) {
+	dir := t.TempDir()
+	log, err := logger.NewLogger(dir, 100)
+	if err != nil {
+		t.Fatalf("Failed to create logger: %v", err)
+	}
+	defer log.Close()
+	cfgMgr := config.NewManager(filepath.Join(dir, "config.json"))
+	m := NewManager(cfgMgr, log, nil)
+
+	initial := config.ProxyConfig{
+		ID:         "update-fail",
+		Name:       "Initial",
+		ListenAddr: "127.0.0.1:47891",
+		TargetAddr: "10.255.255.1:502",
+		Enabled:    false,
+	}
+	if err := m.AddProxy(initial, true); err != nil {
+		t.Fatalf("AddProxy failed: %v", err)
+	}
+
+	// Occupy the port the updated proxy wants, so its Start() fails.
+	blocker, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("blocker listen: %v", err)
+	}
+	defer blocker.Close()
+
+	updated := initial
+	updated.Name = "Updated"
+	updated.ListenAddr = blocker.Addr().String()
+	updated.TargetAddr = "192.168.178.196:502"
+	updated.Enabled = true
+
+	if err := m.UpdateProxy(updated); err == nil {
+		t.Fatal("UpdateProxy should report the start failure")
+	}
+
+	got := cfgMgr.Get().Proxies
+	if len(got) != 1 {
+		t.Fatalf("config holds %d proxies, want 1", len(got))
+	}
+	if got[0].Name != "Updated" || got[0].TargetAddr != updated.TargetAddr {
+		t.Errorf("config not persisted after failed start: %+v", got[0])
 	}
 }

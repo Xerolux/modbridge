@@ -33,6 +33,13 @@ type ResponseCache struct {
 	ttl            time.Duration
 	stats          CacheStats
 	evictionPolicy EvictionPolicy
+
+	// unitGenerations counts invalidations per unit. A reader captures the
+	// generation before its request goes out and stores the answer only when
+	// the generation still matches, so a read answered by the device just
+	// before a concurrent write can never repopulate the cache with the
+	// pre-write value after the write's invalidation.
+	unitGenerations map[uint8]uint64
 }
 
 // EvictionPolicy defines cache eviction strategy
@@ -78,10 +85,11 @@ func NewResponseCache(config ResponseCacheConfig) *ResponseCache {
 	}
 
 	return &ResponseCache{
-		cache:          make(map[uint64]*ResponseCacheEntry),
-		maxSize:        config.MaxSize,
-		ttl:            config.TTL,
-		evictionPolicy: config.EvictionPolicy,
+		cache:           make(map[uint64]*ResponseCacheEntry),
+		maxSize:         config.MaxSize,
+		ttl:             config.TTL,
+		evictionPolicy:  config.EvictionPolicy,
+		unitGenerations: make(map[uint8]uint64),
 	}
 }
 
@@ -126,12 +134,37 @@ func (rc *ResponseCache) Set(hash uint64, response []byte) {
 	rc.SetForUnit(hash, 0, response)
 }
 
+// Generation returns the invalidation generation of a unit. Callers capture it
+// before forwarding a read and hand it to SetForUnitIfFresh when storing.
+func (rc *ResponseCache) Generation(unitID uint8) uint64 {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	return rc.unitGenerations[unitID]
+}
+
 // SetForUnit stores a response and remembers which unit it belongs to, so that
 // a later write to that unit can invalidate it.
 func (rc *ResponseCache) SetForUnit(hash uint64, unitID uint8, response []byte) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
+	rc.storeLocked(hash, unitID, response)
+}
 
+// SetForUnitIfFresh stores a response only when the unit's invalidation
+// generation still equals gen — no write invalidated the unit between the
+// moment the read was issued and now. It reports whether the entry was stored.
+func (rc *ResponseCache) SetForUnitIfFresh(gen uint64, hash uint64, unitID uint8, response []byte) bool {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	if rc.unitGenerations[unitID] != gen {
+		return false
+	}
+	rc.storeLocked(hash, unitID, response)
+	return true
+}
+
+// storeLocked inserts or replaces a cache entry. The caller must hold rc.mu.
+func (rc *ResponseCache) storeLocked(hash uint64, unitID uint8, response []byte) {
 	_, exists := rc.cache[hash]
 	if !exists && len(rc.cache) >= rc.maxSize {
 		rc.evict()
@@ -154,10 +187,14 @@ func (rc *ResponseCache) SetForUnit(hash uint64, unitID uint8, response []byte) 
 
 // InvalidateUnit drops every entry belonging to a unit. Called after a write:
 // the write may have changed any register of that unit, and there is no way to
-// tell from the frame alone which cached reads it affects.
+// tell from the frame alone which cached reads it affects. Bumping the unit's
+// generation also stops in-flight reads of that unit from storing answers the
+// device gave before the write was applied.
 func (rc *ResponseCache) InvalidateUnit(unitID uint8) int {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
+
+	rc.unitGenerations[unitID]++
 
 	dropped := 0
 	for hash, entry := range rc.cache {

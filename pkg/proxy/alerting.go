@@ -208,7 +208,9 @@ func (am *AlertManager) processAlert(alert Alert) {
 	for _, rule := range rules {
 		if rule.Enabled && rule.Condition(alert) {
 			if rule.Channel != nil {
+				am.wg.Add(1)
 				go func(ch AlertChannel, al Alert) {
+					defer am.wg.Done()
 					_ = ch.Send(al)
 				}(rule.Channel, alert)
 			}
@@ -222,7 +224,9 @@ func (am *AlertManager) processAlert(alert Alert) {
 	am.mu.RUnlock()
 
 	for _, channel := range channels {
+		am.wg.Add(1)
 		go func(ch AlertChannel, al Alert) {
+			defer am.wg.Done()
 			_ = ch.Send(al)
 		}(channel, alert)
 	}
@@ -276,9 +280,8 @@ func (am *AlertManager) GetHistory(limit int) []Alert {
 
 // GetStats returns alert statistics
 func (am *AlertManager) GetStats() map[string]interface{} {
-	am.muStats.Lock()
-	defer am.muStats.Unlock()
-
+	// Snapshot the map lengths under the same lock that guards them; reading
+	// them after the RUnlock races AddChannel/AddRule.
 	am.mu.RLock()
 	totalAlerts := len(am.alertHistory)
 	activeAlerts := 0
@@ -287,7 +290,12 @@ func (am *AlertManager) GetStats() map[string]interface{} {
 			activeAlerts++
 		}
 	}
+	channelCount := len(am.channels)
+	ruleCount := len(am.rules)
 	am.mu.RUnlock()
+
+	am.muStats.Lock()
+	defer am.muStats.Unlock()
 
 	return map[string]interface{}{
 		"total_alerts":   totalAlerts,
@@ -297,22 +305,26 @@ func (am *AlertManager) GetStats() map[string]interface{} {
 		"warning_count":  am.alertCounts[SeverityWarning],
 		"info_count":     am.alertCounts[SeverityInfo],
 		"last_alert":     am.lastAlert,
-		"channels":       len(am.channels),
-		"rules":          len(am.rules),
+		"channels":       channelCount,
+		"rules":          ruleCount,
 	}
 }
 
 // Stop stops the alert manager
 func (am *AlertManager) Stop() {
 	am.mu.Lock()
-	defer am.mu.Unlock()
 
 	if !am.running {
+		am.mu.Unlock()
 		return
 	}
 
 	am.running = false
 	am.cancel()
+	am.mu.Unlock()
+
+	// Wait outside am.mu: an in-flight send whose goroutine takes the lock
+	// (via addToHistory on a later alert) would otherwise deadlock Stop.
 	am.wg.Wait()
 }
 

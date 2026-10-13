@@ -392,11 +392,13 @@ func (m *Manager) UpdateProxy(cfg config.ProxyConfig) error {
 	m.proxies[cfg.ID] = p
 	m.mu.Unlock()
 
-	if startErr != nil {
-		return fmt.Errorf("proxy %s failed to start after update: %w", cfg.ID, startErr)
-	}
+	// Broadcast event and persist the configuration even when the new
+	// instance failed to start. The create path already treats "exists but
+	// failed to start" as a valid state the health monitor can retry;
+	// returning early here instead would leave config.json describing the
+	// old proxy while the map holds the new one, silently reverting the
+	// update on the next restart.
 
-	// Broadcast event
 	m.mu.RLock()
 	m.broadcaster.Broadcast(map[string]interface{}{
 		"type":      "proxy_updated",
@@ -405,8 +407,7 @@ func (m *Manager) UpdateProxy(cfg config.ProxyConfig) error {
 	})
 	m.mu.RUnlock()
 
-	// Update config
-	return m.cfgMgr.Update(func(c *config.Config) error {
+	cfgErr := m.cfgMgr.Update(func(c *config.Config) error {
 		for i, pc := range c.Proxies {
 			if pc.ID == cfg.ID {
 				c.Proxies[i] = cfg
@@ -415,6 +416,11 @@ func (m *Manager) UpdateProxy(cfg config.ProxyConfig) error {
 		}
 		return nil
 	})
+
+	if startErr != nil {
+		return fmt.Errorf("proxy %s failed to start after update: %w", cfg.ID, startErr)
+	}
+	return cfgErr
 }
 
 // GetProxies returns status of all proxies.

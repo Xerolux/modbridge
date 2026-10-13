@@ -34,7 +34,7 @@ type CircuitBreaker struct {
 	successThreshold int
 
 	openCount        int64
-	halfOpenInFlight bool // true while a single half-open probe is running
+	halfOpenInFlight int // probes admitted in half-open state and not yet recorded
 
 	totalRequests    int64
 	totalFailures    int64
@@ -106,12 +106,13 @@ func (cb *CircuitBreaker) AllowRequest() bool {
 		cb.rejectedRequests++
 		return false
 	case StateHalfOpen:
-		// Only allow a single probe request at a time in half-open state.
-		if cb.halfOpenInFlight {
+		// Allow a bounded number of concurrent probe requests in half-open
+		// state (HalfOpenAttempts); each admitted probe must be recorded.
+		if cb.halfOpenInFlight >= cb.halfOpenAttempts {
 			cb.rejectedRequests++
 			return false
 		}
-		cb.halfOpenInFlight = true
+		cb.halfOpenInFlight++
 		return true
 	}
 
@@ -139,7 +140,7 @@ func (cb *CircuitBreaker) RecordSuccess() {
 	case StateClosed:
 		cb.failureCount = 0
 	case StateHalfOpen:
-		cb.halfOpenInFlight = false
+		cb.halfOpenInFlight--
 		cb.successCount++
 		if cb.successCount >= cb.successThreshold {
 			cb.transitionToClosed()
@@ -162,8 +163,24 @@ func (cb *CircuitBreaker) RecordFailure() {
 			cb.transitionToOpen()
 		}
 	case StateHalfOpen:
-		cb.halfOpenInFlight = false
+		cb.halfOpenInFlight--
 		cb.transitionToOpen()
+	}
+}
+
+// OnTargetReachable reacts to renewed TCP reachability reported by the health
+// checker without treating it as transaction evidence: the adaptive re-open
+// backoff is forgiven and an Open breaker moves to HalfOpen so the next real
+// client request probes immediately. The breaker still closes only after
+// successful requests, so a rebooting device that accepts TCP before its
+// Modbus application is ready cannot be flooded by admitted traffic.
+func (cb *CircuitBreaker) OnTargetReachable() {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
+	if cb.state == StateOpen {
+		cb.openCount = 0
+		cb.transitionToHalfOpen()
 	}
 }
 
@@ -212,7 +229,7 @@ func (cb *CircuitBreaker) Reset() {
 	cb.failureCount = 0
 	cb.successCount = 0
 	cb.openCount = 0
-	cb.halfOpenInFlight = false
+	cb.halfOpenInFlight = 0
 	cb.lastStateChange = time.Now()
 	cb.lastResetTime = time.Now()
 }
@@ -236,7 +253,7 @@ func (cb *CircuitBreaker) transitionToOpen() {
 func (cb *CircuitBreaker) transitionToHalfOpen() {
 	cb.state = StateHalfOpen
 	cb.successCount = 0
-	cb.halfOpenInFlight = false
+	cb.halfOpenInFlight = 0
 	cb.lastStateChange = time.Now()
 }
 

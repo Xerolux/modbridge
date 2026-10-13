@@ -168,8 +168,10 @@ func (s *EnhancedStats) recordLatency(latency time.Duration) {
 // Caller must hold lock
 func (s *EnhancedStats) checkRequestWindow() {
 	if time.Since(s.requestsResetTime) > s.requestsWindow {
-		// Reset request counter for new window
+		// Reset both window counters: dividing lifetime errors by window
+		// requests would make the error rate creep upward forever.
 		s.requests = 0
+		s.errors = 0
 		s.requestsResetTime = time.Now()
 	}
 }
@@ -239,12 +241,11 @@ func (s *EnhancedStats) GetSnapshot() map[string]interface{} {
 		errorRate = float64(s.errors) / float64(total) * 100
 	}
 
+	// Rate over the current window's elapsed time, not since the last request:
+	// dividing by the sliver of time right after activity produced huge spikes.
 	requestsPerSecond := 0.0
-	if !s.lastRequestTime.IsZero() && s.requests > 0 {
-		duration := time.Since(s.lastRequestTime).Seconds()
-		if duration > 0 {
-			requestsPerSecond = float64(s.requests) / duration
-		}
+	if elapsed := time.Since(s.requestsResetTime); elapsed > time.Second {
+		requestsPerSecond = float64(s.requests) / elapsed.Seconds()
 	}
 
 	return map[string]interface{}{

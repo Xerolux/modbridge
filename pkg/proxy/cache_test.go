@@ -282,6 +282,7 @@ func TestPollerKeepsRegistersWarm(t *testing.T) {
 			}
 		},
 		nil,
+		nil,
 	)
 
 	req := modbus.CreateReadRequest(1, 1, 3, 0, 1)
@@ -320,6 +321,7 @@ func TestPollerDropsIdleRequests(t *testing.T) {
 		func(req []byte) ([]byte, error) { return nil, nil },
 		func(key uint64, unitID uint8, resp []byte) {},
 		nil,
+		nil,
 	)
 
 	req := modbus.CreateReadRequest(1, 1, 3, 0, 1)
@@ -353,6 +355,7 @@ func TestPollerReportsSlowRounds(t *testing.T) {
 			return resp, nil
 		},
 		func(key uint64, unitID uint8, resp []byte) {},
+		nil,
 		func(msg string) { logged.Add(1) },
 	)
 
@@ -384,6 +387,7 @@ func TestPollerRespectsEntryLimit(t *testing.T) {
 	poller := NewRegisterPoller(time.Hour, time.Hour, 3,
 		func(req []byte) ([]byte, error) { return nil, nil },
 		func(key uint64, unitID uint8, resp []byte) {},
+		nil,
 		nil,
 	)
 
@@ -453,5 +457,40 @@ func TestCacheTTLTooTight(t *testing.T) {
 				t.Errorf("cacheTTLTooTight(%v, %v) = %v, want %v", tt.ttl, tt.pollInterval, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestPollerDoesNotCacheExceptionResponses guards the invariant the client
+// path keeps: an exception describes a moment, not a value. A poller that
+// stored a transient device exception would serve it to every client read
+// for a full TTL.
+func TestPollerDoesNotCacheExceptionResponses(t *testing.T) {
+	req := modbus.CreateReadRequest(1, 1, 3, 0, 2)
+	key, unitID, ok := modbus.RequestCacheKey(req)
+	if !ok {
+		t.Fatal("read request should be cacheable")
+	}
+
+	stored := 0
+	poller := NewRegisterPoller(time.Hour, time.Minute, 10,
+		func(req []byte) ([]byte, error) {
+			return modbus.CreateExceptionResponse(req, 0x06), nil
+		},
+		func(key uint64, unitID uint8, resp []byte) { stored++ },
+		nil,
+		nil,
+	)
+
+	poller.refreshOne(t.Context(), dueRequest{key: key, unitID: unitID, frame: req})
+
+	if stored != 0 {
+		t.Error("exception response was cached")
+	}
+	_, refreshes, failures := poller.Stats()
+	if failures != 1 {
+		t.Errorf("exception refresh not counted as failure (failures = %d)", failures)
+	}
+	if refreshes != 0 {
+		t.Errorf("exception refresh counted as a successful refresh (refreshes = %d)", refreshes)
 	}
 }

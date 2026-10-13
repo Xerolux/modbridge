@@ -7,6 +7,7 @@ package proxy
 
 import (
 	"testing"
+	"time"
 )
 
 // TestResponseCacheLFUEviction is a regression test for a bug where evictLFU
@@ -67,5 +68,41 @@ func TestResponseCacheLRUEvictionZeroHash(t *testing.T) {
 	}
 	if _, ok := rc.Get(99); !ok {
 		t.Fatal("expected newly inserted entry hash=99 to be present")
+	}
+}
+
+// TestResponseCacheSetIfFreshBlockedByInvalidation verifies the write-race
+// guard: a read whose answer comes back after a write invalidated the unit
+// must not repopulate the cache with the pre-write value.
+func TestResponseCacheSetIfFreshBlockedByInvalidation(t *testing.T) {
+	rc := NewResponseCache(ResponseCacheConfig{TTL: 60 * time.Second})
+
+	gen := rc.Generation(7)
+	if !rc.SetForUnitIfFresh(gen, 100, 7, []byte("old")) {
+		t.Fatal("store with matching generation was rejected")
+	}
+	if resp, ok := rc.Get(100); !ok || string(resp) != "old" {
+		t.Fatal("precondition: entry should be cached")
+	}
+
+	// A write to the unit invalidates the entry and bumps the generation.
+	rc.InvalidateUnit(7)
+	if _, ok := rc.Get(100); ok {
+		t.Fatal("invalidation did not drop the entry")
+	}
+
+	if rc.SetForUnitIfFresh(gen, 100, 7, []byte("stale")) {
+		t.Error("store with a pre-invalidation generation was accepted")
+	}
+	if _, ok := rc.Get(100); ok {
+		t.Error("stale pre-write value re-entered the cache")
+	}
+
+	// A read started after the write stores normally.
+	if !rc.SetForUnitIfFresh(rc.Generation(7), 100, 7, []byte("fresh")) {
+		t.Error("store with the current generation was rejected")
+	}
+	if resp, ok := rc.Get(100); !ok || string(resp) != "fresh" {
+		t.Fatal("fresh value not served from the cache")
 	}
 }

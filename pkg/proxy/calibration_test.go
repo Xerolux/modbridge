@@ -554,6 +554,7 @@ func TestCalibrationHoldsTheBackgroundPoller(t *testing.T) {
 			return nil, nil
 		},
 		func(key uint64, unitID uint8, resp []byte) {},
+		nil,
 		func(msg string) {},
 	)
 	p.poller.Track(1, 1, modbus.CreateReadRequest(1, 1, 3, 0, 2))

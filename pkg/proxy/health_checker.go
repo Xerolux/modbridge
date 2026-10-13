@@ -8,6 +8,15 @@ import (
 	"time"
 )
 
+// Debounce thresholds: a single failed dial must not flip the verdict (and
+// fire callbacks) on a flapping target, and one successful dial after an
+// outage must not declare recovery either — a rebooting controller accepts
+// TCP long before its Modbus application answers.
+const (
+	defaultFailureThreshold = 3
+	defaultSuccessThreshold = 2
+)
+
 type HealthChecker struct {
 	mu          sync.RWMutex
 	target      string
@@ -15,17 +24,21 @@ type HealthChecker struct {
 	timeout     time.Duration
 	healthy     bool
 	consecutive int
-	lastCheck   time.Time
-	lastError   string
-	ctx         context.Context
-	cancel      context.CancelFunc
-	wg          sync.WaitGroup
-	log         func(string, string)
-	onUnhealthy func()
-	onRecovery  func()
-	running     bool
-	paused      atomic.Bool // suspends checks while something else needs the target
-	callbackMu  sync.Mutex  // prevents overlapping callbacks
+	successes   int
+	// healthy flips only after this many consecutive failed/successful dials.
+	failureThreshold int
+	successThreshold int
+	lastCheck        time.Time
+	lastError        string
+	ctx              context.Context
+	cancel           context.CancelFunc
+	wg               sync.WaitGroup
+	log              func(string, string)
+	onUnhealthy      func()
+	onRecovery       func()
+	running          bool
+	paused           atomic.Bool // suspends checks while something else needs the target
+	callbackMu       sync.Mutex  // prevents overlapping callbacks
 }
 
 type HealthStatus struct {
@@ -47,13 +60,15 @@ func NewHealthChecker(target string, interval, timeout time.Duration, logFn func
 	ctx, cancel := context.WithCancel(context.Background())
 
 	hc := &HealthChecker{
-		target:   target,
-		interval: interval,
-		timeout:  timeout,
-		healthy:  true,
-		log:      logFn,
-		ctx:      ctx,
-		cancel:   cancel,
+		target:           target,
+		interval:         interval,
+		timeout:          timeout,
+		healthy:          true,
+		failureThreshold: defaultFailureThreshold,
+		successThreshold: defaultSuccessThreshold,
+		log:              logFn,
+		ctx:              ctx,
+		cancel:           cancel,
 	}
 
 	return hc
@@ -130,42 +145,54 @@ func (hc *HealthChecker) check() {
 	hc.lastCheck = time.Now()
 
 	if err != nil {
-		wasHealthy := hc.healthy
 		hc.consecutive++
-		hc.healthy = false
 		hc.lastError = err.Error()
 		if hc.consecutive == 1 || hc.consecutive%5 == 0 {
 			if hc.log != nil {
 				hc.log("HC", "target unreachable: "+err.Error())
 			}
 		}
-		if wasHealthy && hc.onUnhealthy != nil {
-			hc.callbackMu.Lock()
-			fn := hc.onUnhealthy
-			hc.callbackMu.Unlock()
-			if fn != nil {
-				go fn()
+		if hc.healthy && hc.consecutive >= hc.failureThreshold {
+			hc.healthy = false
+			hc.successes = 0
+			if hc.onUnhealthy != nil {
+				hc.callbackMu.Lock()
+				fn := hc.onUnhealthy
+				hc.callbackMu.Unlock()
+				if fn != nil {
+					go fn()
+				}
 			}
 		}
 		return
 	}
 
-	wasUnhealthy := !hc.healthy
-	hc.consecutive = 0
-	hc.healthy = true
-	hc.lastError = ""
 	conn.Close()
 
-	if wasUnhealthy {
-		if hc.log != nil {
-			hc.log("HC", "target is reachable again")
-		}
-		hc.callbackMu.Lock()
-		fn := hc.onRecovery
-		hc.callbackMu.Unlock()
-		if fn != nil {
-			go fn()
-		}
+	if hc.healthy {
+		hc.consecutive = 0
+		hc.lastError = ""
+		return
+	}
+
+	// Unhealthy: require sustained success before declaring recovery.
+	hc.consecutive = 0
+	hc.successes++
+	if hc.successes < hc.successThreshold {
+		return
+	}
+
+	hc.healthy = true
+	hc.successes = 0
+	hc.lastError = ""
+	if hc.log != nil {
+		hc.log("HC", "target is reachable again")
+	}
+	hc.callbackMu.Lock()
+	fn := hc.onRecovery
+	hc.callbackMu.Unlock()
+	if fn != nil {
+		go fn()
 	}
 }
 
