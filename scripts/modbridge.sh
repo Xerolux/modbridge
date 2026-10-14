@@ -39,7 +39,7 @@ LOG_FILE="/var/log/modbridge-install.log"
 REPO_URL="https://github.com/Xerolux/modbridge"
 RELEASES_API="https://api.github.com/repos/Xerolux/modbridge/releases"
 SCRIPT_RAW_URL="https://raw.githubusercontent.com/Xerolux/modbridge/main/scripts/modbridge.sh"
-SCRIPT_VERSION="3.0"
+SCRIPT_VERSION="3.1"
 
 AUTO_INSTALL=0
 DEFAULT_VARIANT="full"
@@ -284,10 +284,20 @@ detect_architecture() {
 
 # ── Process / port cleanup ───────────────────────────────────────────────────
 
+# running_proxy_pids lists ModBridge daemon PIDs, never this script's own.
+# pidof/pgrep match the script too: it is invoked as /usr/local/bin/modbridge,
+# so its comm is "modbridge". Killing it aborts an update half-way (observed:
+# service terminated, script dead, update never finished). Every call site
+# must go through this filter, including pidof fallbacks.
+running_proxy_pids() {
+    { pgrep -x "modbridge" 2>/dev/null || pidof modbridge 2>/dev/null || true; }         | tr ' ' '
+' | grep -vw "$$" | grep -v '^$' | tr '
+' ' ' | sed 's/ $//'
+}
+
 kill_all_modbridge_processes() {
     local PIDS
-    PIDS=$(pgrep -x "modbridge" 2>/dev/null | grep -v "^$$\$" || true)
-    [ -z "$PIDS" ] && [ -x "$INSTALL_DIR/modbridge" ] && PIDS=$(pidof modbridge 2>/dev/null || true)
+    PIDS=$(running_proxy_pids)
 
     if [ -z "$PIDS" ]; then
         log "No running processes."
@@ -300,16 +310,16 @@ kill_all_modbridge_processes() {
     local count=0
     while [ $count -lt 10 ]; do
         sleep 0.5
-        PIDS=$(pgrep -x "modbridge" 2>/dev/null || true)
+        PIDS=$(running_proxy_pids)
         [ -z "$PIDS" ] && { log "All processes terminated."; return 0; }
         count=$((count + 1))
     done
 
-    PIDS=$(pgrep -x "modbridge" 2>/dev/null || true)
+    PIDS=$(running_proxy_pids)
     if [ -n "$PIDS" ]; then
         kill -9 $PIDS 2>/dev/null || true
         sleep 1
-        PIDS=$(pgrep -x "modbridge" 2>/dev/null || true)
+        PIDS=$(running_proxy_pids)
         [ -n "$PIDS" ] && { log_error "Could not terminate processes: $PIDS"; return 1; }
     fi
     log "All processes terminated."
