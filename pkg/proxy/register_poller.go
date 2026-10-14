@@ -169,9 +169,25 @@ func (rp *RegisterPoller) loop(ctx context.Context) {
 			continue
 		}
 		started := time.Now()
-		rp.refreshAll(ctx)
+		rp.runRound(ctx)
 		rp.reportRoundDuration(time.Since(started))
 	}
+}
+
+// runRound executes one refresh round behind a panic guard. The poller is a
+// background maintenance task: a bug in parsing or batching must degrade to a
+// logged failed round, never kill the whole process — and with it every proxy
+// it serves.
+func (rp *RegisterPoller) runRound(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			rp.failures.Add(1)
+			if rp.logf != nil {
+				rp.logf(fmt.Sprintf("Background refresh round panicked (recovered): %v", r))
+			}
+		}
+	}()
+	rp.refreshAll(ctx)
 }
 
 // reportRoundDuration flags refresh rounds that take longer than the interval

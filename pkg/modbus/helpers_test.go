@@ -285,3 +285,29 @@ func TestResponseMatchesRequest(t *testing.T) {
 		})
 	}
 }
+
+// TestParseReadResponseLargeByteCount is a regression test for a process-killing
+// bug: the slice bound 9+byteCount was computed in uint8 arithmetic, so a
+// response carrying 248 data bytes (124 registers) wrapped to 9+248 = 1 and
+// sliced [9:1], panicking on every large combined read.
+func TestParseReadResponseLargeByteCount(t *testing.T) {
+	for _, byteCount := range []int{246, 247, 248, 250, 252, 255} {
+		frame := make([]byte, 9+byteCount)
+		frame[7] = 0x03
+		frame[8] = byte(byteCount)
+		for i := 9; i < len(frame); i++ {
+			frame[i] = byte(i)
+		}
+
+		payload, err := ParseReadResponse(frame)
+		if err != nil {
+			t.Fatalf("byteCount %d: unexpected error: %v", byteCount, err)
+		}
+		if len(payload) != byteCount {
+			t.Fatalf("byteCount %d: got %d payload bytes, want %d", byteCount, len(payload), byteCount)
+		}
+		if payload[0] != 9 || payload[len(payload)-1] != frame[len(frame)-1] {
+			t.Fatalf("byteCount %d: payload content mismatch", byteCount)
+		}
+	}
+}
