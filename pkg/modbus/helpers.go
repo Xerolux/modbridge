@@ -299,7 +299,7 @@ func RTUToTCP(rtuFrame []byte, txID uint16) ([]byte, error) {
 // sent: the reply would stay in the socket and desynchronise the connection.
 func SupportsRTUFunction(fc byte) bool {
 	switch fc {
-	case 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x0F, 0x10:
+	case 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x0B, 0x0F, 0x10, 0x17:
 		return true
 	}
 	return false
@@ -321,8 +321,10 @@ func ReadRTUFrame(r io.Reader, fc byte) ([]byte, error) {
 		dataLen = 1 // exception code
 	} else {
 		switch fc {
-		case 0x01, 0x02, 0x03, 0x04:
-			// Next byte is byte count
+		case 0x01, 0x02, 0x03, 0x04, 0x17:
+			// Reads and read/write multiple: the next byte is the data byte
+			// count (a 0x17 exception is handled above, so this is the read
+			// payload shape).
 			bc := make([]byte, 1)
 			if _, err := io.ReadFull(r, bc); err != nil {
 				return nil, fmt.Errorf("rtu byte count read: %w", err)
@@ -335,6 +337,10 @@ func ReadRTUFrame(r io.Reader, fc byte) ([]byte, error) {
 				return nil, fmt.Errorf("rtu data read: %w", err)
 			}
 			return full, nil
+		case 0x07:
+			dataLen = 1 // read exception status: one output byte
+		case 0x0B:
+			dataLen = 4 // comm event counter: status (2) + event count (2)
 		case 0x05, 0x06, 0x0F, 0x10:
 			dataLen = 4 // address (2) + value/quantity (2)
 		default:

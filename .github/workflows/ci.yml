@@ -332,8 +332,8 @@ jobs:
         if: matrix.packages != ''
         run: sudo apt-get update && sudo apt-get install -y ${{ matrix.packages }}
 
-      # Headless needs NO frontend-dist — it has no embedded Web UI and shares
-      # only pkg/config, pkg/logger, pkg/manager with the Web binary.
+      # Headless needs NO frontend-dist — the headless build tag excludes
+      # the embedded web UI from the binary.
       - name: Build headless binary
         env:
           GOOS: ${{ matrix.goos }}

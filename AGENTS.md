@@ -55,7 +55,8 @@ modbridge/
 │   ├── portmanager/           # Dynamic port allocation
 │   ├── web/                   # Embedded frontend assets (dist/ copied here at build time)
 │   └── testing/               # Test utilities: mockmodbus/, integration/, performance/
-├── cmd/cli/                   # CLI tooling
+├── cmd/cli/                   # CLI tooling (the headless variant is the root
+│                              # package built with `-tags headless`)
 ├── frontend/                  # Vue.js 3 + Vite source
 │   ├── src/
 │   │   ├── views/             # Page-level Vue components
