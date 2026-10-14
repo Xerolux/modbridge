@@ -324,15 +324,15 @@ jobs:
           CC: ${{ matrix.cc }}
         run: |
           TAG="${{ needs.prepare.outputs.tag || needs.resolve-tag.outputs.tag || github.ref_name }}"
-          # Build the genuinely-separate headless binary (no Web UI, no API,
-          # no auth, no DB — config-file only). Previous builds used
-          # '-tags headless' on root '.', but no Go file consumes that tag,
-          # so the output was identical to the Web binary.
+          # The headless binary is the full application built with the
+          # 'headless' tag: REST API, auth, DB, proxies, calibration —
+          # everything except the embedded web UI assets.
           go build \
+          -tags headless \
             -ldflags="-s -w -X main.Version=${TAG}" \
             -trimpath \
             -o "modbridge-${{ matrix.suffix }}" \
-            ./cmd/modbridge-headless
+            .
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: modbridge-${{ matrix.suffix }}
