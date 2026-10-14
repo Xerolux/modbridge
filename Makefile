@@ -110,16 +110,17 @@ dev: ## Run in development mode with live reload (requires air)
 	@which air > /dev/null || (echo "air not installed. Install with: go install github.com/cosmtrek/air@latest" && exit 1)
 	air
 
-build-headless: ## Build headless variant (no web UI, no auth, config-file only)
+build-headless: ## Build headless variant (full feature set, no embedded web UI)
 	@echo "Building headless variant..."
-	go build -ldflags="-s -w -X main.Version=$(VERSION)-headless" -trimpath -o modbridge-headless ./cmd/modbridge-headless/
+	go build -tags headless -ldflags="-s -w -X main.Version=$(VERSION)-headless" -trimpath -o modbridge-headless .
 
-build-headless-all: ## Build headless for all platforms
-	@echo "Building headless for all platforms..."
-	GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.Version=$(VERSION)-headless" -trimpath -o bin/modbridge-headless-linux-amd64 ./cmd/modbridge-headless/
-	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=$(VERSION)-headless" -trimpath -o bin/modbridge-headless-linux-arm64 ./cmd/modbridge-headless/
-	GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.Version=$(VERSION)-headless" -trimpath -o bin/modbridge-headless-windows-amd64.exe ./cmd/modbridge-headless/
-	GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.Version=$(VERSION)-headless" -trimpath -o bin/modbridge-headless-darwin-amd64 ./cmd/modbridge-headless/
-	GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.Version=$(VERSION)-headless" -trimpath -o bin/modbridge-headless-darwin-arm64 ./cmd/modbridge-headless/
+# Cross targets need CGO plus a matching cross-compiler (go-sqlite3):
+#   CC_ARM64=aarch64-linux-gnu-gcc make build-headless-all
+# CI installs the cross-toolchains; locally build the native target only.
+build-headless-all: ## Build headless for linux platforms (CC_ARM64/CC_ARM for cross)
+	@echo "Building headless for linux platforms..."
+	GOOS=linux GOARCH=amd64 go build -tags headless -ldflags="-s -w -X main.Version=$(VERSION)-headless" -trimpath -o bin/modbridge-headless-linux-amd64 .
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=$(CC_ARM64) go build -tags headless -ldflags="-s -w -X main.Version=$(VERSION)-headless" -trimpath -o bin/modbridge-headless-linux-arm64 .
+	GOOS=linux GOARCH=arm GOARM=6 CGO_ENABLED=1 CC=$(CC_ARM) go build -tags headless -ldflags="-s -w -X main.Version=$(VERSION)-headless" -trimpath -o bin/modbridge-headless-linux-arm .
 
 .DEFAULT_GOAL := help

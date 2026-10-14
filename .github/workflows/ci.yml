@@ -332,8 +332,8 @@ jobs:
         if: matrix.packages != ''
         run: sudo apt-get update && sudo apt-get install -y ${{ matrix.packages }}
 
-      # Headless needs NO frontend-dist — it has no embedded Web UI and shares
-      # only pkg/config, pkg/logger, pkg/manager with the Web binary.
+      # Headless needs NO frontend-dist — the headless build tag excludes
+      # the embedded web UI from the binary.
       - name: Build headless binary
         env:
           GOOS: ${{ matrix.goos }}
@@ -343,10 +343,11 @@ jobs:
           CC: ${{ matrix.cc }}
         run: |
           go build \
+          -tags headless \
             -ldflags="-s -w -X main.Version=${{ needs.version.outputs.stamp }}" \
             -trimpath \
             -o "modbridge-${{ matrix.suffix }}" \
-            ./cmd/modbridge-headless
+            .
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:

@@ -3,6 +3,8 @@
 // Created by Xerolux
 // https://github.com/Xerolux/modbridge
 
+//go:build !headless
+
 package main
 
 import (

@@ -398,7 +398,7 @@ Default ports:
 5. **No database:** If the database fails to initialize, the app continues without persistence (`db` is nil; users, audit and device history are unavailable) — check startup logs. `pkg/database/fallback.go` contains an unused circuit breaker, it is not wired into this path.
 6. **Frontend output sanitization:** Vite config strips underscore-prefixed filenames from `dist/` to avoid Go embed issues.
 7. **Data locations:** By default the database and logs are written relative to the working directory. In a container set `MODBRIDGE_DATA_DIR`, `MODBRIDGE_LOG_DIR` and `MODBRIDGE_CONFIG` to the mounted volumes, or the state is lost when the container is recreated (`docker-compose.yml` does this).
-8. **Second entry point:** `cmd/modbridge-headless/` builds the WebUI-less variant. `cmd/cli/` is a separate, less complete bootstrap — prefer `main.go` when changing startup behaviour.
+8. **Headless variant:** `go build -tags headless .` — same binary, same REST API/auth/DB/proxies, only the embedded web UI (`pkg/web`) is excluded via the build tag on `web.go`/`web_headless.go`. CI ships it for linux amd64/arm64/arm. `cmd/cli/` is a separate, less complete bootstrap — prefer `main.go` when changing startup behaviour.
 
 ---
 
