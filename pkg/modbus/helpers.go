@@ -192,7 +192,10 @@ func ParseReadResponse(frame []byte) ([]byte, error) {
 	if len(frame) < 9+int(byteCount) {
 		return nil, fmt.Errorf("frame data incomplete")
 	}
-	return frame[9 : 9+byteCount], nil
+	// The bound must be computed in int: 9+byteCount in uint8 arithmetic
+	// wraps at 247 data bytes (9+248 = 1), and slicing [9:1] panics — which
+	// crashed the whole process on every large combined read.
+	return frame[9 : 9+int(byteCount)], nil
 }
 
 // CreateReadResponse constructs a Modbus TCP read response frame.

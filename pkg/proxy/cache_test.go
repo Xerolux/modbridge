@@ -494,3 +494,34 @@ func TestPollerDoesNotCacheExceptionResponses(t *testing.T) {
 		t.Errorf("exception refresh counted as a successful refresh (refreshes = %d)", refreshes)
 	}
 }
+
+// TestPollerRoundSurvivesPanics verifies the panic guard around refresh
+// rounds: a bug inside the refresh path must count as a failed round, not
+// take the whole process down.
+func TestPollerRoundSurvivesPanics(t *testing.T) {
+	req := modbus.CreateReadRequest(1, 1, 3, 40057, 124)
+	key, unitID, ok := modbus.RequestCacheKey(req)
+	if !ok {
+		t.Fatal("read request should be cacheable")
+	}
+
+	var logged atomic.Value
+	poller := NewRegisterPoller(time.Hour, time.Minute, 10,
+		func(req []byte) ([]byte, error) {
+			panic("simulated refresh bug")
+		},
+		func(key uint64, unitID uint8, resp []byte) {},
+		nil,
+		func(msg string) { logged.Store(msg) },
+	)
+	poller.Track(key, unitID, req)
+
+	poller.runRound(t.Context()) // must not panic
+
+	if _, _, failures := poller.Stats(); failures != 1 {
+		t.Errorf("panicked round not counted as failure (failures = %d)", failures)
+	}
+	if logged.Load() == nil {
+		t.Error("panic was not logged")
+	}
+}
