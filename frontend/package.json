@@ -12,7 +12,7 @@
     "test:ui": "playwright test --config playwright.ui.config.js"
   },
   "dependencies": {
-    "@primeuix/themes": "^3.0.0",
+    "@primeuix/themes": "^3.1.0",
     "axios": "^1.20.0",
     "gridstack": "^14.0.0",
     "pinia": "^4.0.3",
