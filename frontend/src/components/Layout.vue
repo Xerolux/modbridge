@@ -101,6 +101,8 @@ watch(mobileMenuOpen, async (open) => {
     mobileCloseButton.value?.focus();
   } else {
     restoreBodyOverflow();
+    await nextTick();
+    if (mobileMenuOpen.value) return;
     if (desktopMedia.matches) documentMainFocus();
     else mobileMenuButton.value?.focus();
   }
