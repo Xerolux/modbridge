@@ -1,5 +1,5 @@
 name: ModBridge
-version: "@VERSION@"
+version: "3.0.0.10"
 slug: modbridge
 description: Modbus TCP proxy manager with an Ingress web interface
 url: https://github.com/Xerolux/modbridge

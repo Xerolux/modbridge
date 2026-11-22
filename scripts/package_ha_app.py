@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -23,8 +24,9 @@ with ZipFile(output, "w", ZIP_DEFLATED) as archive:
                 add_file(path.relative_to(root))
 
     dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
-    archive.writestr("modbridge/Dockerfile", dockerfile + "\n" + (app / "Dockerfile").read_text(encoding="utf-8"))
-    archive.writestr("modbridge/config.yaml", (app / "config.yaml").read_text(encoding="utf-8").replace("@VERSION@", version))
+    archive.writestr("modbridge/Dockerfile", dockerfile + "\n" + (app / "Dockerfile.local").read_text(encoding="utf-8"))
+    config = (app / "config.yaml").read_text(encoding="utf-8")
+    archive.writestr("modbridge/config.yaml", re.sub(r"(?m)^version: .*", f'version: "{version}"', config))
     archive.writestr("modbridge/run.sh", (app / "run.sh").read_text(encoding="utf-8"))
     archive.write(app / "DOCS.md", "modbridge/DOCS.md")
 

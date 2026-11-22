@@ -201,7 +201,9 @@ sudo modbridge restart
 
 ## Home Assistant OS
 
-Install ModBridge as a local Home Assistant app to open its web interface from the sidebar via Ingress. Build the app archive with `make ha-app` and follow the [installation guide](ha-app/DOCS.md).
+Install **ModBridge** from **Xerolux Apps** in the Home Assistant app store. Enable **Show in sidebar** to open the existing web interface via Ingress.
+
+[Add the repository in Home Assistant](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FXerolux%2Fmodbridge) · [Installation guide](ha-app/DOCS.md)
 
 ## 🐳 Docker Deployment
 
