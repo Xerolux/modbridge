@@ -88,6 +88,7 @@ for (const theme of ['light', 'dark', 'bw']) {
 
 test('dashboard shares the initial proxy request and preserves the last successful result on refresh failure', async ({ page }) => {
   await mockApi(page);
+  await page.route('**/api/proxies/stream', route => route.abort());
   let requests = 0;
   let failed = false;
   await page.route('**/api/proxies', async route => {
