@@ -36,9 +36,14 @@ for (const width of [360, 768, 1440]) {
       await page.keyboard.press('Escape');
       await expect(page.getByRole('dialog', { name: 'Hauptnavigation' })).toHaveCount(0);
       await page.getByRole('button', { name: 'Navigation öffnen' }).click();
+      await expect(page.getByRole('dialog', { name: 'Hauptnavigation' })).toBeVisible();
+      await expect(page.locator('body')).toHaveCSS('overflow', 'hidden');
       await page.setViewportSize({ width: 1280, height: 900 });
       await expect(page.getByRole('dialog', { name: 'Hauptnavigation' })).toHaveCount(0);
-      expect(await page.evaluate(() => document.body.style.overflow)).not.toBe('hidden');
+      await expect(page.locator('body')).not.toHaveCSS('overflow', 'hidden');
+      await expect(page.locator('main')).toBeFocused();
+      await page.setViewportSize({ width, height: 900 });
+      await expect(page.getByRole('dialog', { name: 'Hauptnavigation' })).toHaveCount(0);
     }
     expect(errors).toEqual([]);
   });

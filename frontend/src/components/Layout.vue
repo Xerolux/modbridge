@@ -19,7 +19,7 @@ const mobileDrawer = ref(null);
 const mobileCloseButton = ref(null);
 const desktopMedia = window.matchMedia('(min-width: 1024px)');
 const handleDesktop = () => { if (desktopMedia.matches) closeMobileMenu(); };
-let previousBodyOverflow = '';
+let previousBodyOverflow;
 
 const item = (labelKey, icon, path, permission) => ({ labelKey, icon, path, permission });
 const navGroups = [
@@ -68,6 +68,11 @@ const logout = async () => {
 
 const documentMainFocus = () => document.getElementById('main-content')?.focus();
 const closeMobileMenu = () => { mobileMenuOpen.value = false; };
+const restoreBodyOverflow = () => {
+  if (previousBodyOverflow === undefined) return;
+  document.body.style.overflow = previousBodyOverflow;
+  previousBodyOverflow = undefined;
+};
 const handleKeydown = (event) => {
   if (event.key === 'Escape') closeMobileMenu();
   if (event.key !== 'Tab' || !mobileMenuOpen.value || !mobileDrawer.value) return;
@@ -95,8 +100,9 @@ watch(mobileMenuOpen, async (open) => {
     await nextTick();
     mobileCloseButton.value?.focus();
   } else {
-    document.body.style.overflow = previousBodyOverflow;
-    mobileMenuButton.value?.focus();
+    restoreBodyOverflow();
+    if (desktopMedia.matches) documentMainFocus();
+    else mobileMenuButton.value?.focus();
   }
 });
 
@@ -110,7 +116,7 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown);
   desktopMedia.removeEventListener('change', handleDesktop);
-  document.body.style.overflow = previousBodyOverflow;
+  restoreBodyOverflow();
 });
 </script>
 
