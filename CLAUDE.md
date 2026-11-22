@@ -9,7 +9,7 @@ This file describes the codebase structure, development workflows, and conventio
 **ModBridge** is a Modbus TCP Proxy Manager with a web UI. It proxies Modbus TCP traffic, exposing a REST API and Vue.js frontend for configuration and monitoring. The application is written in Go (backend) with a Vue.js 3 frontend embedded into the binary.
 
 **Current version:** see `version.txt`
-**Go version:** see the `go` directive in `go.mod` (currently 1.26.5)
+**Go version:** see the `go` directive in `go.mod` (currently 1.27.4)
 **Node version:** 24 (CI/CD, `frontend/`)
 
 Version numbers are deliberately not repeated here — read them from
@@ -137,7 +137,7 @@ make update-deps      # Update Go dependencies
 
 ### Build Requirements
 
-- **Go 1.26.5+** with `CGO_ENABLED=1` (required for `go-sqlite3`)
+- **Go 1.27.4+** with `CGO_ENABLED=1` (required for `go-sqlite3`)
 - **GCC** (for SQLite CGO compilation; cross-compilers for arm: `gcc-aarch64-linux-gnu`, `gcc-arm-linux-gnueabihf`)
 - Cross-compiling always needs `CGO_ENABLED=1` plus a matching `CC`; a CGO-less build compiles but fails at runtime with "Binary was compiled with CGO_ENABLED=0"
 - **Node 24+** (frontend build)

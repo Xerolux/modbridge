@@ -11,7 +11,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Build stage for backend
-FROM golang:1.26.5-alpine AS builder
+FROM golang:1.27.4-alpine AS builder
 
 # Install build dependencies including GCC for CGO/sqlite3
 RUN apk add --no-cache \
@@ -48,7 +48,7 @@ RUN VERSION="${VERSION:-$(cat version.txt 2>/dev/null || echo dev)}" && \
     -o modbridge .
 
 # Final stage
-FROM alpine:3.23
+FROM alpine:3.24
 
 LABEL org.opencontainers.image.title="ModBridge" \
       org.opencontainers.image.description="Modbus TCP Proxy Manager" \

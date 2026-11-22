@@ -12,25 +12,25 @@
     "test:ui": "playwright test --config playwright.ui.config.js"
   },
   "dependencies": {
-    "@primeuix/themes": "^3.1.0",
-    "axios": "^1.20.0",
-    "gridstack": "^14.0.0",
+    "@primeuix/themes": "^3.1.1",
+    "axios": "^1.21.1",
+    "gridstack": "^14.1.1",
     "pinia": "^4.1.0",
-    "primeicons": "^8.0.0",
-    "primevue": "^5.0.1",
-    "vue": "^3.5.44",
+    "primeicons": "^8.0.2",
+    "primevue": "^5.0.5",
+    "vue": "^3.5.46",
     "vue-draggable-plus": "^0.6.1",
-    "vue-i18n": "^11.4.13",
-    "vue-router": "^5.2.0"
+    "vue-i18n": "^11.4.23",
+    "vue-router": "^5.5.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1",
-    "@tailwindcss/postcss": "^4.3.3",
-    "@vitejs/plugin-vue": "^6.0.8",
-    "autoprefixer": "^10.5.4",
+    "@playwright/test": "^1.65.1",
+    "@tailwindcss/postcss": "^4.3.5",
+    "@vitejs/plugin-vue": "^6.0.11",
+    "autoprefixer": "^10.7.0",
     "esbuild": "^0.28.2",
-    "postcss": "^8.5.26",
-    "tailwindcss": "^4.3.3",
-    "vite": "^8.3.5"
+    "postcss": "^8.5.33",
+    "tailwindcss": "^4.3.5",
+    "vite": "^8.3.8"
   }
 }
