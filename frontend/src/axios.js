@@ -74,4 +74,13 @@ axios.interceptors.response.use(
     }
 );
 
+let initialProxyRequest;
+
+export function fetchInitialProxyList() {
+    initialProxyRequest ??= axios.get('/api/proxies').finally(() => {
+        initialProxyRequest = undefined;
+    });
+    return initialProxyRequest;
+}
+
 export default axios;

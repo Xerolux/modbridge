@@ -9,7 +9,7 @@ This file describes the codebase structure, development workflows, and conventio
 **ModBridge** is a Modbus TCP Proxy Manager with a web UI. It proxies Modbus TCP traffic, exposing a REST API and Vue.js frontend for configuration and monitoring. The application is written in Go (backend) with a Vue.js 3 frontend embedded into the binary.
 
 **Current version:** see `version.txt`
-**Go version:** see the `go` directive in `go.mod` (currently 1.27.4)
+**Go version:** see the `go` directive in `go.mod`.
 **Node version:** 24 (CI/CD, `frontend/`)
 
 Version numbers are deliberately not repeated here — read them from
@@ -137,7 +137,7 @@ make update-deps      # Update Go dependencies
 
 ### Build Requirements
 
-- **Go 1.27.4+** with `CGO_ENABLED=1` (required for `go-sqlite3`)
+- **Go version from `go.mod`** with `CGO_ENABLED=1` (required for `go-sqlite3`)
 - **GCC** (for SQLite CGO compilation; cross-compilers for arm: `gcc-aarch64-linux-gnu`, `gcc-arm-linux-gnueabihf`)
 - Cross-compiling always needs `CGO_ENABLED=1` plus a matching `CC`; a CGO-less build compiles but fails at runtime with "Binary was compiled with CGO_ENABLED=0"
 - **Node 24+** (frontend build)
@@ -323,13 +323,13 @@ import (
 
 ## Frontend Conventions
 
-**Stack:** Vue.js 3 (Composition API), Pinia, Vue Router, PrimeVue 4, Tailwind CSS, Axios, vue-i18n
+**Stack:** Vue.js 3 (Composition API), Pinia, Vue Router, PrimeVue 5, Tailwind CSS, Axios, vue-i18n
 
 - Components use `<script setup>` syntax
 - State management via Pinia stores in `frontend/src/stores/`
 - All user-facing strings go through `vue-i18n` (locales in `frontend/src/locales/`)
 - API calls use Axios; dev proxy redirects `/api/*` to `:8080`
-- UI components from PrimeVue; icons from `lucide-vue-next`
+- UI components from PrimeVue and icons from PrimeIcons
 - Dashboard layouts use `gridstack` for drag-and-drop
 
 **Dev server:**
@@ -418,17 +418,20 @@ Versions live in `go.mod`; this table only says what each module is for.
 | `github.com/mattn/go-sqlite3` | SQLite3 (CGO) |
 
 ### Frontend (key)
+
+Version ranges live in `frontend/package.json`. The lockfile records the exact installed versions.
+
 | Package | Purpose |
 |---------|---------|
-| `vue` ^3.5 | UI framework |
-| `pinia` ^3.0 | State management |
-| `vue-router` ^5.0 | Client-side routing |
-| `primevue` ^4.5 | UI component library |
-| `axios` ^1.13 | HTTP client |
-| `vue-i18n` ^11.3 | Internationalization |
-| `tailwindcss` ^3.4 | Utility CSS |
-| `vite` ^8.0 | Build tool |
-| `gridstack` ^12.4 | Dashboard drag-and-drop |
+| `vue` | UI framework |
+| `pinia` | State management |
+| `vue-router` | Client-side routing |
+| `primevue` | UI component library |
+| `axios` | HTTP client |
+| `vue-i18n` | Internationalization |
+| `tailwindcss` | Utility CSS |
+| `vite` | Build tool |
+| `gridstack` | Dashboard drag-and-drop |
 
 ---
 

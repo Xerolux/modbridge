@@ -43,7 +43,7 @@
                                 </div>
                             </div>
 
-                            <Button @click="saveConfig" :disabled="!configLoaded" :label="t('config.saveLogging')" icon="pi pi-save" />
+                            <Button @click="saveConfig" :disabled="!configLoaded || savingConfig" :loading="savingConfig" :label="t('config.saveLogging')" icon="pi pi-save" />
                         </div>
                     </TabPanel>
 
@@ -75,8 +75,14 @@
                                 <h3 class="text-lg font-semibold mb-4">CORS</h3>
                                 <div class="grid grid-cols-1 gap-4">
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.corsOrigins') }}</label>
-                                        <Chips v-model="config.cors_allowed_origins" class="w-full" />
+                                        <label for="cors-origins" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.corsOrigins') }}</label>
+                                        <Chips v-model="config.cors_allowed_origins" input-id="cors-origins" :input-props="{ 'aria-describedby': 'cors-origin-help' }" class="w-full" />
+                                        <p id="cors-origin-help" class="mt-2 text-sm text-[var(--text-secondary)]">{{ t('config.corsOriginHelp') }}</p>
+                                        <div v-if="config.cors_allowed_origins?.includes('*')" class="data-health data-health--stale mt-2">
+                                            <span role="status">{{ t('config.corsWildcardWarning') }}</span>
+                                            <button type="button" class="workspace-action" @click="restrictCorsOrigins">{{ t('config.restrictCorsOrigins') }}</button>
+                                        </div>
+                                        <p v-if="corsRestartRequired" role="status" class="mt-2 text-sm text-[var(--text-secondary)]">{{ t('config.corsRestartRequired') }}</p>
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{{ t('config.corsMethods') }}</label>
@@ -129,7 +135,7 @@
                                 </div>
                             </div>
 
-                            <Button @click="saveConfig" :disabled="!configLoaded" :label="t('config.saveSecurity')" icon="pi pi-shield" />
+                            <Button @click="saveConfig" :disabled="!configLoaded || savingConfig" :loading="savingConfig" :label="t('config.saveSecurity')" icon="pi pi-shield" />
                         </div>
                     </TabPanel>
 
@@ -176,7 +182,7 @@
                                 </div>
                             </div>
 
-                            <Button @click="saveConfig" :disabled="!configLoaded" :label="t('config.saveEmail')" icon="pi pi-envelope" />
+                            <Button @click="saveConfig" :disabled="!configLoaded || savingConfig" :loading="savingConfig" :label="t('config.saveEmail')" icon="pi pi-envelope" />
                         </div>
                     </TabPanel>
 
@@ -211,7 +217,7 @@
                                 </div>
                             </div>
 
-                            <Button @click="saveConfig" :disabled="!configLoaded" :label="t('config.saveBackup')" icon="pi pi-download" />
+                            <Button @click="saveConfig" :disabled="!configLoaded || savingConfig" :loading="savingConfig" :label="t('config.saveBackup')" icon="pi pi-download" />
                         </div>
                     </TabPanel>
 
@@ -278,7 +284,7 @@
                                 </div>
                             </div>
 
-                            <Button @click="saveConfig" :disabled="!configLoaded" :label="t('config.saveAdvanced')" icon="pi pi-cog" />
+                            <Button @click="saveConfig" :disabled="!configLoaded || savingConfig" :loading="savingConfig" :label="t('config.saveAdvanced')" icon="pi pi-cog" />
                         </div>
                     </TabPanel>
                 </TabPanels>
@@ -325,6 +331,7 @@ const { t } = useI18n();
      new_password: ''
  });
 
+ const defaultCorsOrigins = ['http://localhost:8080', 'http://localhost:3000'];
  const config = ref({
      log_level: 'INFO',
      log_max_size: 100,
@@ -334,7 +341,7 @@ const { t } = useI18n();
      tls_cert_file: '',
      tls_key_file: '',
      session_timeout: 24,
-     cors_allowed_origins: ['http://localhost:8080', 'http://localhost:3000'],
+     cors_allowed_origins: [...defaultCorsOrigins],
      cors_allowed_methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
      cors_allowed_headers: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
      rate_limit_enabled: true,
@@ -385,12 +392,21 @@ const { t } = useI18n();
  // origins in particular, which can lock the operator out of the UI.
  const configLoaded = ref(false);
  const configError = ref(false);
+ const savingConfig = ref(false);
+ const savedCorsOrigins = ref([]);
+ const corsRestartRequired = ref(false);
+
+ const restrictCorsOrigins = () => {
+     const origins = config.value.cors_allowed_origins.filter(origin => origin !== '*');
+     config.value.cors_allowed_origins = origins.length ? origins : [...defaultCorsOrigins];
+ };
 
  const fetchConfig = async () => {
      configError.value = false;
      try {
          const res = await axios.get('/api/config/system');
          config.value = { ...config.value, ...res.data };
+         savedCorsOrigins.value = [...(config.value.cors_allowed_origins ?? [])];
          configLoaded.value = true;
      } catch (e) {
          configLoaded.value = false;
@@ -402,23 +418,29 @@ const { t } = useI18n();
  onMounted(async () => {
      await Promise.all([
          store.fetchWebPort(),
-         store.fetchProxies(),
+         store.fetchProxies({ initial: true }),
          fetchConfig()
      ]);
      loading.value = false;
  });
 
  const saveConfig = async () => {
+     if (savingConfig.value) return;
      if (!configLoaded.value) {
          toast.add({ severity: 'warn', summary: t('common.error'), detail: t('config.loadError'), life: 5000 });
          return;
      }
+     const payload = { ...config.value, cors_allowed_origins: [...(config.value.cors_allowed_origins ?? [])] };
+     savingConfig.value = true;
      try {
-         await axios.put('/api/config/system', config.value);
+         await axios.put('/api/config/system', payload);
+         corsRestartRequired.value ||= JSON.stringify(payload.cors_allowed_origins) !== JSON.stringify(savedCorsOrigins.value);
+         savedCorsOrigins.value = payload.cors_allowed_origins;
          toast.add({ severity: 'success', summary: t('common.success'), detail: t('config.saved'), life: 3000 });
-     } catch (e) {
-         const detail = typeof e.response?.data === 'string' ? e.response.data : e.message;
+     } catch {
          toast.add({ severity: 'error', summary: t('common.error'), detail: t('config.saveError'), life: 5000 });
+     } finally {
+         savingConfig.value = false;
      }
  };
 

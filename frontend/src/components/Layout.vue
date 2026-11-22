@@ -113,7 +113,7 @@ watch(() => route.path, closeMobileMenu);
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown);
   desktopMedia.addEventListener('change', handleDesktop);
-  app.fetchProxies();
+  app.fetchProxies({ initial: true });
 });
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown);

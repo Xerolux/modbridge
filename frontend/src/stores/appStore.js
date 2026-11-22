@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import axios from '../axios.js';
+import axios, { fetchInitialProxyList } from '../axios.js';
 
 export const THEMES = ['light', 'dark', 'bw'];
 export const ACCENTS = ['sky', 'violet', 'emerald', 'amber', 'rose', 'mono'];
@@ -98,10 +98,10 @@ export const useAppStore = defineStore('app', () => {
     });
   };
 
-  const fetchProxies = async () => {
+  const fetchProxies = async ({ initial = false } = {}) => {
     try {
       isLoading.value = true;
-      const res = await axios.get('/api/proxies');
+      const res = await (initial ? fetchInitialProxyList() : axios.get('/api/proxies'));
       // Convert tags array to comma-separated string for editing
       proxies.value = applyStoredProxyOrder(res.data.map(proxy => ({
         ...proxy,

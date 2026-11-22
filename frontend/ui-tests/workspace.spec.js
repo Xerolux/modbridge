@@ -85,3 +85,53 @@ for (const theme of ['light', 'dark', 'bw']) {
     await page.screenshot({ path: `test-results/settings-${theme}.png`, fullPage: true });
   });
 }
+
+test('dashboard shares the initial proxy request and preserves the last successful result on refresh failure', async ({ page }) => {
+  await mockApi(page);
+  let requests = 0;
+  let failed = false;
+  await page.route('**/api/proxies', async route => {
+    requests++;
+    await new Promise(resolve => setTimeout(resolve, 150));
+    return route.fulfill(failed ? { status: 500 } : { json: proxies });
+  });
+  await page.goto('/#/');
+  await expect(page.locator('.widget-shell')).toHaveCount(1);
+  const status = page.locator('main .data-health');
+  const lastSuccess = status.locator('time');
+  await expect(lastSuccess).toBeVisible();
+  expect(requests).toBe(1);
+  const timestamp = await lastSuccess.getAttribute('datetime');
+
+  failed = true;
+  await status.getByRole('button').click();
+  await expect(status.getByRole('button')).toBeDisabled();
+  await expect(status).toContainText('Aktualisierung fehlgeschlagen');
+  await expect(status.getByRole('button')).toBeEnabled();
+  await expect(lastSuccess).toHaveAttribute('datetime', timestamp);
+  await expect(page.locator('.widget-shell')).toContainText(proxies[0].name);
+});
+
+test('security settings remove only the wildcard and show when a restart is required', async ({ page }) => {
+  await mockApi(page);
+  let saved;
+  await page.route('**/api/config/system', route => {
+    if (route.request().method() === 'PUT') {
+      saved = route.request().postDataJSON();
+      return route.fulfill({ json: {} });
+    }
+    return route.fulfill({ json: { cors_allowed_origins: ['*', 'https://panel.example.net:8443'] } });
+  });
+  await page.setViewportSize({ width: 360, height: 900 });
+  await page.goto('/#/config');
+  await page.getByRole('tab', { name: 'Sicherheit' }).click();
+  await expect(page.getByLabel('Erlaubte Origins', { exact: true })).toBeVisible();
+  await expect(page.getByText('Mit * sind Browser-Anfragen', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Platzhalter entfernen' }).click();
+  await expect(page.getByText('Mit * sind Browser-Anfragen', { exact: false })).toHaveCount(0);
+  expect(saved).toBeUndefined();
+  await page.getByRole('button', { name: 'Sicherheitskonfiguration speichern' }).click();
+  await expect(page.getByText('Starte ModBridge neu', { exact: false })).toBeVisible();
+  expect(saved.cors_allowed_origins).toEqual(['https://panel.example.net:8443']);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});

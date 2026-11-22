@@ -9,7 +9,7 @@ This file describes the codebase structure, development workflows, and conventio
 **ModBridge** is a Modbus TCP Proxy Manager with a web UI. It proxies Modbus TCP traffic, exposing a REST API and Vue.js frontend for configuration and monitoring. The application is written in Go (backend) with a Vue.js 3 frontend embedded into the binary.
 
 **Current version:** see `version.txt`
-**Go version:** 1.26.4 (see `go.mod`)
+**Go version:** see the `go` directive in `go.mod`.
 **Node version:** 24 (CI/CD, `frontend/`)
 
 ---
@@ -128,7 +128,7 @@ make update-deps      # Update Go dependencies
 
 ### Build Requirements
 
-- **Go 1.26.1+** with `CGO_ENABLED=1` (required for `go-sqlite3`)
+- **Go version from `go.mod`** with `CGO_ENABLED=1` (required for `go-sqlite3`)
 - **GCC** (for SQLite CGO compilation; cross-compilers for arm: `gcc-aarch64-linux-gnu`, `gcc-arm-linux-gnueabihf`)
 - **Node 24+** (frontend build)
 - **npm** (frontend dependency management)
@@ -280,13 +280,13 @@ import (
 
 ## Frontend Conventions
 
-**Stack:** Vue.js 3 (Composition API), Pinia, Vue Router, PrimeVue 4, Tailwind CSS, Axios, vue-i18n
+**Stack:** Vue.js 3 (Composition API), Pinia, Vue Router, PrimeVue 5, Tailwind CSS, Axios, vue-i18n
 
 - Components use `<script setup>` syntax
 - State management via Pinia stores in `frontend/src/stores/`
 - All user-facing strings go through `vue-i18n` (translations live in `frontend/src/i18n.js`, German + English)
 - API calls use Axios; dev proxy redirects `/api/*` to `:8080`
-- UI components from PrimeVue; icons from `lucide-vue-next`
+- UI components from PrimeVue and icons from PrimeIcons
 - Dashboard layouts use `gridstack` for drag-and-drop
 
 **Dev server:**
@@ -358,24 +358,29 @@ Default ports:
 ## Dependencies
 
 ### Go (minimal)
-| Module | Version | Purpose |
-|--------|---------|---------|
-| `github.com/google/uuid` | v1.6.0 | UUID generation |
-| `golang.org/x/crypto` | v0.48.0 | bcrypt password hashing |
-| `github.com/mattn/go-sqlite3` | v1.14.37 | SQLite3 (CGO) |
+Versions live in `go.mod`.
+
+| Module | Purpose |
+|--------|---------|
+| `github.com/google/uuid` | UUID generation |
+| `golang.org/x/crypto` | bcrypt password hashing |
+| `github.com/mattn/go-sqlite3` | SQLite3 (CGO) |
 
 ### Frontend (key)
+
+Version ranges live in `frontend/package.json`. The lockfile records the exact installed versions.
+
 | Package | Purpose |
 |---------|---------|
-| `vue` ^3.5 | UI framework |
-| `pinia` ^3.0 | State management |
-| `vue-router` ^5.0 | Client-side routing |
-| `primevue` ^4.5 | UI component library |
-| `axios` ^1.13 | HTTP client |
-| `vue-i18n` ^11.3 | Internationalization |
-| `tailwindcss` ^3.4 | Utility CSS |
-| `vite` ^8.0 | Build tool |
-| `gridstack` ^12.4 | Dashboard drag-and-drop |
+| `vue` | UI framework |
+| `pinia` | State management |
+| `vue-router` | Client-side routing |
+| `primevue` | UI component library |
+| `axios` | HTTP client |
+| `vue-i18n` | Internationalization |
+| `tailwindcss` | Utility CSS |
+| `vite` | Build tool |
+| `gridstack` | Dashboard drag-and-drop |
 
 ---
 

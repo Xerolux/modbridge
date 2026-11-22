@@ -282,7 +282,7 @@ A new device is an entry in `frontend/src/deviceProfiles.js` with a label and a 
   "tls_cert_file": "",
   "tls_key_file": "",
 
-  "cors_allowed_origins": ["*"],
+  "cors_allowed_origins": ["http://localhost:3000", "http://localhost:8080"],
   "cors_allowed_methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   "cors_allowed_headers": ["Content-Type", "Authorization"],
 
@@ -319,6 +319,8 @@ A new device is an entry in `frontend/src/deviceProfiles.js` with a label and a 
   "max_connections": 1000
 }
 ```
+
+When a separate browser frontend calls the ModBridge API, list its exact origin, including its scheme and port if applicable. The built-in Web UI uses the same origin as the API. A wildcard allows any origin to make credentialed CORS requests. Restart ModBridge after changing the allowed origins.
 
 ## Writes and flash wear
 

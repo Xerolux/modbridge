@@ -1,6 +1,7 @@
 <template>
   <div class="dashboard-container p-2 sm:p-4 flex flex-col gap-4 w-full overflow-x-hidden">
-    <DataHealth :live="sseConnected !== false && !liveStale" @refresh="fetchData(false)" />
+    <DataHealth :busy="refreshing" :failed="refreshFailed" :last-success="lastSuccess"
+      :live="sseConnected === true && !liveStale" @refresh="fetchData(Boolean(error))" />
     <section class="glass-hero dashboard-hero rounded-[28px] p-5 sm:p-6">
       <div class="relative z-[1] flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div class="space-y-3">
@@ -177,7 +178,7 @@ import { useRouter } from 'vue-router';
 import { useI18n } from "vue-i18n";
 import { GridStack } from 'gridstack';
 import 'gridstack/dist/gridstack.min.css';
-import axios from '../axios.js';
+import axios, { fetchInitialProxyList } from '../axios.js';
 import Button from 'primevue/button';
 import Dialog from 'primevue/dialog';
 import Dropdown from 'primevue/select';
@@ -198,6 +199,9 @@ const showAddWidget = ref(false);
 const showConfigPanel = ref(false);
 const selectedProxy = ref(null);
 const loading = ref(true);
+const refreshing = ref(false);
+const refreshFailed = ref(false);
+const lastSuccess = ref(null);
 const error = ref(null);
 const errorMessage = ref('');
 const layoutEditing = ref(false);
@@ -323,7 +327,7 @@ const initializeGrid = () => {
 
 onMounted(async () => {
   try {
-    await fetchData(true);
+    await fetchData(true, true);
     if (disposed) return;
 
     // Initialize GridStack BEFORE loading widgets: the <Teleport> targets
@@ -533,15 +537,19 @@ const saveLayout = () => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
 };
 
-const fetchData = async (isInitial = false) => {
+const fetchData = async (isInitial = false, shareInitial = false) => {
+  if (refreshing.value || disposed) return;
+  refreshing.value = true;
   const thisVersion = ++fetchVersion;
   try {
     if (isInitial) loading.value = true;
     error.value = null;
     errorMessage.value = '';
-    const res = await axios.get('/api/proxies');
+    const res = await (shareInitial ? fetchInitialProxyList() : axios.get('/api/proxies'));
     if (disposed || thisVersion !== fetchVersion) return;
     proxies.value = res.data;
+    refreshFailed.value = false;
+    lastSuccess.value = new Date();
     if (isInitial) loading.value = false;
     await nextTick();
     if (disposed) return;
@@ -555,12 +563,15 @@ const fetchData = async (isInitial = false) => {
   } catch (requestError) {
     if (disposed || thisVersion !== fetchVersion) return;
     const errorData = requestError.response?.data;
+    refreshFailed.value = true;
     error.value = isInitial || !gridInitialized;
     liveStale.value = true;
     errorMessage.value = typeof errorData === 'string' ? errorData : requestError.message || t('common.error');
     if (isInitial) loading.value = false;
     // No rethrow: fetchData is also used directly as a template event handler
     // (retry button, panel refresh), and the error state is already recorded.
+  } finally {
+    refreshing.value = false;
   }
 };
 
