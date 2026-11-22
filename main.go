@@ -13,6 +13,7 @@ import (
 	"modbridge/pkg/database"
 	"modbridge/pkg/logger"
 	"modbridge/pkg/manager"
+	"modbridge/pkg/middleware"
 	"modbridge/pkg/users"
 	"net/http"
 	_ "net/http/pprof"
@@ -302,9 +303,15 @@ func main() {
 		addr = envPort
 	}
 
+	handler := http.Handler(mux)
+	haIngress := os.Getenv("MODBRIDGE_HA_INGRESS") == "1"
+	if haIngress {
+		handler = middleware.RequireHAIngress(handler)
+	}
+
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           handler,
 		ReadHeaderTimeout: 30 * time.Second,
 		ReadTimeout:       60 * time.Second,
 		WriteTimeout:      60 * time.Second,
@@ -313,7 +320,7 @@ func main() {
 	}
 
 	// Apply TLS configuration when enabled.
-	tlsEnabled := cfgMgr.Get().TLSEnabled
+	tlsEnabled := cfgMgr.Get().TLSEnabled && !haIngress
 	tlsCertFile := cfgMgr.Get().TLSCertFile
 	tlsKeyFile := cfgMgr.Get().TLSKeyFile
 	if tlsEnabled {

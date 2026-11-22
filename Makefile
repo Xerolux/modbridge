@@ -1,4 +1,4 @@
-.PHONY: help build test clean run lint coverage bench bench-ci openapi openapi-check fmt vet deps update-deps install dev
+.PHONY: ha-app help build test clean run lint coverage bench bench-ci openapi openapi-check fmt vet deps update-deps install dev
 
 BINARY_NAME=modbridge
 VERSION?=$(shell cat version.txt 2>/dev/null || echo "dev")
@@ -22,6 +22,9 @@ build-frontend: ## Build the frontend
 	rm -rf pkg/web/dist
 	cp -r frontend/dist pkg/web/dist
 	@echo "Frontend built and copied to pkg/web/dist"
+
+ha-app: ## Package the local Home Assistant OS app
+	python scripts/package_ha_app.py
 
 # Cross-compiling needs CGO because of go-sqlite3, so each target needs its
 # own C compiler. These are the targets CI actually releases; other platforms

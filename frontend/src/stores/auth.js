@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios from '../axios.js'
+import { appCookiePath } from '../utils/appURL.js'
 import { onUnauthorized } from '../utils/authEvents'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -106,8 +107,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
     resetState()
     const secureFlag = window.location.protocol === 'https:' ? '; Secure' : ''
-    document.cookie = `session_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax${secureFlag}`
-    document.cookie = `csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax${secureFlag}`
+    document.cookie = `session_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=${appCookiePath()}; SameSite=Lax${secureFlag}`
+    document.cookie = `csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=${appCookiePath()}; SameSite=Lax${secureFlag}`
   }
 
   return {

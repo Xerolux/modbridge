@@ -6,6 +6,7 @@
 package web
 
 import (
+	"bytes"
 	"embed"
 	"fmt"
 	"io/fs"
@@ -28,11 +29,26 @@ func Handler() (http.Handler, error) {
 		return nil, fmt.Errorf("failed to access embedded web assets: %w", err)
 	}
 
+	serveIndex := func(w http.ResponseWriter, r *http.Request) {
+		content, err := fs.ReadFile(distRoot, "index.html")
+		if err != nil {
+			http.Error(w, "Internal Server Error: index.html not found", http.StatusInternalServerError)
+			return
+		}
+		if prefix := middleware.HAIngressPath(r); prefix != "" {
+			content = bytes.Replace(content, []byte(`<base href="/"`), []byte(`<base href="`+prefix+`/"`), 1)
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write(content)
+	}
+
 	// Use a custom handler for SPA support
 	spaHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/")
-		if path == "" {
-			path = "index.html"
+		if path == "" || path == "index.html" {
+			serveIndex(w, r)
+			return
 		}
 
 		// Try to open the file
@@ -86,14 +102,7 @@ func Handler() (http.Handler, error) {
 		}
 
 		// Fallback to index.html
-		content, err := fs.ReadFile(distRoot, "index.html")
-		if err != nil {
-			http.Error(w, "Internal Server Error: index.html not found", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html")
-		w.Header().Set("Cache-Control", "no-cache")
-		_, _ = w.Write(content) // Ignore write error (already committed response)
+		serveIndex(w, r)
 	})
 
 	security := middleware.NewSecurityMiddleware()

@@ -39,8 +39,13 @@ func (m *SecurityMiddleware) Middleware(next http.HandlerFunc) http.HandlerFunc 
 		// X-Content-Type-Options
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 
-		// X-Frame-Options
-		w.Header().Set("X-Frame-Options", "DENY")
+		frameAncestors := "'none'"
+		frameOptions := "DENY"
+		if HAIngressPath(r) != "" {
+			frameAncestors = "'self'"
+			frameOptions = "SAMEORIGIN"
+		}
+		w.Header().Set("X-Frame-Options", frameOptions)
 
 		// Disable the obsolete browser XSS auditor; CSP is the active protection.
 		w.Header().Set("X-XSS-Protection", "0")
@@ -48,7 +53,7 @@ func (m *SecurityMiddleware) Middleware(next http.HandlerFunc) http.HandlerFunc 
 		// Content-Security-Policy
 		// unsafe-eval removed from script-src; a pre-built Vue 3/Vite SPA does not need it.
 		// unsafe-inline is kept for style-src only (PrimeVue/TailwindCSS inject inline styles).
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws: wss:; manifest-src 'self'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors "+frameAncestors+"; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws: wss:; manifest-src 'self'")
 
 		// Referrer-Policy
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
