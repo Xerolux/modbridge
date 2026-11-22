@@ -48,7 +48,7 @@ RUN VERSION="${VERSION:-$(cat version.txt 2>/dev/null || echo dev)}" && \
     -o modbridge .
 
 # Final stage
-FROM alpine:3.24
+FROM alpine:3.24 AS runtime
 
 LABEL org.opencontainers.image.title="ModBridge" \
       org.opencontainers.image.description="Modbus TCP Proxy Manager" \

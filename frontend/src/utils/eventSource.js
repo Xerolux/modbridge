@@ -1,4 +1,5 @@
 import { ref, getCurrentScope, onScopeDispose } from 'vue';
+import { appURL } from './appURL.js';
 import { EVENT_SOURCE_CONFIG } from './constants';
 
 export function useEventSource(url, options = {}) {
@@ -31,7 +32,7 @@ export function useEventSource(url, options = {}) {
     }
 
     try {
-      eventSource.value = new EventSource(url, {
+      eventSource.value = new EventSource(appURL(url), {
         withCredentials: true,
         ...options,
       });

@@ -199,6 +199,10 @@ sudo modbridge restart
 
 ---
 
+## Home Assistant OS
+
+Install ModBridge as a local Home Assistant app to open its web interface from the sidebar via Ingress. Build the app archive with `make ha-app` and follow the [installation guide](ha-app/DOCS.md).
+
 ## 🐳 Docker Deployment
 
 Alternative installation via Docker Compose:

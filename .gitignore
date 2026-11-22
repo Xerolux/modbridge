@@ -63,3 +63,4 @@ venv/
 
 # AI assistant working directories
 .zcode/
+/bin/modbridge-ha-*.zip

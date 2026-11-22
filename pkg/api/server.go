@@ -679,9 +679,9 @@ func (s *Server) finalizeLogin(w http.ResponseWriter, r *http.Request, userID, u
 		Value:    token,
 		Expires:  time.Now().Add(time.Duration(sessionTimeoutHours) * time.Hour),
 		HttpOnly: true,
-		Secure:   cfg.TLSEnabled,
+		Secure:   middleware.SecureCookie(r, cfg.TLSEnabled),
 		SameSite: http.SameSiteStrictMode,
-		Path:     "/",
+		Path:     middleware.CookiePath(r),
 	})
 
 	csrfToken := s.csrf.GenerateToken(token)
@@ -692,9 +692,9 @@ func (s *Server) finalizeLogin(w http.ResponseWriter, r *http.Request, userID, u
 	http.SetCookie(w, &http.Cookie{
 		Name:     "csrf_token",
 		Value:    csrfToken,
-		Path:     "/",
+		Path:     middleware.CookiePath(r),
 		HttpOnly: false,
-		Secure:   cfg.TLSEnabled,
+		Secure:   middleware.SecureCookie(r, cfg.TLSEnabled),
 		SameSite: http.SameSiteStrictMode,
 	})
 
@@ -774,7 +774,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	for _, name := range []string{"session_token", "csrf_token"} {
 		http.SetCookie(w, &http.Cookie{
 			Name: name, Value: "", Expires: time.Unix(0, 0),
-			Path: "/", HttpOnly: true, MaxAge: -1,
+			Path: middleware.CookiePath(r), HttpOnly: true, MaxAge: -1,
 		})
 	}
 	w.Header().Set("Content-Type", "application/json")

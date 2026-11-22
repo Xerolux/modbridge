@@ -62,6 +62,7 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '../stores/auth';
 import axios from '../axios';
+import { appURL } from '../utils/appURL.js';
 import Card from 'primevue/card';
 import Badge from 'primevue/badge';
 import Button from 'primevue/button';
@@ -96,7 +97,7 @@ const clearPending = () => { sessionStorage.removeItem('modbridge_update_target'
 const pollStatus = async () => {
   if (disposed || !updating.value) return;
   try {
-    const health = await fetch('/api/health', { cache:'no-store', signal:AbortSignal.timeout(5000) });
+    const health = await fetch(appURL('/api/health'), { cache:'no-store', signal:AbortSignal.timeout(5000) });
     const body = health.ok ? await health.json() : {};
     if (disposed) return;
     if (String(body.version || '').replace(/^v/,'') === targetVersion.replace(/^v/,'')) {

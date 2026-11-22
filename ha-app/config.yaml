@@ -1,0 +1,29 @@
+name: ModBridge
+version: "@VERSION@"
+slug: modbridge
+description: Modbus TCP proxy manager with an Ingress web interface
+url: https://github.com/Xerolux/modbridge
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: auto
+init: false
+ingress: true
+ingress_port: 8080
+ingress_entry: index.html
+panel_icon: mdi:swap-horizontal
+panel_title: ModBridge
+panel_admin: true
+ports:
+  5020/tcp: null
+  5021/tcp: null
+  5022/tcp: null
+  5023/tcp: null
+  5024/tcp: null
+  5025/tcp: null
+  5026/tcp: null
+  5027/tcp: null
+  5028/tcp: null
+  5029/tcp: null
+  5030/tcp: null

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { appURL } from './utils/appURL.js';
 import { emitUnauthorized } from './utils/authEvents.js';
 
 axios.defaults.withCredentials = true;
@@ -12,6 +13,9 @@ function getCookie(name) {
 }
 
 axios.interceptors.request.use(config => {
+    if (config.url?.startsWith('/api/')) {
+        config.url = appURL(config.url);
+    }
     if (config.skipAuth) {
         return config;
     }

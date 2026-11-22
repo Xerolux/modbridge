@@ -143,11 +143,11 @@ func (m *CSRFMiddleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 			// Only set Secure flag if connection is HTTPS
-			isSecure := r.TLS != nil
+			isSecure := SecureCookie(r, r.TLS != nil)
 			http.SetCookie(w, &http.Cookie{
 				Name:     "csrf_token",
 				Value:    token,
-				Path:     "/",
+				Path:     CookiePath(r),
 				HttpOnly: false,
 				Secure:   isSecure,
 				SameSite: http.SameSiteStrictMode,
